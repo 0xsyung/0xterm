@@ -41,6 +41,7 @@ import {
   resolveChain
 } from "./constants";
 import type { LogEntry, ThemeMode, DexProtocol } from "./types";
+import { useAppKit } from "@reown/appkit/react";
 
 export default function TerminalShell({
   onToggleRain,
@@ -72,6 +73,8 @@ export default function TerminalShell({
   const { connectors, connect } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChainAsync } = useSwitchChain();
+
+  const { open } = useAppKit();
 
   useEffect(() => {
     setMounted(true);
@@ -1213,22 +1216,13 @@ export default function TerminalShell({
 
       case "connect":
         if (!isConnected) {
-          // Find the injected or first available connector
-          const connector = connectors[0];
-          if (connector) {
-            connect({ connector });
-            newEntry = {
-              id: (Date.now() + 1).toString(),
-              type: "text",
-              text: "Initiating wallet connection handshake..."
-            };
-          } else {
-            newEntry = {
-              id: (Date.now() + 1).toString(),
-              type: "text",
-              text: "ERROR: No wallet connector found."
-            };
-          }
+          // Opens the native WalletConnect / Injected selection modal safely on mobile & desktop
+          open();
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Opening secure wallet connection modal..."
+          };
         } else {
           newEntry = {
             id: (Date.now() + 1).toString(),

@@ -1,44 +1,47 @@
-import { http, createConfig } from 'wagmi'
-import { mainnet, arbitrum, base, polygon, optimism, sepolia, arbitrumSepolia, baseSepolia, polygonAmoy, optimismSepolia } from 'wagmi/chains'
-import { injected, walletConnect } from 'wagmi/connectors'
+import { createAppKit } from '@reown/appkit'
+import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
+import { mainnet, arbitrum, base, polygon, optimism, sepolia, arbitrumSepolia, baseSepolia, polygonAmoy, optimismSepolia } from '@reown/appkit/networks'
 
 const projectId = '5b2bbdbe0deaa155601b8aaa96f96aaf'
 
-export const config = createConfig({
-  chains: [
-    mainnet,
-    sepolia,
-    arbitrum,
-    arbitrumSepolia,
-    base,
-    baseSepolia,
-    polygon,
-    polygonAmoy,
-    optimism,
-    optimismSepolia
-  ],
-  connectors: [
-    injected(),
-    walletConnect({
-      projectId,
-      metadata: {
-        name: '0xTERM',
-        description: 'Full On-Chain DeFi Terminal Suite',
-        url: 'https://0xsyung.github.io/0xterm/',
-        icons: ['https://avatars.githubusercontent.com/u/37784886'] // Optional app icon fallback
-      }
-    }),
-  ],
-  transports: {
-    [mainnet.id]: http(),
-    [sepolia.id]: http(),
-    [arbitrum.id]: http(),
-    [arbitrumSepolia.id]: http(),
-    [base.id]: http(),
-    [baseSepolia.id]: http(),
-    [polygon.id]: http(),
-    [polygonAmoy.id]: http(),
-    [optimism.id]: http(),
-    [optimismSepolia.id]: http(),
-  },
+// 1. Define supported networks
+const networks = [
+  mainnet,
+  sepolia,
+  arbitrum,
+  arbitrumSepolia,
+  base,
+  baseSepolia,
+  polygon,
+  polygonAmoy,
+  optimism,
+  optimismSepolia
+]
+
+// 2. Set up Wagmi Adapter
+const wagmiAdapter = new WagmiAdapter({
+  projectId,
+  networks
 })
+
+// 3. Initialize AppKit Modal
+const metadata = {
+  name: '0xTERM',
+  description: 'Full On-Chain DeFi Terminal Suite',
+  url: 'https://0xsyung.github.io/0xterm/',
+  icons: ['https://avatars.githubusercontent.com/u/37784886']
+}
+
+export const modal = createAppKit({
+  adapters: [wagmiAdapter],
+  networks,
+  projectId,
+  metadata,
+  themeMode: 'dark',
+  features: {
+    analytics: false
+  }
+})
+
+// Export the wagmi config for WagmiProvider
+export const config = wagmiAdapter.wagmiConfig
