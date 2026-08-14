@@ -1,50 +1,44 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
-import { Providers } from "./providers";
-import MatrixRain from "@/components/terminal/MatrixRain";
-import TerminalShell from "@/components/terminal/TerminalShell";
+import { WagmiProvider } from "wagmi";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { config } from "@/config/wagmi";
+import type { ThemeMode } from "@/components/terminal/types";
 
-type ThemeMode = "matrix" | "mac" | "bloomberg" | "whatsapp";
+// Dynamically import TerminalShell with ssr: false so it only loads in the browser
+const TerminalShell = dynamic(
+  () => import("@/components/terminal/TerminalShell"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-screen h-screen bg-black text-[#00ff66] font-mono flex items-center justify-center">
+        INITIALIZING 0xTERM...
+      </div>
+    )
+  }
+);
 
-export default function Home() {
-  const [rainActive, setRainActive] = useState(true);
+const queryClient = new QueryClient();
+
+export default function Page() {
   const [currentThemeKey, setCurrentThemeKey] = useState<ThemeMode>("matrix");
+  const [isRainActive, setIsRainActive] = useState(false);
 
-  const handleToggleRain = () => {
-    setRainActive((prev) => !prev);
-  };
-
-  // Determine main container background and scanline overlay based on theme
-  const getThemeMainClasses = (theme: ThemeMode) => {
-    switch (theme) {
-      case "matrix":
-        return "crt-overlay bg-black";
-      case "mac":
-        return "bg-[#1e1e1e]";
-      case "bloomberg":
-        return "bg-[#0c0c0c]";
-      case "whatsapp":
-        return "bg-[#0b141a]";
-      default:
-        return "bg-black";
-    }
-  };
+  const toggleRain = () => setIsRainActive(!isRainActive);
 
   return (
-    <Providers>
-      <main
-        className={`fixed inset-0 overflow-hidden flex flex-col transition-colors duration-300 ${getThemeMainClasses(currentThemeKey)}`}
-      >
-        {/* Matrix rain only renders on Matrix theme */}
-        {currentThemeKey === "matrix" && <MatrixRain active={rainActive} />}
-
-        <TerminalShell
-          onToggleRain={handleToggleRain}
-          currentThemeKey={currentThemeKey}
-          onThemeChange={setCurrentThemeKey}
-        />
-      </main>
-    </Providers>
+    <WagmiProvider config={config}>
+      <QueryClientProvider client={queryClient}>
+        <main className="w-screen h-screen overflow-hidden relative">
+          <TerminalShell
+            onToggleRain={toggleRain}
+            currentThemeKey={currentThemeKey}
+            onThemeChange={setCurrentThemeKey}
+          />
+        </main>
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 }
