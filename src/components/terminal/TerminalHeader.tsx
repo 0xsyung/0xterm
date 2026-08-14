@@ -21,11 +21,6 @@ export default function TerminalHeader({
           0xTERM
         </span>
       </div>
-
-      <div className={`text-xs ${theme.text}/50 font-mono tracking-wide`}>
-        Type <span className={`font-bold ${theme.primary}`}>help</span> to view
-        commands
-      </div>
     </div>
   );
 }
