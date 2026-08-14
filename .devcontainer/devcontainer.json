@@ -1,9 +1,9 @@
 {
   "name": "0xterm Web3 Terminal Environment",
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
-      "version": "22",
+      "version": "24",
       "nodeGypDependencies": true
     }
   },

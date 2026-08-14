@@ -814,11 +814,14 @@ export default function TerminalShell({
               })
             ]);
 
-            const [r0, r1] = reserves as [bigint, bigint];
-            const isTokenA0 =
-              (token0 as string).toLowerCase() === addrA.toLowerCase();
-            const reserveA = isTokenA0 ? r0 : r1;
-            const reserveB = isTokenA0 ? r1 : r0;
+            const reserveA =
+              (token0 as string).toLowerCase() === addrA.toLowerCase()
+                ? reserves[0]
+                : reserves[1];
+            const reserveB =
+              (token0 as string).toLowerCase() === addrA.toLowerCase()
+                ? reserves[1]
+                : reserves[0];
 
             const formattedA = parseFloat(
               formatUnits(reserveA, tokenA.decimals)
@@ -844,7 +847,7 @@ export default function TerminalShell({
               })
             ]);
 
-            const sqrtPriceX96 = (slot0 as [bigint])[0];
+            const sqrtPriceX96 = slot0[0];
             const isTokenA0 =
               (token0 as string).toLowerCase() === addrA.toLowerCase();
 
