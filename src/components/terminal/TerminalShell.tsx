@@ -721,6 +721,32 @@ export default function TerminalShell({
       }
       return { id: generateId(), type: "text", text: dexText };
     },
+    theme: (args) => {
+      const themeKeys = Object.keys(THEMES) as ThemeMode[];
+      if (!args[1]) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `Active Theme: ${theme.name}. Available themes: ${themeKeys.join(", ")}`
+        };
+      }
+
+      const targetThemeKey = args[1].toLowerCase() as ThemeMode;
+      if (!THEMES[targetThemeKey]) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] Error: Theme "${args[1]}" not found. Available themes: ${themeKeys.join(", ")}`
+        };
+      }
+
+      handleThemeSwitch(targetThemeKey);
+      return {
+        id: generateId(),
+        type: "text",
+        text: `[✓] Theme switched to ${THEMES[targetThemeKey].name}`
+      };
+    },
     register: async (args) => {
       if (!activeChainId)
         return {
@@ -873,7 +899,6 @@ export default function TerminalShell({
           text: "Wallet not connected. Connect your target wallet first before importing."
         };
 
-      // Extract everything after 'import ' or 'imp ' using raw input to preserve JSON spaces
       const match = rawInput.trim().match(/^(import|imp)\s+([\s\S]+)$/i);
       if (!match || !match[2]) {
         return {
@@ -1664,6 +1689,7 @@ export default function TerminalShell({
   commands.reg = commands.register;
   commands.exp = commands.export;
   commands.imp = commands.import;
+  commands.style = commands.theme;
 
   const availableCommands = Object.keys(commands);
 
@@ -1781,6 +1807,11 @@ export default function TerminalShell({
           if (activeChainId && DEX_REGISTRY[activeChainId]) {
             candidates = DEX_REGISTRY[activeChainId].map((d) => d.id);
           }
+        } else if (
+          (command === "theme" || command === "style") &&
+          currentArgIdx === 1
+        ) {
+          candidates = Object.keys(THEMES);
         } else {
           let isTokenArg = false;
           if (
