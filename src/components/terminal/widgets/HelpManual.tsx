@@ -10,7 +10,7 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
       >
         SYSTEM COMMAND MANUAL
       </div>
-      <div className="grid grid-cols-[200px_1fr] gap-x-4 gap-y-2 pt-1">
+      <div className="grid grid-cols-[280px_1fr] gap-x-4 gap-y-2 pt-1">
         <div className={`font-bold ${theme.primary}`}>networks</div>
         <div>List all available blockchain networks</div>
         <div className={`font-bold ${theme.primary}`}>
