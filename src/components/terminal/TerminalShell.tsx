@@ -1,3 +1,10 @@
+/**
+ * @file TerminalShell.tsx
+ * @description 0xTERM Terminal Shell Component
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
+
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
@@ -47,15 +54,27 @@ const MAX_LOGS = 100;
 const formatViemError = (err: any): string => {
   const msg = err?.shortMessage || err?.message || String(err);
   if (msg.includes("User rejected")) return "Transaction rejected by user.";
-  if (msg.includes("insufficient funds")) return "Insufficient native balance for transaction.";
-  if (msg.includes("INSUFFICIENT_OUTPUT_AMOUNT")) return "Slippage tolerance exceeded.";
-  if (msg.includes("allowance")) return "Insufficient ERC20 allowance. Approve tokens first.";
-  if (msg.includes("Failed to fetch")) return "Network Error: Failed to fetch. If using on-chain data, your RPC node may be down. If using API, check your ad-blocker.";
-  return `ERROR: ${msg.split('\n')[0]}`;
+  if (msg.includes("insufficient funds"))
+    return "Insufficient native balance for transaction.";
+  if (msg.includes("INSUFFICIENT_OUTPUT_AMOUNT"))
+    return "Slippage tolerance exceeded.";
+  if (msg.includes("allowance"))
+    return "Insufficient ERC20 allowance. Approve tokens first.";
+  if (msg.includes("Failed to fetch"))
+    return "Network Error: Failed to fetch. If using on-chain data, your RPC node may be down. If using API, check your ad-blocker.";
+  return `ERROR: ${msg.split("\n")[0]}`;
 };
 
 // --- Click-to-Copy Address Component ---
-function CopyableAddress({ address, theme, className = "" }: { address: string; theme: any; className?: string }) {
+function CopyableAddress({
+  address,
+  theme,
+  className = ""
+}: {
+  address: string;
+  theme: any;
+  className?: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   return (
@@ -67,20 +86,28 @@ function CopyableAddress({ address, theme, className = "" }: { address: string; 
         setTimeout(() => setCopied(false), 1500);
       }}
       className={`cursor-pointer font-mono transition-colors relative group inline-flex items-center gap-1 ${
-        copied ? 'text-green-400 font-bold' : 'hover:underline'
+        copied ? "text-green-400 font-bold" : "hover:underline"
       } ${className}`}
       title="Click to copy address"
     >
       <span>{address}</span>
       <span className="text-[10px] opacity-60 group-hover:opacity-100">
-        {copied ? '[COPIED!]' : '📋'}
+        {copied ? "[COPIED!]" : "📋"}
       </span>
     </span>
   );
 }
 
 // --- Export Widget Component with Copy Icon ---
-function ExportWidget({ exportData, theme, address }: { exportData: any; theme: any; address: string }) {
+function ExportWidget({
+  exportData,
+  theme,
+  address
+}: {
+  exportData: any;
+  theme: any;
+  address: string;
+}) {
   const [copied, setCopied] = useState(false);
   const jsonString = JSON.stringify(exportData, null, 2);
 
@@ -91,8 +118,12 @@ function ExportWidget({ exportData, theme, address }: { exportData: any; theme: 
   };
 
   return (
-    <div className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2 max-w-xl`}>
-      <div className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}>
+    <div
+      className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2 max-w-xl`}
+    >
+      <div
+        className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+      >
         <span className="font-bold">EXPORT CONFIG & CUSTOM TOKENS</span>
         <div className="flex items-center gap-3">
           <CopyableAddress address={address} theme={theme} />
@@ -101,17 +132,35 @@ function ExportWidget({ exportData, theme, address }: { exportData: any; theme: 
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded border ${theme.border} bg-current/5 hover:bg-current/15 transition-all text-[11px] font-mono`}
             title="Copy JSON to clipboard"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012-2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012-2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+              />
             </svg>
-            {copied ? <span className="text-green-400 font-bold">COPIED!</span> : <span>COPY</span>}
+            {copied ? (
+              <span className="text-green-400 font-bold">COPIED!</span>
+            ) : (
+              <span>COPY</span>
+            )}
           </button>
         </div>
       </div>
       <div className={`text-[10px] ${theme.text}/60`}>
-        Copy the JSON below and run <span className={theme.primary}>import &lt;json&gt;</span> in your new wallet terminal:
+        Copy the JSON below and run{" "}
+        <span className={theme.primary}>import &lt;json&gt;</span> in your new
+        wallet terminal:
       </div>
-      <pre className={`p-3 bg-black/40 rounded border ${theme.border} font-mono text-[10px] overflow-x-auto select-all max-h-48 text-green-400`}>
+      <pre
+        className={`p-3 bg-black/40 rounded border ${theme.border} font-mono text-[10px] overflow-x-auto select-all max-h-48 text-green-400`}
+      >
         {jsonString}
       </pre>
     </div>
@@ -132,11 +181,29 @@ export default function TerminalShell({
   const [activeDexId, setActiveDexId] = useState<string | null>(null);
 
   // Multi-provider RPC maps: ChainId -> { providerName: url } & ChainId -> activeProviderName
-  const [rpcProviders, setRpcProviders] = useState<Record<number, Record<string, string>>>({});
-  const [activeRpcProviders, setActiveRpcProviders] = useState<Record<number, string>>({});
+  const [rpcProviders, setRpcProviders] = useState<
+    Record<number, Record<string, string>>
+  >({});
+  const [activeRpcProviders, setActiveRpcProviders] = useState<
+    Record<number, string>
+  >({});
 
   // Custom User-Registered Tokens Map: ChainId -> { SYMBOL: TokenDetails }
-  const [customTokens, setCustomTokens] = useState<Record<number, Record<string, { address: Address; symbol: string; name: string; decimals: number; isNative: boolean }>>>({});
+  const [customTokens, setCustomTokens] = useState<
+    Record<
+      number,
+      Record<
+        string,
+        {
+          address: Address;
+          symbol: string;
+          name: string;
+          decimals: number;
+          isNative: boolean;
+        }
+      >
+    >
+  >({});
 
   const theme = THEMES[currentThemeKey];
 
@@ -147,7 +214,7 @@ export default function TerminalShell({
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
-  
+
   // Autocomplete State
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionIdx, setSuggestionIdx] = useState(-1);
@@ -165,7 +232,7 @@ export default function TerminalShell({
   useEffect(() => {
     setMounted(true);
   }, []);
-  
+
   useEffect(() => {
     if (logContainerRef.current) {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
@@ -214,14 +281,19 @@ export default function TerminalShell({
 
           if (prefs.theme && THEMES[prefs.theme as ThemeMode]) {
             onThemeChange(prefs.theme as ThemeMode);
-            loadedDetails.push(`Theme: ${THEMES[prefs.theme as ThemeMode].name}`);
+            loadedDetails.push(
+              `Theme: ${THEMES[prefs.theme as ThemeMode].name}`
+            );
           }
 
           if (prefs.rpcProviders) setRpcProviders(prefs.rpcProviders);
-          if (prefs.activeRpcProviders) setActiveRpcProviders(prefs.activeRpcProviders);
+          if (prefs.activeRpcProviders)
+            setActiveRpcProviders(prefs.activeRpcProviders);
 
           if (prefs.chainId) {
-            const chainObj = SUPPORTED_CHAINS.find((c) => c.id === prefs.chainId);
+            const chainObj = SUPPORTED_CHAINS.find(
+              (c) => c.id === prefs.chainId
+            );
             if (chainObj) {
               setActiveChainId(chainObj.id);
               const dexes = DEX_REGISTRY[chainObj.id] || [];
@@ -235,11 +307,16 @@ export default function TerminalShell({
           }
 
           if (loadedDetails.length > 0) {
-            setLogs((prev) => [...prev, {
-              id: Date.now().toString(),
-              type: "text",
-              text: `[✓] Profile loaded for wallet ${address.slice(0, 6)}...${address.slice(-4)} (${loadedDetails.join(" | ")})`
-            } as LogEntry].slice(-MAX_LOGS));
+            setLogs((prev) =>
+              [
+                ...prev,
+                {
+                  id: Date.now().toString(),
+                  type: "text",
+                  text: `[✓] Profile loaded for wallet ${address.slice(0, 6)}...${address.slice(-4)} (${loadedDetails.join(" | ")})`
+                } as LogEntry
+              ].slice(-MAX_LOGS)
+            );
           }
         }
       } catch (e) {
@@ -279,11 +356,21 @@ export default function TerminalShell({
 
   const resolveTokenDetails = async (queryToken: string, chain: Chain) => {
     const sym = queryToken.toUpperCase();
-    const isNative = sym === chain.nativeCurrency.symbol || sym === "ETH" || queryToken === NATIVE_TOKEN_ADDRESS;
+    const isNative =
+      sym === chain.nativeCurrency.symbol ||
+      sym === "ETH" ||
+      queryToken === NATIVE_TOKEN_ADDRESS;
     if (isNative)
-      return { address: NATIVE_TOKEN_ADDRESS as Address, symbol: chain.nativeCurrency.symbol, name: chain.nativeCurrency.name, decimals: 18, isNative: true };
+      return {
+        address: NATIVE_TOKEN_ADDRESS as Address,
+        symbol: chain.nativeCurrency.symbol,
+        name: chain.nativeCurrency.name,
+        decimals: 18,
+        isNative: true
+      };
 
-    const preset = COMMON_TOKENS[chain.id]?.[sym] || customTokens[chain.id]?.[sym];
+    const preset =
+      COMMON_TOKENS[chain.id]?.[sym] || customTokens[chain.id]?.[sym];
     if (preset) return { ...preset, isNative: false };
 
     const client = getClient(chain);
@@ -291,46 +378,105 @@ export default function TerminalShell({
       const addr = queryToken as Address;
       try {
         const [decimals, tokenSymbol, name] = await Promise.all([
-          client.readContract({ address: addr, abi: erc20Abi, functionName: "decimals" }),
-          client.readContract({ address: addr, abi: erc20Abi, functionName: "symbol" }),
-          client.readContract({ address: addr, abi: erc20Abi, functionName: "name" })
+          client.readContract({
+            address: addr,
+            abi: erc20Abi,
+            functionName: "decimals"
+          }),
+          client.readContract({
+            address: addr,
+            abi: erc20Abi,
+            functionName: "symbol"
+          }),
+          client.readContract({
+            address: addr,
+            abi: erc20Abi,
+            functionName: "name"
+          })
         ]);
-        return { address: addr, symbol: String(tokenSymbol), name: String(name), decimals: Number(decimals), isNative: false };
+        return {
+          address: addr,
+          symbol: String(tokenSymbol),
+          name: String(name),
+          decimals: Number(decimals),
+          isNative: false
+        };
       } catch {
-        return { address: addr, symbol: `${addr.slice(0, 6)}...`, name: "Custom Token", decimals: 18, isNative: false };
+        return {
+          address: addr,
+          symbol: `${addr.slice(0, 6)}...`,
+          name: "Custom Token",
+          decimals: 18,
+          isNative: false
+        };
       }
     }
 
     try {
-      const res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${queryToken}`);
+      const res = await fetch(
+        `https://api.dexscreener.com/latest/dex/search?q=${queryToken}`
+      );
       const data = await res.json();
-      const pair = data.pairs?.find((p: { chainId: string }) => p.chainId.toLowerCase() === chain.name.toLowerCase() || p.chainId === "ethereum");
+      const pair = data.pairs?.find(
+        (p: { chainId: string }) =>
+          p.chainId.toLowerCase() === chain.name.toLowerCase() ||
+          p.chainId === "ethereum"
+      );
 
       if (pair?.baseToken?.address && isAddress(pair.baseToken.address)) {
         const addr = pair.baseToken.address as Address;
         try {
-          const decimals = await client.readContract({ address: addr, abi: erc20Abi, functionName: "decimals" });
-          return { address: addr, symbol: pair.baseToken.symbol, name: pair.baseToken.name, decimals: Number(decimals), isNative: false };
+          const decimals = await client.readContract({
+            address: addr,
+            abi: erc20Abi,
+            functionName: "decimals"
+          });
+          return {
+            address: addr,
+            symbol: pair.baseToken.symbol,
+            name: pair.baseToken.name,
+            decimals: Number(decimals),
+            isNative: false
+          };
         } catch {
-          return { address: addr, symbol: pair.baseToken.symbol, name: pair.baseToken.name, decimals: 18, isNative: false };
+          return {
+            address: addr,
+            symbol: pair.baseToken.symbol,
+            name: pair.baseToken.name,
+            decimals: 18,
+            isNative: false
+          };
         }
       }
     } catch {
       // Ignore fetch errors during token resolution
     }
 
-    throw new Error(`Unable to resolve token "${queryToken}" on ${chain.name}. Register it first using 'register <address>'.`);
+    throw new Error(
+      `Unable to resolve token "${queryToken}" on ${chain.name}. Register it first using 'register <address>'.`
+    );
   };
 
-  const fetchPoolAddress = async (queryA: string, queryB: string, targetChain: Chain, activeDex: DexProtocol, feeTierArg?: string) => {
+  const fetchPoolAddress = async (
+    queryA: string,
+    queryB: string,
+    targetChain: Chain,
+    activeDex: DexProtocol,
+    feeTierArg?: string
+  ) => {
     const [tokenA, tokenB] = await Promise.all([
       resolveTokenDetails(queryA, targetChain),
       resolveTokenDetails(queryB, targetChain)
     ]);
 
-    const addrA = tokenA.isNative ? WRAPPED_NATIVE[targetChain.id] || tokenA.address : tokenA.address;
-    const addrB = tokenB.isNative ? WRAPPED_NATIVE[targetChain.id] || tokenB.address : tokenB.address;
-    if (addrA.toLowerCase() === addrB.toLowerCase()) throw new Error("Tokens must be different.");
+    const addrA = tokenA.isNative
+      ? WRAPPED_NATIVE[targetChain.id] || tokenA.address
+      : tokenA.address;
+    const addrB = tokenB.isNative
+      ? WRAPPED_NATIVE[targetChain.id] || tokenB.address
+      : tokenB.address;
+    if (addrA.toLowerCase() === addrB.toLowerCase())
+      throw new Error("Tokens must be different.");
 
     const client = getClient(targetChain);
     let pairAddress: Address | undefined;
@@ -357,19 +503,32 @@ export default function TerminalShell({
         return (
           <div className="text-yellow-400 my-2 p-3 border border-yellow-900/50 bg-yellow-950/30 rounded max-w-md text-xs">
             <div className="font-bold mb-1">NO POOL FOUND</div>
-            <div>No {activeDex.type} pool exists for {tokenA.symbol}/{tokenB.symbol} on {activeDex.name}.</div>
+            <div>
+              No {activeDex.type} pool exists for {tokenA.symbol}/
+              {tokenB.symbol} on {activeDex.name}.
+            </div>
           </div>
         );
       }
 
       return (
-        <div className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs`}>
-          <div className={`flex justify-between items-center ${theme.text}/70 mb-2 border-b ${theme.border} pb-1`}>
+        <div
+          className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs`}
+        >
+          <div
+            className={`flex justify-between items-center ${theme.text}/70 mb-2 border-b ${theme.border} pb-1`}
+          >
             <span className="font-bold">ON-CHAIN POOL LOCATED</span>
-            <span>{activeDex.name} ({activeDex.type})</span>
+            <span>
+              {activeDex.name} ({activeDex.type})
+            </span>
           </div>
-          <div className={`text-lg font-bold ${theme.primary} mb-1`}>{tokenA.symbol} / {tokenB.symbol}</div>
-          <div className={`${theme.text} p-2 bg-current/10 rounded border ${theme.border} text-center my-2 font-mono flex items-center justify-center gap-2`}>
+          <div className={`text-lg font-bold ${theme.primary} mb-1`}>
+            {tokenA.symbol} / {tokenB.symbol}
+          </div>
+          <div
+            className={`${theme.text} p-2 bg-current/10 rounded border ${theme.border} text-center my-2 font-mono flex items-center justify-center gap-2`}
+          >
             <CopyableAddress address={pairAddress} theme={theme} />
           </div>
         </div>
@@ -378,78 +537,198 @@ export default function TerminalShell({
       return (
         <div className="text-red-400 my-2 p-3 border border-red-900/50 bg-red-950/30 rounded max-w-md text-xs space-y-1">
           <div className="font-bold">DEBUG ERROR DETAILS:</div>
-          <div className="font-mono text-[10px] break-all">{err.message || String(err)}</div>
+          <div className="font-mono text-[10px] break-all">
+            {err.message || String(err)}
+          </div>
         </div>
       );
     }
   };
 
-  const fetchOnChainLiquidity = async (poolAddress: string, targetChain: Chain) => {
-    if (!isAddress(poolAddress)) return <div className="text-red-400">Error: Provide a valid pool contract address (0x...).</div>;
+  const fetchOnChainLiquidity = async (
+    poolAddress: string,
+    targetChain: Chain
+  ) => {
+    if (!isAddress(poolAddress))
+      return (
+        <div className="text-red-400">
+          Error: Provide a valid pool contract address (0x...).
+        </div>
+      );
 
     const client = getClient(targetChain);
 
     try {
       const [token0, token1, fee, liquidity, slot0] = await Promise.all([
-        client.readContract({ address: poolAddress as Address, abi: parseAbi(["function token0() view returns (address)"]), functionName: "token0" }) as Promise<Address>,
-        client.readContract({ address: poolAddress as Address, abi: parseAbi(["function token1() view returns (address)"]), functionName: "token1" }) as Promise<Address>,
-        client.readContract({ address: poolAddress as Address, abi: parseAbi(["function fee() view returns (uint24)"]), functionName: "fee" }) as Promise<number>,
-        client.readContract({ address: poolAddress as Address, abi: parseAbi(["function liquidity() view returns (uint128)"]), functionName: "liquidity" }) as Promise<bigint>,
-        client.readContract({ address: poolAddress as Address, abi: uniV3PoolAbi, functionName: "slot0" }) as Promise<[bigint, number, number, number, number, number, boolean]>
+        client.readContract({
+          address: poolAddress as Address,
+          abi: parseAbi(["function token0() view returns (address)"]),
+          functionName: "token0"
+        }) as Promise<Address>,
+        client.readContract({
+          address: poolAddress as Address,
+          abi: parseAbi(["function token1() view returns (address)"]),
+          functionName: "token1"
+        }) as Promise<Address>,
+        client.readContract({
+          address: poolAddress as Address,
+          abi: parseAbi(["function fee() view returns (uint24)"]),
+          functionName: "fee"
+        }) as Promise<number>,
+        client.readContract({
+          address: poolAddress as Address,
+          abi: parseAbi(["function liquidity() view returns (uint128)"]),
+          functionName: "liquidity"
+        }) as Promise<bigint>,
+        client.readContract({
+          address: poolAddress as Address,
+          abi: uniV3PoolAbi,
+          functionName: "slot0"
+        }) as Promise<[bigint, number, number, number, number, number, boolean]>
       ]);
 
       const [dec0, sym0] = await Promise.all([
-        client.readContract({ address: token0, abi: erc20Abi, functionName: "decimals" }) as Promise<number>,
-        client.readContract({ address: token0, abi: erc20Abi, functionName: "symbol" }) as Promise<string>
+        client.readContract({
+          address: token0,
+          abi: erc20Abi,
+          functionName: "decimals"
+        }) as Promise<number>,
+        client.readContract({
+          address: token0,
+          abi: erc20Abi,
+          functionName: "symbol"
+        }) as Promise<string>
       ]);
 
       const [dec1, sym1] = await Promise.all([
-        client.readContract({ address: token1, abi: erc20Abi, functionName: "decimals" }) as Promise<number>,
-        client.readContract({ address: token1, abi: erc20Abi, functionName: "symbol" }) as Promise<string>
+        client.readContract({
+          address: token1,
+          abi: erc20Abi,
+          functionName: "decimals"
+        }) as Promise<number>,
+        client.readContract({
+          address: token1,
+          abi: erc20Abi,
+          functionName: "symbol"
+        }) as Promise<string>
       ]);
 
       return (
-        <div className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}>
-          <div className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}>
+        <div
+          className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
+        >
+          <div
+            className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+          >
             <span className="font-bold">UNISWAP V3 POOL METRICS</span>
             <span>{targetChain.name.toUpperCase()}</span>
           </div>
           <div className={`grid grid-cols-2 gap-2 ${theme.text}`}>
-            <div><div className={`text-[10px] ${theme.text}/50`}>PAIR</div><div className={`font-bold ${theme.primary}`}>{sym0} / {sym1}</div></div>
-            <div><div className={`text-[10px] ${theme.text}/50`}>FEE TIER</div><div className={`font-bold ${theme.primary}`}>{Number(fee) / 10000}%</div></div>
-            <div><div className={`text-[10px] ${theme.text}/50`}>ACTIVE LIQUIDITY</div><div className={`font-bold ${theme.primary}`}>{liquidity.toString()}</div></div>
-            <div><div className={`text-[10px] ${theme.text}/50`}>CURRENT TICK</div><div className={`font-bold ${theme.primary}`}>{slot0[1]}</div></div>
+            <div>
+              <div className={`text-[10px] ${theme.text}/50`}>PAIR</div>
+              <div className={`font-bold ${theme.primary}`}>
+                {sym0} / {sym1}
+              </div>
+            </div>
+            <div>
+              <div className={`text-[10px] ${theme.text}/50`}>FEE TIER</div>
+              <div className={`font-bold ${theme.primary}`}>
+                {Number(fee) / 10000}%
+              </div>
+            </div>
+            <div>
+              <div className={`text-[10px] ${theme.text}/50`}>
+                ACTIVE LIQUIDITY
+              </div>
+              <div className={`font-bold ${theme.primary}`}>
+                {liquidity.toString()}
+              </div>
+            </div>
+            <div>
+              <div className={`text-[10px] ${theme.text}/50`}>CURRENT TICK</div>
+              <div className={`font-bold ${theme.primary}`}>{slot0[1]}</div>
+            </div>
           </div>
-          <div className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border}`}>SQRT PRICE X96: {slot0[0].toString()}</div>
+          <div
+            className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border}`}
+          >
+            SQRT PRICE X96: {slot0[0].toString()}
+          </div>
         </div>
       );
     } catch {
       try {
         const [token0, token1, reserves] = await Promise.all([
-          client.readContract({ address: poolAddress as Address, abi: uniV2PairAbi, functionName: "token0" }) as Promise<Address>,
-          client.readContract({ address: poolAddress as Address, abi: uniV2PairAbi, functionName: "token1" }) as Promise<Address>,
-          client.readContract({ address: poolAddress as Address, abi: uniV2PairAbi, functionName: "getReserves" }) as Promise<[bigint, bigint, number]>
+          client.readContract({
+            address: poolAddress as Address,
+            abi: uniV2PairAbi,
+            functionName: "token0"
+          }) as Promise<Address>,
+          client.readContract({
+            address: poolAddress as Address,
+            abi: uniV2PairAbi,
+            functionName: "token1"
+          }) as Promise<Address>,
+          client.readContract({
+            address: poolAddress as Address,
+            abi: uniV2PairAbi,
+            functionName: "getReserves"
+          }) as Promise<[bigint, bigint, number]>
         ]);
 
         const [dec0, sym0] = await Promise.all([
-          client.readContract({ address: token0, abi: erc20Abi, functionName: "decimals" }) as Promise<number>,
-          client.readContract({ address: token0, abi: erc20Abi, functionName: "symbol" }) as Promise<string>
+          client.readContract({
+            address: token0,
+            abi: erc20Abi,
+            functionName: "decimals"
+          }) as Promise<number>,
+          client.readContract({
+            address: token0,
+            abi: erc20Abi,
+            functionName: "symbol"
+          }) as Promise<string>
         ]);
 
         const [dec1, sym1] = await Promise.all([
-          client.readContract({ address: token1, abi: erc20Abi, functionName: "decimals" }) as Promise<number>,
-          client.readContract({ address: token1, abi: erc20Abi, functionName: "symbol" }) as Promise<string>
+          client.readContract({
+            address: token1,
+            abi: erc20Abi,
+            functionName: "decimals"
+          }) as Promise<number>,
+          client.readContract({
+            address: token1,
+            abi: erc20Abi,
+            functionName: "symbol"
+          }) as Promise<string>
         ]);
 
         return (
-          <div className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}>
-            <div className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}>
+          <div
+            className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
+          >
+            <div
+              className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+            >
               <span className="font-bold">UNISWAP V2 POOL RESERVES</span>
               <span>{targetChain.name.toUpperCase()}</span>
             </div>
             <div className={`grid grid-cols-2 gap-4 ${theme.text}`}>
-              <div><div className={`text-[10px] ${theme.text}/50`}>{sym0} RESERVE</div><div className={`text-base font-bold ${theme.primary}`}>{parseFloat(formatUnits(reserves[0], dec0)).toLocaleString()}</div></div>
-              <div><div className={`text-[10px] ${theme.text}/50`}>{sym1} RESERVE</div><div className={`text-base font-bold ${theme.primary}`}>{parseFloat(formatUnits(reserves[1], dec1)).toLocaleString()}</div></div>
+              <div>
+                <div className={`text-[10px] ${theme.text}/50`}>
+                  {sym0} RESERVE
+                </div>
+                <div className={`text-base font-bold ${theme.primary}`}>
+                  {parseFloat(formatUnits(reserves[0], dec0)).toLocaleString()}
+                </div>
+              </div>
+              <div>
+                <div className={`text-[10px] ${theme.text}/50`}>
+                  {sym1} RESERVE
+                </div>
+                <div className={`text-base font-bold ${theme.primary}`}>
+                  {parseFloat(formatUnits(reserves[1], dec1)).toLocaleString()}
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -457,30 +736,50 @@ export default function TerminalShell({
         return (
           <div className="text-red-400 my-1 p-2 border border-red-900/50 bg-red-950/30 rounded max-w-md text-xs">
             <div className="font-bold">Failed to read pool contract.</div>
-            <div>Ensure {poolAddress} is a valid V2 pair or V3 pool address.</div>
+            <div>
+              Ensure {poolAddress} is a valid V2 pair or V3 pool address.
+            </div>
           </div>
         );
       }
     }
   };
 
-  const fetchTokenBalanceData = async (userAddress: Address, targetChain: Chain, queryToken?: string) => {
+  const fetchTokenBalanceData = async (
+    userAddress: Address,
+    targetChain: Chain,
+    queryToken?: string
+  ) => {
     const client = getClient(targetChain);
     if (!queryToken) {
       const bal = await client.getBalance({ address: userAddress });
-      return { balance: formatEther(bal), symbol: targetChain.nativeCurrency.symbol };
+      return {
+        balance: formatEther(bal),
+        symbol: targetChain.nativeCurrency.symbol
+      };
     }
     const token = await resolveTokenDetails(queryToken, targetChain);
     if (token.isNative) {
       const bal = await client.getBalance({ address: userAddress });
       return { balance: formatEther(bal), symbol: token.symbol };
     }
-    const bal = await client.readContract({ address: token.address, abi: erc20Abi, functionName: "balanceOf", args: [userAddress] });
-    return { balance: formatUnits(bal as bigint, token.decimals), symbol: token.symbol };
+    const bal = await client.readContract({
+      address: token.address,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [userAddress]
+    });
+    return {
+      balance: formatUnits(bal as bigint, token.decimals),
+      symbol: token.symbol
+    };
   };
 
   // COMMAND REGISTRY
-  type CommandHandler = (args: string[], rawInput: string) => Promise<LogEntry | LogEntry[] | null> | LogEntry | LogEntry[] | null;
+  type CommandHandler = (
+    args: string[],
+    rawInput: string
+  ) => Promise<LogEntry | LogEntry[] | null> | LogEntry | LogEntry[] | null;
 
   const commands: Record<string, CommandHandler> = {
     clear: () => {
@@ -493,7 +792,9 @@ export default function TerminalShell({
       let netText = "";
       const queryArg = args.slice(1).join(" ");
       if (!queryArg) {
-        const currentChainObj = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+        const currentChainObj = SUPPORTED_CHAINS.find(
+          (c) => c.id === activeChainId
+        );
         netText = `Active Network: ${currentChainObj?.name || "None"}`;
       } else if (queryArg === "0") {
         setActiveChainId(null);
@@ -506,24 +807,34 @@ export default function TerminalShell({
         if (!targetChain) netText = "Network not recognized.";
         else {
           handleChainSwitch(targetChain.id);
-          if (isConnected) await switchChainAsync({ chainId: targetChain.id }).catch(() => {});
+          if (isConnected)
+            await switchChainAsync({ chainId: targetChain.id }).catch(() => {});
           netText = `[✓] Network set to ${targetChain.name}`;
         }
       }
       return { id: generateId(), type: "text", text: netText };
     },
     dexes: () => {
-      if (!activeChainId) return { id: generateId(), type: "text", text: "Select network first." };
+      if (!activeChainId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network first."
+        };
       return { id: generateId(), type: "dexes" };
     },
     dex: (args) => {
       let dexText = "";
       if (!activeChainId) dexText = "Select network first.";
       else if (!args[1]) {
-        const activeDexObj = DEX_REGISTRY[activeChainId]?.find((d) => d.id === activeDexId);
+        const activeDexObj = DEX_REGISTRY[activeChainId]?.find(
+          (d) => d.id === activeDexId
+        );
         dexText = `Active DEX: ${activeDexObj?.name || "None"}`;
       } else {
-        const targetDex = DEX_REGISTRY[activeChainId]?.find((d) => d.id === args[1].toLowerCase());
+        const targetDex = DEX_REGISTRY[activeChainId]?.find(
+          (d) => d.id === args[1].toLowerCase()
+        );
         if (!targetDex) dexText = "DEX not found.";
         else {
           setActiveDexId(targetDex.id);
@@ -560,7 +871,12 @@ export default function TerminalShell({
       };
     },
     rpc: (args) => {
-      if (!activeChainId) return { id: generateId(), type: "text", text: "Select network first using 'network <name>'." };
+      if (!activeChainId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network first using 'network <name>'."
+        };
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
       const chainProviders = rpcProviders[targetChain.id] || {};
       const activeName = activeRpcProviders[targetChain.id] || "default";
@@ -569,10 +885,12 @@ export default function TerminalShell({
         const defaultUrl = targetChain.rpcUrls.default.http[0];
         const allProviders = { default: defaultUrl, ...chainProviders };
 
-        const providerLines = Object.entries(allProviders).map(([name, url]) => {
-          const isActive = name === activeName;
-          return `${isActive ? '▶ [ACTIVE]' : '         '} ${name.toUpperCase()}:\n           ${url}`;
-        });
+        const providerLines = Object.entries(allProviders).map(
+          ([name, url]) => {
+            const isActive = name === activeName;
+            return `${isActive ? "▶ [ACTIVE]" : "         "} ${name.toUpperCase()}:\n           ${url}`;
+          }
+        );
 
         const helpText = [
           `RPC Providers for ${targetChain.name}:`,
@@ -594,27 +912,50 @@ export default function TerminalShell({
 
       if (sub === "use" || sub === "switch") {
         const providerName = args[2]?.toLowerCase();
-        if (!providerName) return { id: generateId(), type: "text", text: "Usage: rpc use <providerName> (e.g., 'rpc use alchemy', 'rpc use default')" };
+        if (!providerName)
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Usage: rpc use <providerName> (e.g., 'rpc use alchemy', 'rpc use default')"
+          };
 
         if (providerName !== "default" && !chainProviders[providerName]) {
-          return { id: generateId(), type: "text", text: `[!] Provider "${providerName}" not found for ${targetChain.name}. Configure it first.` };
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] Provider "${providerName}" not found for ${targetChain.name}. Configure it first.`
+          };
         }
 
-        const updatedActive = { ...activeRpcProviders, [targetChain.id]: providerName };
+        const updatedActive = {
+          ...activeRpcProviders,
+          [targetChain.id]: providerName
+        };
         setActiveRpcProviders(updatedActive);
         savePreference("activeRpcProviders", updatedActive);
-        return { id: generateId(), type: "text", text: `[✓] Switched active RPC provider to "${providerName}" on ${targetChain.name}.` };
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[✓] Switched active RPC provider to "${providerName}" on ${targetChain.name}.`
+        };
       }
 
       if (sub === "add") {
         const name = args[2]?.toLowerCase();
         const url = args[3];
         if (!name || !url || !url.startsWith("http")) {
-          return { id: generateId(), type: "text", text: "Usage: rpc add <name> <url>" };
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Usage: rpc add <name> <url>"
+          };
         }
 
         const updatedChainProviders = { ...chainProviders, [name]: url };
-        const updatedAll = { ...rpcProviders, [targetChain.id]: updatedChainProviders };
+        const updatedAll = {
+          ...rpcProviders,
+          [targetChain.id]: updatedChainProviders
+        };
         const updatedActive = { ...activeRpcProviders, [targetChain.id]: name };
 
         setRpcProviders(updatedAll);
@@ -622,21 +963,42 @@ export default function TerminalShell({
         savePreference("rpcProviders", updatedAll);
         savePreference("activeRpcProviders", updatedActive);
 
-        return { id: generateId(), type: "text", text: `[✓] Added and activated RPC provider "${name}" for ${targetChain.name}.` };
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[✓] Added and activated RPC provider "${name}" for ${targetChain.name}.`
+        };
       }
 
       if (sub === "remove" || sub === "rm") {
         const name = args[2]?.toLowerCase();
-        if (!name) return { id: generateId(), type: "text", text: "Usage: rpc remove <name>" };
-        if (name === "default") return { id: generateId(), type: "text", text: "Cannot remove default provider." };
+        if (!name)
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Usage: rpc remove <name>"
+          };
+        if (name === "default")
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Cannot remove default provider."
+          };
 
         if (!chainProviders[name]) {
-          return { id: generateId(), type: "text", text: `[!] Provider "${name}" not found.` };
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] Provider "${name}" not found.`
+          };
         }
 
         const updatedChainProviders = { ...chainProviders };
         delete updatedChainProviders[name];
-        const updatedAll = { ...rpcProviders, [targetChain.id]: updatedChainProviders };
+        const updatedAll = {
+          ...rpcProviders,
+          [targetChain.id]: updatedChainProviders
+        };
 
         const updatedActive = { ...activeRpcProviders };
         if (activeName === name) {
@@ -648,7 +1010,11 @@ export default function TerminalShell({
         savePreference("rpcProviders", updatedAll);
         savePreference("activeRpcProviders", updatedActive);
 
-        return { id: generateId(), type: "text", text: `[✓] Removed RPC provider "${name}". Active provider reverted to default if needed.` };
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[✓] Removed RPC provider "${name}". Active provider reverted to default if needed.`
+        };
       }
 
       let newUrl = "";
@@ -656,19 +1022,44 @@ export default function TerminalShell({
 
       if (sub === "alchemy") {
         const key = args[2];
-        if (!key) return { id: generateId(), type: "text", text: "Usage: rpc alchemy <apiKey>" };
+        if (!key)
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Usage: rpc alchemy <apiKey>"
+          };
         const subDomain = getAlchemySubdomain(targetChain.id);
-        if (!subDomain) return { id: generateId(), type: "text", text: `[!] Alchemy preset not available for ${targetChain.name}. Use 'rpc add custom <url>'.` };
+        if (!subDomain)
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] Alchemy preset not available for ${targetChain.name}. Use 'rpc add custom <url>'.`
+          };
         newUrl = `https://${subDomain}.g.alchemy.com/v2/${key}`;
       } else if (sub === "infura") {
         const key = args[2];
-        if (!key) return { id: generateId(), type: "text", text: "Usage: rpc infura <apiKey>" };
+        if (!key)
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Usage: rpc infura <apiKey>"
+          };
         const subDomain = getInfuraSubdomain(targetChain.id);
-        if (!subDomain) return { id: generateId(), type: "text", text: `[!] Infura preset not available for ${targetChain.name}. Use 'rpc add custom <url>'.` };
+        if (!subDomain)
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] Infura preset not available for ${targetChain.name}. Use 'rpc add custom <url>'.`
+          };
         newUrl = `https://${subDomain}.infura.io/v3/${key}`;
       } else if (sub === "quicknode") {
         const endpoint = args[2];
-        if (!endpoint) return { id: generateId(), type: "text", text: "Usage: rpc quicknode <endpointUrlOrKey>" };
+        if (!endpoint)
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Usage: rpc quicknode <endpointUrlOrKey>"
+          };
         newUrl = endpoint.startsWith("http") ? endpoint : `https://${endpoint}`;
       } else if (args[1].startsWith("http")) {
         newUrl = args[1];
@@ -681,9 +1072,18 @@ export default function TerminalShell({
         };
       }
 
-      const updatedChainProviders = { ...chainProviders, [providerKey]: newUrl };
-      const updatedAll = { ...rpcProviders, [targetChain.id]: updatedChainProviders };
-      const updatedActive = { ...activeRpcProviders, [targetChain.id]: providerKey };
+      const updatedChainProviders = {
+        ...chainProviders,
+        [providerKey]: newUrl
+      };
+      const updatedAll = {
+        ...rpcProviders,
+        [targetChain.id]: updatedChainProviders
+      };
+      const updatedActive = {
+        ...activeRpcProviders,
+        [targetChain.id]: providerKey
+      };
 
       setRpcProviders(updatedAll);
       setActiveRpcProviders(updatedActive);
@@ -697,19 +1097,43 @@ export default function TerminalShell({
       };
     },
     register: async (args) => {
-      if (!activeChainId) return { id: generateId(), type: "text", text: "Select network first using 'network <name>'." };
-      if (!args[1] || !isAddress(args[1])) return { id: generateId(), type: "text", text: "Usage: register <tokenAddress> [customSymbol]" };
+      if (!activeChainId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network first using 'network <name>'."
+        };
+      if (!args[1] || !isAddress(args[1]))
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: register <tokenAddress> [customSymbol]"
+        };
 
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
       const tokenAddress = args[1] as Address;
       const client = getClient(targetChain);
 
-      let contractSymbol: string, contractDecimals: number, contractName: string;
+      let contractSymbol: string,
+        contractDecimals: number,
+        contractName: string;
       try {
         const [symRes, decRes, nameRes] = await Promise.all([
-          client.readContract({ address: tokenAddress, abi: erc20Abi, functionName: "symbol" }),
-          client.readContract({ address: tokenAddress, abi: erc20Abi, functionName: "decimals" }),
-          client.readContract({ address: tokenAddress, abi: erc20Abi, functionName: "name" })
+          client.readContract({
+            address: tokenAddress,
+            abi: erc20Abi,
+            functionName: "symbol"
+          }),
+          client.readContract({
+            address: tokenAddress,
+            abi: erc20Abi,
+            functionName: "decimals"
+          }),
+          client.readContract({
+            address: tokenAddress,
+            abi: erc20Abi,
+            functionName: "name"
+          })
         ]);
         contractSymbol = String(symRes);
         contractDecimals = Number(decRes);
@@ -726,7 +1150,8 @@ export default function TerminalShell({
 
       const existingCommon = COMMON_TOKENS[targetChain.id]?.[symbolToUse];
       const existingCustom = customTokens[targetChain.id]?.[symbolToUse];
-      const isNative = symbolToUse === targetChain.nativeCurrency.symbol.toUpperCase();
+      const isNative =
+        symbolToUse === targetChain.nativeCurrency.symbol.toUpperCase();
 
       if (existingCommon || existingCustom || isNative) {
         return {
@@ -744,8 +1169,14 @@ export default function TerminalShell({
         isNative: false
       };
 
-      const updatedChainTokens = { ...(customTokens[targetChain.id] || {}), [symbolToUse]: newToken };
-      const updatedAllTokens = { ...customTokens, [targetChain.id]: updatedChainTokens };
+      const updatedChainTokens = {
+        ...(customTokens[targetChain.id] || {}),
+        [symbolToUse]: newToken
+      };
+      const updatedAllTokens = {
+        ...customTokens,
+        [targetChain.id]: updatedChainTokens
+      };
 
       setCustomTokens(updatedAllTokens);
       saveCustomTokenToStorage(updatedAllTokens);
@@ -757,12 +1188,21 @@ export default function TerminalShell({
       };
     },
     export: () => {
-      if (!isConnected || !address) return { id: generateId(), type: "text", text: "Wallet not connected. Connect a wallet to export its profile and custom tokens." };
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected. Connect a wallet to export its profile and custom tokens."
+        };
       const userKey = `0xterm_user_${address.toLowerCase()}`;
       const tokensKey = `0xterm_custom_tokens_${address.toLowerCase()}`;
-      const prefs = localStorage.getItem(userKey) ? JSON.parse(localStorage.getItem(userKey)!) : {};
-      const tokens = localStorage.getItem(tokensKey) ? JSON.parse(localStorage.getItem(tokensKey)!) : {};
-      
+      const prefs = localStorage.getItem(userKey)
+        ? JSON.parse(localStorage.getItem(userKey)!)
+        : {};
+      const tokens = localStorage.getItem(tokensKey)
+        ? JSON.parse(localStorage.getItem(tokensKey)!)
+        : {};
+
       const exportData = {
         version: "1.0",
         wallet: address,
@@ -770,15 +1210,26 @@ export default function TerminalShell({
         customTokens: tokens
       };
 
-      const exportWidget = <ExportWidget exportData={exportData} theme={theme} address={address} />;
+      const exportWidget = (
+        <ExportWidget exportData={exportData} theme={theme} address={address} />
+      );
       return { id: generateId(), type: "component", component: exportWidget };
     },
     import: (args, rawInput) => {
-      if (!isConnected || !address) return { id: generateId(), type: "text", text: "Wallet not connected. Connect your target wallet first before importing." };
-      
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected. Connect your target wallet first before importing."
+        };
+
       const match = rawInput.trim().match(/^(import|imp)\s+([\s\S]+)$/i);
       if (!match || !match[2]) {
-        return { id: generateId(), type: "text", text: "Usage: import <json_payload>" };
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: import <json_payload>"
+        };
       }
 
       const jsonStr = match[2].trim();
@@ -786,7 +1237,11 @@ export default function TerminalShell({
       try {
         const data = JSON.parse(jsonStr);
         if (!data.preferences && !data.customTokens) {
-          return { id: generateId(), type: "text", text: "[!] Error: Invalid configuration JSON format." };
+          return {
+            id: generateId(),
+            type: "text",
+            text: "[!] Error: Invalid configuration JSON format."
+          };
         }
 
         const userKey = `0xterm_user_${address.toLowerCase()}`;
@@ -794,11 +1249,16 @@ export default function TerminalShell({
 
         if (data.preferences) {
           localStorage.setItem(userKey, JSON.stringify(data.preferences));
-          if (data.preferences.theme && THEMES[data.preferences.theme as ThemeMode]) {
+          if (
+            data.preferences.theme &&
+            THEMES[data.preferences.theme as ThemeMode]
+          ) {
             onThemeChange(data.preferences.theme as ThemeMode);
           }
-          if (data.preferences.rpcProviders) setRpcProviders(data.preferences.rpcProviders);
-          if (data.preferences.activeRpcProviders) setActiveRpcProviders(data.preferences.activeRpcProviders);
+          if (data.preferences.rpcProviders)
+            setRpcProviders(data.preferences.rpcProviders);
+          if (data.preferences.activeRpcProviders)
+            setActiveRpcProviders(data.preferences.activeRpcProviders);
           if (data.preferences.chainId) {
             setActiveChainId(data.preferences.chainId);
             if (data.preferences.dexId) {
@@ -818,26 +1278,44 @@ export default function TerminalShell({
           text: `[✓] Successfully imported settings and custom tokens to wallet ${address.slice(0, 6)}...${address.slice(-4)}!`
         };
       } catch (e: any) {
-        return { id: generateId(), type: "text", text: `[!] Error parsing JSON: ${e.message}` };
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] Error parsing JSON: ${e.message}`
+        };
       }
     },
     price: async (args) => {
-      if (!args[1]) return { id: generateId(), type: "text", text: "Usage: price <tokenA> [tokenB] [pool|api]" };
+      if (!args[1])
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: price <tokenA> [tokenB] [pool|api]"
+        };
 
       let source = "pool";
       const filteredArgs = [...args.slice(1)];
       const lastArg = filteredArgs[filteredArgs.length - 1].toLowerCase();
 
       if (["api", "pool", "dexscreener", "onchain"].includes(lastArg)) {
-        source = (lastArg === "api" || lastArg === "dexscreener") ? "api" : "pool";
+        source =
+          lastArg === "api" || lastArg === "dexscreener" ? "api" : "pool";
         filteredArgs.pop();
       }
 
       const queryA = filteredArgs[0];
       let queryB = filteredArgs[1];
-      const targetChain = activeChainId ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId) : null;
+      const targetChain = activeChainId
+        ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
+        : null;
 
-      if (source === "api" && targetChain && (targetChain.testnet || targetChain.id === 11155111 || targetChain.name.toLowerCase().includes("sepolia"))) {
+      if (
+        source === "api" &&
+        targetChain &&
+        (targetChain.testnet ||
+          targetChain.id === 11155111 ||
+          targetChain.name.toLowerCase().includes("sepolia"))
+      ) {
         return {
           id: generateId(),
           type: "text",
@@ -854,8 +1332,15 @@ export default function TerminalShell({
           };
         }
 
-        const activeDex = DEX_REGISTRY[activeChainId]?.find((d) => d.id === activeDexId);
-        if (!activeDex) return { id: generateId(), type: "text", text: "Invalid active DEX." };
+        const activeDex = DEX_REGISTRY[activeChainId]?.find(
+          (d) => d.id === activeDexId
+        );
+        if (!activeDex)
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Invalid active DEX."
+          };
 
         if (!queryB) {
           const common = COMMON_TOKENS[targetChain!.id];
@@ -870,8 +1355,12 @@ export default function TerminalShell({
             resolveTokenDetails(queryB, targetChain!)
           ]);
 
-          const addrA = tokenA.isNative ? WRAPPED_NATIVE[targetChain!.id] || tokenA.address : tokenA.address;
-          const addrB = tokenB.isNative ? WRAPPED_NATIVE[targetChain!.id] || tokenB.address : tokenB.address;
+          const addrA = tokenA.isNative
+            ? WRAPPED_NATIVE[targetChain!.id] || tokenA.address
+            : tokenA.address;
+          const addrB = tokenB.isNative
+            ? WRAPPED_NATIVE[targetChain!.id] || tokenB.address
+            : tokenB.address;
 
           if (addrA.toLowerCase() === addrB.toLowerCase()) {
             throw new Error("Tokens must be different.");
@@ -908,28 +1397,56 @@ export default function TerminalShell({
 
           if (activeDex.type === "V2") {
             const [token0, reserves] = await Promise.all([
-              client.readContract({ address: pairAddress, abi: uniV2PairAbi, functionName: "token0" }),
-              client.readContract({ address: pairAddress, abi: uniV2PairAbi, functionName: "getReserves" })
+              client.readContract({
+                address: pairAddress,
+                abi: uniV2PairAbi,
+                functionName: "token0"
+              }),
+              client.readContract({
+                address: pairAddress,
+                abi: uniV2PairAbi,
+                functionName: "getReserves"
+              })
             ]);
 
-            const reserveA = (token0 as string).toLowerCase() === addrA.toLowerCase() ? reserves[0] : reserves[1];
-            const reserveB = (token0 as string).toLowerCase() === addrA.toLowerCase() ? reserves[1] : reserves[0];
+            const reserveA =
+              (token0 as string).toLowerCase() === addrA.toLowerCase()
+                ? reserves[0]
+                : reserves[1];
+            const reserveB =
+              (token0 as string).toLowerCase() === addrA.toLowerCase()
+                ? reserves[1]
+                : reserves[0];
 
-            const formattedA = parseFloat(formatUnits(reserveA, tokenA.decimals));
-            const formattedB = parseFloat(formatUnits(reserveB, tokenB.decimals));
+            const formattedA = parseFloat(
+              formatUnits(reserveA, tokenA.decimals)
+            );
+            const formattedB = parseFloat(
+              formatUnits(reserveB, tokenB.decimals)
+            );
 
-            if (formattedA === 0) throw new Error("Pool reserve for token A is zero.");
+            if (formattedA === 0)
+              throw new Error("Pool reserve for token A is zero.");
             priceRatio = formattedB / formattedA;
           } else {
             const [token0, slot0] = await Promise.all([
-              client.readContract({ address: pairAddress, abi: parseAbi(["function token0() view returns (address)"]), functionName: "token0" }),
-              client.readContract({ address: pairAddress, abi: uniV3PoolAbi, functionName: "slot0" })
+              client.readContract({
+                address: pairAddress,
+                abi: parseAbi(["function token0() view returns (address)"]),
+                functionName: "token0"
+              }),
+              client.readContract({
+                address: pairAddress,
+                abi: uniV3PoolAbi,
+                functionName: "slot0"
+              })
             ]);
 
             const sqrtPriceX96 = slot0[0];
-            const isTokenA0 = (token0 as string).toLowerCase() === addrA.toLowerCase();
+            const isTokenA0 =
+              (token0 as string).toLowerCase() === addrA.toLowerCase();
 
-            const sqrtPriceFloat = Number(sqrtPriceX96) / (2 ** 96);
+            const sqrtPriceFloat = Number(sqrtPriceX96) / 2 ** 96;
             const pRaw = Math.pow(sqrtPriceFloat, 2);
 
             const dec0 = isTokenA0 ? tokenA.decimals : tokenB.decimals;
@@ -945,66 +1462,107 @@ export default function TerminalShell({
           }
 
           const priceWidget = (
-            <div className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}>
-              <div className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}>
-                <span className="font-bold">ON-CHAIN POOL PRICE ({activeDex.name})</span>
+            <div
+              className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
+            >
+              <div
+                className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+              >
+                <span className="font-bold">
+                  ON-CHAIN POOL PRICE ({activeDex.name})
+                </span>
                 <span className="uppercase">{targetChain!.name}</span>
               </div>
               <div className={`grid grid-cols-2 gap-4 ${theme.text}`}>
                 <div>
                   <div className={`text-[10px] ${theme.text}/50`}>PAIR</div>
-                  <div className={`text-base font-bold ${theme.primary}`}>{tokenA.symbol} / {tokenB.symbol}</div>
+                  <div className={`text-base font-bold ${theme.primary}`}>
+                    {tokenA.symbol} / {tokenB.symbol}
+                  </div>
                 </div>
                 <div>
-                  <div className={`text-[10px] ${theme.text}/50`}>RATE (ON-CHAIN)</div>
+                  <div className={`text-[10px] ${theme.text}/50`}>
+                    RATE (ON-CHAIN)
+                  </div>
                   <div className={`text-base font-bold ${theme.primary}`}>
-                    1 {tokenA.symbol} = {priceRatio.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })} {tokenB.symbol}
+                    1 {tokenA.symbol} ={" "}
+                    {priceRatio.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 8
+                    })}{" "}
+                    {tokenB.symbol}
                   </div>
                 </div>
               </div>
-              <div className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border} flex items-center gap-1`}>
-                <span>POOL ADDRESS:</span> <CopyableAddress address={pairAddress} theme={theme} />
+              <div
+                className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border} flex items-center gap-1`}
+              >
+                <span>POOL ADDRESS:</span>{" "}
+                <CopyableAddress address={pairAddress} theme={theme} />
               </div>
             </div>
           );
 
-          return { id: generateId(), type: "component", component: priceWidget };
+          return {
+            id: generateId(),
+            type: "component",
+            component: priceWidget
+          };
         } catch (err: any) {
-          return { id: generateId(), type: "text", text: `On-chain pool error: ${err.message || err}` };
+          return {
+            id: generateId(),
+            type: "text",
+            text: `On-chain pool error: ${err.message || err}`
+          };
         }
       } else {
         const encodedQuery = encodeURIComponent(queryA);
         let res;
-        
+
         try {
-          res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodedQuery}`);
+          res = await fetch(
+            `https://api.dexscreener.com/latest/dex/search?q=${encodedQuery}`
+          );
         } catch (e) {
-          return { 
-            id: generateId(), 
-            type: "text", 
-            text: "[!] API Fetch Failed: Request timed out or was blocked. Ensure your ad-blocker isn't blocking 'api.dexscreener.com'." 
+          return {
+            id: generateId(),
+            type: "text",
+            text: "[!] API Fetch Failed: Request timed out or was blocked. Ensure your ad-blocker isn't blocking 'api.dexscreener.com'."
           };
         }
 
         if (!res.ok) {
-           return { id: generateId(), type: "text", text: `DexScreener API returned status error: ${res.status}` };
+          return {
+            id: generateId(),
+            type: "text",
+            text: `DexScreener API returned status error: ${res.status}`
+          };
         }
 
         const data = await res.json();
-        
+
         if (!data.pairs || data.pairs.length === 0) {
-          return { id: generateId(), type: "text", text: `No API price data found for "${queryA}".` };
+          return {
+            id: generateId(),
+            type: "text",
+            text: `No API price data found for "${queryA}".`
+          };
         }
 
         const chainName = targetChain ? targetChain.name.toLowerCase() : "";
 
         let pair = data.pairs.find((p: any) => {
           const matchesChain = p.chainId.toLowerCase() === chainName;
-          const matchesQuote = queryB ? p.quoteToken.symbol.toLowerCase() === queryB.toLowerCase() : true;
+          const matchesQuote = queryB
+            ? p.quoteToken.symbol.toLowerCase() === queryB.toLowerCase()
+            : true;
           return matchesChain && matchesQuote;
         });
 
-        if (!pair) pair = data.pairs.find((p: any) => p.chainId.toLowerCase() === chainName);
+        if (!pair)
+          pair = data.pairs.find(
+            (p: any) => p.chainId.toLowerCase() === chainName
+          );
         if (!pair) pair = data.pairs[0];
 
         const priceUsd = pair.priceUsd;
@@ -1016,32 +1574,56 @@ export default function TerminalShell({
         const h24 = pair.priceChange?.h24;
 
         const priceWidget = (
-          <div className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}>
-            <div className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}>
-              <span className="font-bold">DEXSCREENER API PRICE ({dex.toUpperCase()})</span>
+          <div
+            className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
+          >
+            <div
+              className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+            >
+              <span className="font-bold">
+                DEXSCREENER API PRICE ({dex.toUpperCase()})
+              </span>
               <span className="uppercase">{chain}</span>
             </div>
             <div className={`grid grid-cols-2 gap-4 ${theme.text}`}>
               <div>
                 <div className={`text-[10px] ${theme.text}/50`}>PAIR</div>
-                <div className={`text-base font-bold ${theme.primary}`}>{tokenSymbol} / {quoteSymbol}</div>
-              </div>
-              <div>
-                <div className={`text-[10px] ${theme.text}/50`}>PRICE (USD)</div>
                 <div className={`text-base font-bold ${theme.primary}`}>
-                  ${priceUsd ? parseFloat(priceUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) : "N/A"}
+                  {tokenSymbol} / {quoteSymbol}
                 </div>
               </div>
               <div>
-                <div className={`text-[10px] ${theme.text}/50`}>PRICE ({quoteSymbol})</div>
+                <div className={`text-[10px] ${theme.text}/50`}>
+                  PRICE (USD)
+                </div>
                 <div className={`text-base font-bold ${theme.primary}`}>
-                  {priceNative ? parseFloat(priceNative).toLocaleString(undefined, { maximumFractionDigits: 6 }) : "N/A"}
+                  $
+                  {priceUsd
+                    ? parseFloat(priceUsd).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 6
+                      })
+                    : "N/A"}
+                </div>
+              </div>
+              <div>
+                <div className={`text-[10px] ${theme.text}/50`}>
+                  PRICE ({quoteSymbol})
+                </div>
+                <div className={`text-base font-bold ${theme.primary}`}>
+                  {priceNative
+                    ? parseFloat(priceNative).toLocaleString(undefined, {
+                        maximumFractionDigits: 6
+                      })
+                    : "N/A"}
                 </div>
               </div>
               <div>
                 <div className={`text-[10px] ${theme.text}/50`}>24H CHANGE</div>
-                <div className={`text-base font-bold ${h24 >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {h24 !== undefined ? `${h24 > 0 ? '+' : ''}${h24}%` : "N/A"}
+                <div
+                  className={`text-base font-bold ${h24 >= 0 ? "text-green-400" : "text-red-400"}`}
+                >
+                  {h24 !== undefined ? `${h24 > 0 ? "+" : ""}${h24}%` : "N/A"}
                 </div>
               </div>
             </div>
@@ -1052,42 +1634,106 @@ export default function TerminalShell({
       }
     },
     createpool: async (args) => {
-      if (!isConnected || !address) return { id: generateId(), type: "text", text: "Wallet not connected." };
-      if (!activeChainId || !activeDexId) return { id: generateId(), type: "text", text: "Select network and DEX first." };
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected."
+        };
+      if (!activeChainId || !activeDexId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network and DEX first."
+        };
 
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
-      const activeDex = DEX_REGISTRY[activeChainId]?.find((d) => d.id === activeDexId);
-      if (!activeDex) return { id: generateId(), type: "text", text: 'Invalid active DEX for this network. Type "dexes" to see available DEXes.' };
-      if (!args[1] || !args[2]) return { id: generateId(), type: "text", text: "Usage: createpool <tokenA> <tokenB> [fee]" };
+      const activeDex = DEX_REGISTRY[activeChainId]?.find(
+        (d) => d.id === activeDexId
+      );
+      if (!activeDex)
+        return {
+          id: generateId(),
+          type: "text",
+          text: 'Invalid active DEX for this network. Type "dexes" to see available DEXes.'
+        };
+      if (!args[1] || !args[2])
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: createpool <tokenA> <tokenB> [fee]"
+        };
 
       const [tokenA, tokenB] = await Promise.all([
         resolveTokenDetails(args[1], targetChain),
         resolveTokenDetails(args[2], targetChain)
       ]);
-      const addrA = tokenA.isNative ? WRAPPED_NATIVE[targetChain.id] || tokenA.address : tokenA.address;
-      const addrB = tokenB.isNative ? WRAPPED_NATIVE[targetChain.id] || tokenB.address : tokenB.address;
+      const addrA = tokenA.isNative
+        ? WRAPPED_NATIVE[targetChain.id] || tokenA.address
+        : tokenA.address;
+      const addrB = tokenB.isNative
+        ? WRAPPED_NATIVE[targetChain.id] || tokenB.address
+        : tokenB.address;
       const fee = args[3] ? parseInt(args[3]) : 3000;
 
-      return { id: generateId(), type: "createpool", payload: { targetChain, activeDex, tokenA, tokenB, addrA, addrB, fee } };
+      return {
+        id: generateId(),
+        type: "createpool",
+        payload: { targetChain, activeDex, tokenA, tokenB, addrA, addrB, fee }
+      };
     },
     initialize: async (args) => {
-      if (!isConnected || !address) return { id: generateId(), type: "text", text: "Wallet not connected." };
-      if (!activeChainId || !activeDexId) return { id: generateId(), type: "text", text: "Select network and DEX first." };
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected."
+        };
+      if (!activeChainId || !activeDexId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network and DEX first."
+        };
 
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
-      const activeDex = DEX_REGISTRY[activeChainId]?.find((d) => d.id === activeDexId);
-      if (!activeDex) return { id: generateId(), type: "text", text: 'Invalid active DEX for this network. Type "dexes" to choose a valid DEX.' };
-      if (activeDex.type !== "V3") return { id: generateId(), type: "text", text: "Initialization is only applicable to Uniswap V3 pools." };
-      if (!args[1] || !args[2]) return { id: generateId(), type: "text", text: "Usage: initialize <tokenA> <tokenB> [fee]" };
+      const activeDex = DEX_REGISTRY[activeChainId]?.find(
+        (d) => d.id === activeDexId
+      );
+      if (!activeDex)
+        return {
+          id: generateId(),
+          type: "text",
+          text: 'Invalid active DEX for this network. Type "dexes" to choose a valid DEX.'
+        };
+      if (activeDex.type !== "V3")
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Initialization is only applicable to Uniswap V3 pools."
+        };
+      if (!args[1] || !args[2])
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: initialize <tokenA> <tokenB> [fee]"
+        };
 
       const [tokenA, tokenB] = await Promise.all([
         resolveTokenDetails(args[1], targetChain),
         resolveTokenDetails(args[2], targetChain)
       ]);
-      const addrA = tokenA.isNative ? WRAPPED_NATIVE[targetChain.id] || tokenA.address : tokenA.address;
-      const addrB = tokenB.isNative ? WRAPPED_NATIVE[targetChain.id] || tokenB.address : tokenB.address;
+      const addrA = tokenA.isNative
+        ? WRAPPED_NATIVE[targetChain.id] || tokenA.address
+        : tokenA.address;
+      const addrB = tokenB.isNative
+        ? WRAPPED_NATIVE[targetChain.id] || tokenB.address
+        : tokenB.address;
       const fee = args[3] ? parseInt(args[3]) : 3000;
-      const [token0, token1] = addrA.toLowerCase() < addrB.toLowerCase() ? [addrA, addrB] : [addrB, addrA];
+      const [token0, token1] =
+        addrA.toLowerCase() < addrB.toLowerCase()
+          ? [addrA, addrB]
+          : [addrB, addrA];
 
       const client = getClient(targetChain);
       const poolAddress = (await client.readContract({
@@ -1098,31 +1744,77 @@ export default function TerminalShell({
       })) as Address;
 
       if (!poolAddress || poolAddress === NATIVE_TOKEN_ADDRESS) {
-        throw new Error(`Pool does not exist. Run 'createpool ${tokenA.symbol} ${tokenB.symbol} ${fee}' first.`);
+        throw new Error(
+          `Pool does not exist. Run 'createpool ${tokenA.symbol} ${tokenB.symbol} ${fee}' first.`
+        );
       }
 
-      return { id: generateId(), type: "initialize", payload: { targetChain, poolAddress, tokenA, tokenB } };
+      return {
+        id: generateId(),
+        type: "initialize",
+        payload: { targetChain, poolAddress, tokenA, tokenB }
+      };
     },
     getpool: async (args) => {
-      if (!activeChainId || !activeDexId) return { id: generateId(), type: "text", text: "Select network and DEX first." };
-      
-      const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
-      const activeDex = DEX_REGISTRY[activeChainId]?.find((d) => d.id === activeDexId);
-      
-      if (!activeDex) return { id: generateId(), type: "text", text: 'Invalid active DEX for this network. Type "dexes" to check available DEXes.' };
-      if (!args[1] || !args[2]) return { id: generateId(), type: "text", text: "Usage: getpool <tokenA> <tokenB> [fee]" };
+      if (!activeChainId || !activeDexId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network and DEX first."
+        };
 
-      const poolWidget = await fetchPoolAddress(args[1], args[2], targetChain, activeDex, args[3]);
+      const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
+      const activeDex = DEX_REGISTRY[activeChainId]?.find(
+        (d) => d.id === activeDexId
+      );
+
+      if (!activeDex)
+        return {
+          id: generateId(),
+          type: "text",
+          text: 'Invalid active DEX for this network. Type "dexes" to check available DEXes.'
+        };
+      if (!args[1] || !args[2])
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: getpool <tokenA> <tokenB> [fee]"
+        };
+
+      const poolWidget = await fetchPoolAddress(
+        args[1],
+        args[2],
+        targetChain,
+        activeDex,
+        args[3]
+      );
       return { id: generateId(), type: "component", component: poolWidget };
     },
     addliq: async (args) => {
-      if (!isConnected || !address) return { id: generateId(), type: "text", text: "Wallet not connected." };
-      if (!activeChainId || !activeDexId) return { id: generateId(), type: "text", text: "Select network and DEX first." };
-      if (!args[1] || !args[2] || !args[3] || !args[4]) return { id: generateId(), type: "text", text: "Usage: addliq <tokenA> <tokenB> <amtA> <amtB> [fee]" };
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected."
+        };
+      if (!activeChainId || !activeDexId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network and DEX first."
+        };
+      if (!args[1] || !args[2] || !args[3] || !args[4])
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: addliq <tokenA> <tokenB> <amtA> <amtB> [fee]"
+        };
 
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
-      const activeDex = DEX_REGISTRY[activeChainId].find((d) => d.id === activeDexId)!;
-      
+      const activeDex = DEX_REGISTRY[activeChainId].find(
+        (d) => d.id === activeDexId
+      )!;
+
       const [tokenA, tokenB] = await Promise.all([
         resolveTokenDetails(args[1], targetChain),
         resolveTokenDetails(args[2], targetChain)
@@ -1131,15 +1823,45 @@ export default function TerminalShell({
       const amountBWei = parseUnits(args[4], tokenB.decimals);
       const fee = args[5] ? parseInt(args[5]) : 3000;
 
-      return { id: generateId(), type: "addliq", payload: { userAddress: address, targetChain, activeDex, tokenA, tokenB, amountAWei, amountBWei, fee } };
+      return {
+        id: generateId(),
+        type: "addliq",
+        payload: {
+          userAddress: address,
+          targetChain,
+          activeDex,
+          tokenA,
+          tokenB,
+          amountAWei,
+          amountBWei,
+          fee
+        }
+      };
     },
     swap: async (args) => {
-      if (!isConnected || !address) return { id: generateId(), type: "text", text: "Wallet not connected." };
-      if (!activeChainId || !activeDexId) return { id: generateId(), type: "text", text: "Select network and DEX first." };
-      if (!args[1] || !args[2] || !args[3]) return { id: generateId(), type: "text", text: "Usage: swap <amount> <fromToken> <toToken>" };
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected."
+        };
+      if (!activeChainId || !activeDexId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network and DEX first."
+        };
+      if (!args[1] || !args[2] || !args[3])
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: swap <amount> <fromToken> <toToken>"
+        };
 
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
-      const activeDex = DEX_REGISTRY[activeChainId].find((d) => d.id === activeDexId)!;
+      const activeDex = DEX_REGISTRY[activeChainId].find(
+        (d) => d.id === activeDexId
+      )!;
 
       const [fromToken, toToken] = await Promise.all([
         resolveTokenDetails(args[2], targetChain),
@@ -1147,22 +1869,32 @@ export default function TerminalShell({
       ]);
       const amountInWei = parseUnits(args[1], fromToken.decimals);
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
-      const addrIn = fromToken.isNative ? WRAPPED_NATIVE[targetChain.id] || fromToken.address : fromToken.address;
-      const addrOut = toToken.isNative ? WRAPPED_NATIVE[targetChain.id] || toToken.address : toToken.address;
+      const addrIn = fromToken.isNative
+        ? WRAPPED_NATIVE[targetChain.id] || fromToken.address
+        : fromToken.address;
+      const addrOut = toToken.isNative
+        ? WRAPPED_NATIVE[targetChain.id] || toToken.address
+        : toToken.address;
 
-      let txData: `0x${string}`, txValue = "0x0" as `0x${string}`, approvalAddress: Address | undefined;
-      
+      let txData: `0x${string}`,
+        txValue = "0x0" as `0x${string}`,
+        approvalAddress: Address | undefined;
+
       if (activeDex.type === "V2") {
         if (fromToken.isNative) {
           txData = encodeFunctionData({
-            abi: parseAbi(["function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable"]),
+            abi: parseAbi([
+              "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable"
+            ]),
             functionName: "swapExactETHForTokens",
             args: [0n, [addrIn, addrOut], address, deadline]
           });
           txValue = toHex(amountInWei);
         } else {
           txData = encodeFunctionData({
-            abi: parseAbi(["function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)"]),
+            abi: parseAbi([
+              "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)"
+            ]),
             functionName: "swapExactTokensForTokens",
             args: [amountInWei, 0n, [addrIn, addrOut], address, deadline]
           });
@@ -1172,16 +1904,18 @@ export default function TerminalShell({
         txData = encodeFunctionData({
           abi: uniV3RouterAbi,
           functionName: "exactInputSingle",
-          args: [{
-            tokenIn: addrIn,
-            tokenOut: addrOut,
-            fee: 3000,
-            recipient: address,
-            deadline,
-            amountIn: amountInWei,
-            amountOutMinimum: 0n,
-            sqrtPriceLimitX96: 0n
-          }]
+          args: [
+            {
+              tokenIn: addrIn,
+              tokenOut: addrOut,
+              fee: 3000,
+              recipient: address,
+              deadline,
+              amountIn: amountInWei,
+              amountOutMinimum: 0n,
+              sqrtPriceLimitX96: 0n
+            }
+          ]
         });
         if (fromToken.isNative) txValue = toHex(amountInWei);
         else approvalAddress = activeDex.router;
@@ -1196,23 +1930,48 @@ export default function TerminalShell({
           fromAmountFormatted={args[1]}
           toAmountFormatted="ROUTED"
           amountInWei={amountInWei}
-          transactionRequest={{ to: activeDex.router, data: txData, value: txValue }}
+          transactionRequest={{
+            to: activeDex.router,
+            data: txData,
+            value: txValue
+          }}
           approvalAddress={approvalAddress}
         />
       );
-      
+
       return { id: generateId(), type: "component", component: swapWidget };
     },
     balance: async (args) => {
-      if (!isConnected || !address) return { id: generateId(), type: "text", text: "Wallet not connected." };
-      const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId) || SUPPORTED_CHAINS[5];
-      const balData = await fetchTokenBalanceData(address as Address, targetChain, args[1]);
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected."
+        };
+      const targetChain =
+        SUPPORTED_CHAINS.find((c) => c.id === activeChainId) ||
+        SUPPORTED_CHAINS[5];
+      const balData = await fetchTokenBalanceData(
+        address as Address,
+        targetChain,
+        args[1]
+      );
       return { id: generateId(), type: "balance", payload: balData };
     },
     pool: async (args) => {
-      if (!activeChainId) return { id: generateId(), type: "text", text: "Select network first." };
-      if (!args[1]) return { id: generateId(), type: "text", text: "Usage: pool <poolAddress>" };
-      
+      if (!activeChainId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network first."
+        };
+      if (!args[1])
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: pool <poolAddress>"
+        };
+
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
       const poolWidget = await fetchOnChainLiquidity(args[1], targetChain);
       return { id: generateId(), type: "component", component: poolWidget };
@@ -1220,9 +1979,17 @@ export default function TerminalShell({
     connect: () => {
       if (!isConnected) {
         open();
-        return { id: generateId(), type: "text", text: "Opening secure wallet connection modal..." };
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Opening secure wallet connection modal..."
+        };
       }
-      return { id: generateId(), type: "text", text: "Wallet is already connected." };
+      return {
+        id: generateId(),
+        type: "text",
+        text: "Wallet is already connected."
+      };
     },
     disconnect: () => {
       disconnect();
@@ -1237,25 +2004,39 @@ export default function TerminalShell({
   // Helper functions for common RPC providers
   function getAlchemySubdomain(chainId: number): string | null {
     switch (chainId) {
-      case 1: return "eth-mainnet";
-      case 11155111: return "eth-sepolia";
-      case 42161: return "arb-mainnet";
-      case 10: return "opt-mainnet";
-      case 137: return "polygon-mainnet";
-      case 8453: return "base-mainnet";
-      default: return null;
+      case 1:
+        return "eth-mainnet";
+      case 11155111:
+        return "eth-sepolia";
+      case 42161:
+        return "arb-mainnet";
+      case 10:
+        return "opt-mainnet";
+      case 137:
+        return "polygon-mainnet";
+      case 8453:
+        return "base-mainnet";
+      default:
+        return null;
     }
   }
 
   function getInfuraSubdomain(chainId: number): string | null {
     switch (chainId) {
-      case 1: return "mainnet";
-      case 11155111: return "sepolia";
-      case 42161: return "arbitrum-mainnet";
-      case 10: return "optimism-mainnet";
-      case 137: return "polygon-mainnet";
-      case 8453: return "base-mainnet";
-      default: return null;
+      case 1:
+        return "mainnet";
+      case 11155111:
+        return "sepolia";
+      case 42161:
+        return "arbitrum-mainnet";
+      case 10:
+        return "optimism-mainnet";
+      case 137:
+        return "polygon-mainnet";
+      case 8453:
+        return "base-mainnet";
+      default:
+        return null;
     }
   }
 
@@ -1283,7 +2064,7 @@ export default function TerminalShell({
       type: "input",
       text: `$ ${trimmed}`
     };
-    
+
     setLogs((prev) => [...prev, userLog].slice(-MAX_LOGS));
     setHistory((prev) => [...prev, trimmed]);
     setHistoryIdx(-1);
@@ -1293,11 +2074,16 @@ export default function TerminalShell({
     const handler = commands[command];
 
     if (!handler) {
-      setLogs((prev) => [...prev, {
-        id: generateId(),
-        type: "text",
-        text: `Command not recognized: "${command}". Type "help".`
-      } as LogEntry].slice(-MAX_LOGS));
+      setLogs((prev) =>
+        [
+          ...prev,
+          {
+            id: generateId(),
+            type: "text",
+            text: `Command not recognized: "${command}". Type "help".`
+          } as LogEntry
+        ].slice(-MAX_LOGS)
+      );
       return;
     }
 
@@ -1308,11 +2094,16 @@ export default function TerminalShell({
         setLogs((prev) => [...prev, ...newEntries].slice(-MAX_LOGS));
       }
     } catch (err: any) {
-      setLogs((prev) => [...prev, {
-        id: generateId(),
-        type: "text",
-        text: formatViemError(err)
-      } as LogEntry].slice(-MAX_LOGS));
+      setLogs((prev) =>
+        [
+          ...prev,
+          {
+            id: generateId(),
+            type: "text",
+            text: formatViemError(err)
+          } as LogEntry
+        ].slice(-MAX_LOGS)
+      );
     }
   };
 
@@ -1335,7 +2126,7 @@ export default function TerminalShell({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Tab") {
       e.preventDefault();
-      
+
       if (suggestions.length > 0) {
         applySuggestion(suggestions[suggestionIdx]);
         return;
@@ -1348,8 +2139,10 @@ export default function TerminalShell({
 
       if (isTypingCommand) {
         const val = input.trim().toLowerCase();
-        const matches = availableCommands.filter((c) => c.startsWith(val)).sort();
-        
+        const matches = availableCommands
+          .filter((c) => c.startsWith(val))
+          .sort();
+
         if (matches.length === 1) {
           applySuggestion(matches[0]);
         } else if (matches.length > 1) {
@@ -1358,23 +2151,45 @@ export default function TerminalShell({
         }
       } else {
         const command = rawArgs[0].toLowerCase();
-        const currentArgIdx = input.endsWith(" ") ? rawArgs.length : rawArgs.length - 1;
-        const partialArg = input.endsWith(" ") ? "" : rawArgs[rawArgs.length - 1].toLowerCase();
+        const currentArgIdx = input.endsWith(" ")
+          ? rawArgs.length
+          : rawArgs.length - 1;
+        const partialArg = input.endsWith(" ")
+          ? ""
+          : rawArgs[rawArgs.length - 1].toLowerCase();
 
         let candidates: string[] = [];
 
-        if ((command === "network" || command === "net") && currentArgIdx === 1) {
+        if (
+          (command === "network" || command === "net") &&
+          currentArgIdx === 1
+        ) {
           candidates = SUPPORTED_CHAINS.map((c) => c.name);
         } else if (command === "dex" && currentArgIdx === 1) {
           if (activeChainId && DEX_REGISTRY[activeChainId]) {
             candidates = DEX_REGISTRY[activeChainId].map((d) => d.id);
           }
-        } else if ((command === "theme" || command === "style") && currentArgIdx === 1) {
+        } else if (
+          (command === "theme" || command === "style") &&
+          currentArgIdx === 1
+        ) {
           candidates = Object.keys(THEMES);
         } else if (command === "rpc") {
           if (currentArgIdx === 1) {
-            candidates = ["use", "add", "remove", "alchemy", "infura", "quicknode"];
-          } else if (currentArgIdx === 2 && (rawArgs[1]?.toLowerCase() === "use" || rawArgs[1]?.toLowerCase() === "switch" || rawArgs[1]?.toLowerCase() === "remove")) {
+            candidates = [
+              "use",
+              "add",
+              "remove",
+              "alchemy",
+              "infura",
+              "quicknode"
+            ];
+          } else if (
+            currentArgIdx === 2 &&
+            (rawArgs[1]?.toLowerCase() === "use" ||
+              rawArgs[1]?.toLowerCase() === "switch" ||
+              rawArgs[1]?.toLowerCase() === "remove")
+          ) {
             candidates = ["default"];
             if (activeChainId && rpcProviders[activeChainId]) {
               candidates.push(...Object.keys(rpcProviders[activeChainId]));
@@ -1382,15 +2197,37 @@ export default function TerminalShell({
           }
         } else {
           let isTokenArg = false;
-          if (command === "swap" && (currentArgIdx === 2 || currentArgIdx === 3)) isTokenArg = true;
-          if (["addliq", "provideliq", "createpool", "initialize", "initpool", "getpool", "findpool", "price"].includes(command) && (currentArgIdx === 1 || currentArgIdx === 2)) isTokenArg = true;
-          if (["balance", "bal"].includes(command) && currentArgIdx === 1) isTokenArg = true;
+          if (
+            command === "swap" &&
+            (currentArgIdx === 2 || currentArgIdx === 3)
+          )
+            isTokenArg = true;
+          if (
+            [
+              "addliq",
+              "provideliq",
+              "createpool",
+              "initialize",
+              "initpool",
+              "getpool",
+              "findpool",
+              "price"
+            ].includes(command) &&
+            (currentArgIdx === 1 || currentArgIdx === 2)
+          )
+            isTokenArg = true;
+          if (["balance", "bal"].includes(command) && currentArgIdx === 1)
+            isTokenArg = true;
 
           if (isTokenArg && activeChainId) {
             candidates = Object.keys(COMMON_TOKENS[activeChainId] || {});
-            const customForChain = Object.keys(customTokens[activeChainId] || {});
+            const customForChain = Object.keys(
+              customTokens[activeChainId] || {}
+            );
             candidates.push(...customForChain);
-            const chainObj = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+            const chainObj = SUPPORTED_CHAINS.find(
+              (c) => c.id === activeChainId
+            );
             if (chainObj) candidates.push(chainObj.nativeCurrency.symbol);
             if (command === "price") candidates.push("pool", "api");
             candidates = Array.from(new Set(candidates));
@@ -1418,7 +2255,9 @@ export default function TerminalShell({
         setSuggestionIdx((prev) => (prev + 1) % suggestions.length);
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
-        setSuggestionIdx((prev) => (prev - 1 + suggestions.length) % suggestions.length);
+        setSuggestionIdx(
+          (prev) => (prev - 1 + suggestions.length) % suggestions.length
+        );
       } else if (e.key === "Enter") {
         e.preventDefault();
         applySuggestion(suggestions[suggestionIdx]);
@@ -1450,7 +2289,9 @@ export default function TerminalShell({
   };
 
   return (
-    <div className={`relative z-10 w-full h-full flex flex-col cursor-text overflow-hidden transition-all duration-300 ${theme.bg} ${theme.text} ${theme.font}`}>
+    <div
+      className={`relative z-10 w-full h-full flex flex-col cursor-text overflow-hidden transition-all duration-300 ${theme.bg} ${theme.text} ${theme.font}`}
+    >
       {/* EXCLUSIVE SCANLINE OVERLAY */}
       {currentThemeKey === "matrix" && (
         <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.35)_50%)] bg-[length:100%_4px] opacity-70 z-20"></div>
