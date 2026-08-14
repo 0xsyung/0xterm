@@ -2,18 +2,8 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
-import {
-  formatEther,
-  formatUnits,
-  parseUnits,
-  isAddress,
-  createPublicClient,
-  http,
-  encodeFunctionData,
-  toHex,
-  type Address,
-  type Chain
-} from "viem";
+import { formatEther, formatUnits, parseUnits, isAddress, createPublicClient, http, encodeFunctionData, toHex, parseAbi, type Address, type Chain } from 'viem'
+
 import SwapWidget from "./SwapWidget";
 import TerminalHeader from "./TerminalHeader";
 import HelpManual from "./widgets/HelpManual";
