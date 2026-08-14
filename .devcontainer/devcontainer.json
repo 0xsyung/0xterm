@@ -29,5 +29,5 @@
       "onAutoForward": "openPreview"
     }
   },
-  "postCreateCommand": "npm install"
+  "postCreateCommand": "curl -L https://foundry.paradigm.xyz | bash && source /home/node/.bashrc && foundryup && npm install"
 }
