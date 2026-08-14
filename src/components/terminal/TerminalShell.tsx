@@ -1063,18 +1063,18 @@ export default function TerminalShell({
             if (activeDex.type === "V2") {
               if (fromToken.isNative) {
                 txData = encodeFunctionData({
-                  abi: [
+                  abi: parseAbi([
                     "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable"
-                  ],
+                  ]),
                   functionName: "swapExactETHForTokens",
                   args: [0n, [addrIn, addrOut], address, deadline]
                 });
                 txValue = toHex(amountInWei);
               } else {
                 txData = encodeFunctionData({
-                  abi: [
+                  abi: parseAbi([
                     "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)"
-                  ],
+                  ]),
                   functionName: "swapExactTokensForTokens",
                   args: [amountInWei, 0n, [addrIn, addrOut], address, deadline]
                 });
