@@ -97,6 +97,7 @@ export default function TerminalShell({
   };
 
   // Load user settings upon wallet connection
+  // Load user settings upon wallet connection
   useEffect(() => {
     if (isConnected && address) {
       const storageKey = `0xterm_user_${address.toLowerCase()}`;
@@ -106,9 +107,11 @@ export default function TerminalShell({
           const prefs = JSON.parse(saved);
           const loadedDetails: string[] = [];
 
-          if (prefs.theme && THEMES[prefs.theme]) {
-            onThemeChange(prefs.theme);
-            loadedDetails.push(`Theme: ${THEMES[prefs.theme].name}`);
+          if (prefs.theme && THEMES[prefs.theme as ThemeMode]) {
+            onThemeChange(prefs.theme as ThemeMode);
+            loadedDetails.push(
+              `Theme: ${THEMES[prefs.theme as ThemeMode].name}`
+            );
           }
 
           if (prefs.chainId) {
