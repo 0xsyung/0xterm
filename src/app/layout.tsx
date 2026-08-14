@@ -8,8 +8,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://0xterm.xyz"),
   title: "0xterm",
-  description: "Matrix-style Web3 Terminal Interface"
+  description: "Matrix-style Web3 Terminal Interface",
+  alternates: {
+    canonical: "/"
+  }
 };
 
 export default function RootLayout({

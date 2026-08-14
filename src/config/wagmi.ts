@@ -32,7 +32,7 @@ const wagmiAdapter = new WagmiAdapter({
 const metadata = {
   name: '0xTERM',
   description: 'Full On-Chain DeFi Terminal Suite',
-  url: 'https://0xsyung.github.io/0xterm/',
+  url: 'https://0xterm.xyz',
   icons: ['https://avatars.githubusercontent.com/u/37784886']
 }
 
