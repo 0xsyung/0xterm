@@ -1117,28 +1117,120 @@ export default function TerminalShell({
     }
   };
 
+  const applySuggestion = (suggestion: string) => {
+    const rawArgs = input.trimStart().split(/\s+/);
+    if (
+      !input.includes(" ") ||
+      (rawArgs.length === 1 && !input.endsWith(" "))
+    ) {
+      // Completing a command
+      setInput(suggestion + " ");
+    } else {
+      // Completing a parameter
+      const newArgs = [...rawArgs];
+      if (input.endsWith(" ")) {
+        newArgs.push(suggestion);
+      } else {
+        newArgs[newArgs.length - 1] = suggestion;
+      }
+      setInput(newArgs.join(" ") + " ");
+    }
+    setSuggestions([]);
+    setSuggestionIdx(-1);
+    inputRef.current?.focus();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Tab") {
       e.preventDefault();
 
       if (suggestions.length > 0) {
-        setInput(suggestions[suggestionIdx] + " ");
-        setSuggestions([]);
-        setSuggestionIdx(-1);
+        applySuggestion(suggestions[suggestionIdx]);
         return;
       }
 
-      const val = input.trim().toLowerCase();
-      // Only autocomplete if we are typing the first word without spaces
-      if (!val || input.includes(" ")) return;
+      const rawArgs = input.trimStart().split(/\s+/);
+      const isTypingCommand = rawArgs.length === 1 && !input.endsWith(" ");
 
-      const matches = availableCommands.filter((c) => c.startsWith(val)).sort();
+      if (isTypingCommand) {
+        const val = input.trim().toLowerCase();
+        if (!val) return;
 
-      if (matches.length === 1) {
-        setInput(matches[0] + " ");
-      } else if (matches.length > 1) {
-        setSuggestions(matches);
-        setSuggestionIdx(0);
+        const matches = availableCommands
+          .filter((c) => c.startsWith(val))
+          .sort();
+
+        if (matches.length === 1) {
+          applySuggestion(matches[0]);
+        } else if (matches.length > 1) {
+          setSuggestions(matches);
+          setSuggestionIdx(0);
+        }
+      } else {
+        // Parameter Autocomplete
+        const command = rawArgs[0].toLowerCase();
+        const currentArgIdx = rawArgs.length - (input.endsWith(" ") ? 0 : 1);
+        const partialArg = input.endsWith(" ")
+          ? ""
+          : rawArgs[rawArgs.length - 1].toLowerCase();
+
+        let candidates: string[] = [];
+
+        if (
+          (command === "network" || command === "net") &&
+          currentArgIdx === 1
+        ) {
+          candidates = SUPPORTED_CHAINS.map((c) => c.name);
+        } else if (command === "dex" && currentArgIdx === 1) {
+          if (activeChainId && DEX_REGISTRY[activeChainId]) {
+            candidates = DEX_REGISTRY[activeChainId].map((d) => d.id);
+          }
+        } else {
+          // Token Autocomplete Checks
+          let isTokenArg = false;
+          if (
+            command === "swap" &&
+            (currentArgIdx === 2 || currentArgIdx === 3)
+          )
+            isTokenArg = true;
+          if (
+            [
+              "addliq",
+              "provideliq",
+              "createpool",
+              "initialize",
+              "initpool",
+              "getpool",
+              "findpool"
+            ].includes(command) &&
+            (currentArgIdx === 1 || currentArgIdx === 2)
+          )
+            isTokenArg = true;
+          if (["balance", "bal"].includes(command) && currentArgIdx === 1)
+            isTokenArg = true;
+
+          if (isTokenArg && activeChainId) {
+            candidates = Object.keys(COMMON_TOKENS[activeChainId] || {});
+            const chainObj = SUPPORTED_CHAINS.find(
+              (c) => c.id === activeChainId
+            );
+            if (chainObj) candidates.push(chainObj.nativeCurrency.symbol);
+            candidates = Array.from(new Set(candidates)); // Deduplicate
+          }
+        }
+
+        if (candidates.length > 0) {
+          const matches = candidates
+            .filter((c) => c.toLowerCase().startsWith(partialArg))
+            .sort();
+
+          if (matches.length === 1) {
+            applySuggestion(matches[0]);
+          } else if (matches.length > 1) {
+            setSuggestions(matches);
+            setSuggestionIdx(0);
+          }
+        }
       }
     } else if (suggestions.length > 0) {
       if (e.key === "ArrowRight") {
@@ -1151,9 +1243,7 @@ export default function TerminalShell({
         );
       } else if (e.key === "Enter") {
         e.preventDefault();
-        setInput(suggestions[suggestionIdx] + " ");
-        setSuggestions([]);
-        setSuggestionIdx(-1);
+        applySuggestion(suggestions[suggestionIdx]);
       } else if (e.key === "Escape") {
         setSuggestions([]);
         setSuggestionIdx(-1);
