@@ -1,14 +1,25 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { useAccount, useConnect, useDisconnect, usePublicClient } from "wagmi";
+import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import {
   formatEther,
   formatUnits,
   isAddress,
   parseAbi,
-  type Address
+  createPublicClient,
+  http,
+  type Address,
+  type Chain
 } from "viem";
+import {
+  mainnet,
+  arbitrum,
+  base,
+  polygon,
+  optimism,
+  sepolia
+} from "viem/chains";
 
 type LogItem = {
   id: string;
@@ -16,7 +27,17 @@ type LogItem = {
   content: React.ReactNode;
 };
 
-// Standard ERC-20 minimal ABI for reading token state
+// Supported chains registry
+const SUPPORTED_CHAINS: Chain[] = [
+  mainnet,
+  arbitrum,
+  base,
+  polygon,
+  optimism,
+  sepolia
+];
+
+// Standard ERC-20 ABI
 const erc20Abi = parseAbi([
   "function balanceOf(address owner) view returns (uint256)",
   "function decimals() view returns (uint8)",
@@ -24,7 +45,7 @@ const erc20Abi = parseAbi([
   "function name() view returns (string)"
 ]);
 
-// Preset token registry for high-frequency assets
+// Preset tokens across supported chains
 const COMMON_TOKENS: Record<
   number,
   Record<
@@ -33,7 +54,7 @@ const COMMON_TOKENS: Record<
   >
 > = {
   1: {
-    // Mainnet
+    // Ethereum Mainnet
     USDC: {
       address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
       decimals: 6,
@@ -57,22 +78,10 @@ const COMMON_TOKENS: Record<
       decimals: 18,
       symbol: "DAI",
       name: "Dai Stablecoin"
-    },
-    UNI: {
-      address: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
-      decimals: 18,
-      symbol: "UNI",
-      name: "Uniswap"
-    },
-    LINK: {
-      address: "0x514910771AF9Ca656af840dff83E8264EcF986CA",
-      decimals: 18,
-      symbol: "LINK",
-      name: "ChainLink"
     }
   },
   42161: {
-    // Arbitrum
+    // Arbitrum One
     USDC: {
       address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
       decimals: 6,
@@ -84,12 +93,6 @@ const COMMON_TOKENS: Record<
       decimals: 6,
       symbol: "USDT",
       name: "Tether USD"
-    },
-    WBTC: {
-      address: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
-      decimals: 8,
-      symbol: "WBTC",
-      name: "Wrapped BTC"
     },
     ARB: {
       address: "0x912CE59144191C1204E64559FE8253a0e49E6548",
@@ -112,7 +115,54 @@ const COMMON_TOKENS: Record<
       symbol: "AERO",
       name: "Aerodrome"
     }
+  },
+  137: {
+    // Polygon
+    USDC: {
+      address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+      decimals: 6,
+      symbol: "USDC",
+      name: "USD Coin"
+    },
+    USDT: {
+      address: "0xc2132D05D31c914a87C6611C10748AEb04B58d90",
+      decimals: 6,
+      symbol: "USDT",
+      name: "Tether USD"
+    }
+  },
+  10: {
+    // Optimism
+    USDC: {
+      address: "0x0b2C639c533813f4Aa9D7837CAf62653d097F853",
+      decimals: 6,
+      symbol: "USDC",
+      name: "USD Coin"
+    },
+    OP: {
+      address: "0x4200000000000000000000000000000000000042",
+      decimals: 18,
+      symbol: "OP",
+      name: "Optimism"
+    }
   }
+};
+
+// Utility to resolve network name or chain ID
+const resolveChain = (query?: string): Chain | undefined => {
+  if (!query) return undefined;
+  const q = query.toLowerCase().trim();
+  return SUPPORTED_CHAINS.find(
+    (c) =>
+      c.id.toString() === q ||
+      c.name.toLowerCase() === q ||
+      c.nativeCurrency.symbol.toLowerCase() === q ||
+      (q === "mainnet" && c.id === 1) ||
+      (q === "ethereum" && c.id === 1) ||
+      (q === "arb" && c.id === 42161) ||
+      (q === "matic" && c.id === 137) ||
+      (q === "op" && c.id === 10)
+  );
 };
 
 export default function TerminalShell({
@@ -121,6 +171,7 @@ export default function TerminalShell({
   onToggleRain: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
+  const [activeChainId, setActiveChainId] = useState<number | null>(null);
   const [logs, setLogs] = useState<LogItem[]>([
     {
       id: "1",
@@ -143,7 +194,7 @@ export default function TerminalShell({
   const { address, isConnected } = useAccount();
   const { connectors, connect } = useConnect();
   const { disconnect } = useDisconnect();
-  const publicClient = usePublicClient();
+  const { switchChainAsync } = useSwitchChain();
 
   useEffect(() => {
     setMounted(true);
@@ -211,29 +262,33 @@ export default function TerminalShell({
 
   const fetchTokenBalance = async (
     userAddress: Address,
+    targetChain: Chain,
     queryToken?: string
   ) => {
-    if (!publicClient) throw new Error("Client unavailable");
+    const client = createPublicClient({
+      chain: targetChain,
+      transport: http()
+    });
 
-    const chainId = publicClient.chain.id;
-    const chainName = publicClient.chain.name || "Ethereum";
+    const chainId = targetChain.id;
+    const chainName = targetChain.name;
 
-    // 1. Fetch Native Token (ETH) Balance if no token specified
+    // 1. Native Token Balance
     if (!queryToken) {
-      const rawBalance = await publicClient.getBalance({
-        address: userAddress
-      });
+      const rawBalance = await client.getBalance({ address: userAddress });
       const formatted = parseFloat(formatEther(rawBalance)).toLocaleString(
         undefined,
         { maximumFractionDigits: 4 }
       );
-      const symbol = publicClient.chain?.nativeCurrency?.symbol || "ETH";
+      const symbol = targetChain.nativeCurrency.symbol;
 
       return (
         <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow">
           <div className="flex justify-between items-center text-xs text-[#00ff66]/70 mb-1">
-            <span>NATIVE ACCOUNT BALANCE</span>
-            <span>{chainName.toUpperCase()}</span>
+            <span>NATIVE BALANCE</span>
+            <span>
+              {chainName.toUpperCase()} (ID: {chainId})
+            </span>
           </div>
           <div className="text-2xl font-bold my-1 text-[#00ff66]">
             {formatted}{" "}
@@ -253,22 +308,22 @@ export default function TerminalShell({
     let tokenSymbol = queryToken.toUpperCase();
     let tokenName = "ERC-20 Token";
 
-    // 2. Case A: Direct Contract Address (0x...)
+    // 2. Direct Address Input
     if (isAddress(queryToken)) {
       tokenAddress = queryToken as Address;
       try {
         const [rawDec, sym, name] = await Promise.all([
-          publicClient.readContract({
+          client.readContract({
             address: tokenAddress,
             abi: erc20Abi,
             functionName: "decimals"
           }),
-          publicClient.readContract({
+          client.readContract({
             address: tokenAddress,
             abi: erc20Abi,
             functionName: "symbol"
           }),
-          publicClient.readContract({
+          client.readContract({
             address: tokenAddress,
             abi: erc20Abi,
             functionName: "name"
@@ -280,13 +335,13 @@ export default function TerminalShell({
       } catch {
         return (
           <div className="text-red-400">
-            Error: Target address {queryToken} is not a valid ERC-20 contract on{" "}
+            Error: Address {queryToken} is not a valid ERC-20 contract on{" "}
             {chainName}.
           </div>
         );
       }
     } else {
-      // 3. Case B: Preset registry lookup
+      // 3. Preset Lookup
       const preset = COMMON_TOKENS[chainId]?.[tokenSymbol];
       if (preset) {
         tokenAddress = preset.address;
@@ -302,8 +357,7 @@ export default function TerminalShell({
           const data = await res.json();
           const pair = data.pairs?.find(
             (p: { chainId: string }) =>
-              p.chainId.toLowerCase() ===
-                publicClient.chain.name.toLowerCase() ||
+              p.chainId.toLowerCase() === chainName.toLowerCase() ||
               p.chainId === "ethereum"
           );
 
@@ -312,7 +366,7 @@ export default function TerminalShell({
             tokenSymbol = pair.baseToken.symbol;
             tokenName = pair.baseToken.name;
             tokenDecimals = Number(
-              await publicClient.readContract({
+              await client.readContract({
                 address: tokenAddress,
                 abi: erc20Abi,
                 functionName: "decimals"
@@ -329,13 +383,13 @@ export default function TerminalShell({
       return (
         <div className="text-red-400">
           Error: Could not resolve token "{queryToken}" on {chainName}. Try
-          passing the contract address directly.
+          passing contract address.
         </div>
       );
     }
 
     // 4. Query ERC-20 balanceOf
-    const rawBal = await publicClient.readContract({
+    const rawBal = await client.readContract({
       address: tokenAddress,
       abi: erc20Abi,
       functionName: "balanceOf",
@@ -350,7 +404,9 @@ export default function TerminalShell({
       <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow">
         <div className="flex justify-between items-center text-xs text-[#00ff66]/70 mb-1">
           <span>{tokenName.toUpperCase()}</span>
-          <span>{chainName.toUpperCase()}</span>
+          <span>
+            {chainName.toUpperCase()} (ID: {chainId})
+          </span>
         </div>
         <div className="text-2xl font-bold my-1 text-[#00ff66]">
           {formattedBal}{" "}
@@ -387,33 +443,129 @@ export default function TerminalShell({
 
       case "help":
         outputContent = (
-          <div className="text-xs space-y-1 my-1 text-[#00ff66]/90">
-            <div>
-              <span className="font-bold">connect</span> - Authenticate Web3
-              wallet
+          <div className="text-xs space-y-2 my-2 text-[#00ff66]/90 max-w-2xl">
+            <div className="border-b border-[#00ff66]/20 pb-1 font-bold text-[#00ff66] tracking-wider">
+              SYSTEM COMMAND MANUAL
             </div>
-            <div>
-              <span className="font-bold">disconnect</span> - Disconnect current
-              wallet session
-            </div>
-            <div>
-              <span className="font-bold">balance [symbol|address]</span> (or{" "}
-              <span className="font-bold">bal</span>) - Query ETH or ERC-20
-              token balance (e.g. bal, bal USDC, bal 0xa0b8...)
-            </div>
-            <div>
-              <span className="font-bold">price &lt;symbol&gt;</span> - Query
-              DEX pair prices (e.g., price ETH, price PEPE)
-            </div>
-            <div>
-              <span className="font-bold">rain</span> - Toggle background
-              digital rain canvas
-            </div>
-            <div>
-              <span className="font-bold">clear</span> - Flush terminal buffer
+            <div className="grid grid-cols-[220px_1fr] gap-x-4 gap-y-2 pt-1">
+              <div className="font-bold text-[#00ff66]">
+                network &lt;name|id&gt;
+              </div>
+              <div>
+                Switch active network session (or view available)
+                <div className="text-[#00ff66]/50 text-[11px]">
+                  Alias: <span className="text-[#00ff66]/80">net</span> • E.g.:{" "}
+                  <span className="text-[#00ff66]/80">net mainnet</span>,{" "}
+                  <span className="text-[#00ff66]/80">net 8453</span>,{" "}
+                  <span className="text-[#00ff66]/80">net arbitrum</span>
+                </div>
+              </div>
+
+              <div className="font-bold text-[#00ff66]">connect</div>
+              <div>Authenticate Web3 wallet session</div>
+
+              <div className="font-bold text-[#00ff66]">disconnect</div>
+              <div>Disconnect active wallet session</div>
+
+              <div className="font-bold text-[#00ff66]">
+                balance [token] [network]
+              </div>
+              <div>
+                Query native or ERC-20 token balance
+                <div className="text-[#00ff66]/50 text-[11px]">
+                  Alias: <span className="text-[#00ff66]/80">bal</span> • E.g.:{" "}
+                  <span className="text-[#00ff66]/80">bal</span>,{" "}
+                  <span className="text-[#00ff66]/80">bal USDC</span>,{" "}
+                  <span className="text-[#00ff66]/80">bal USDC base</span>
+                </div>
+              </div>
+
+              <div className="font-bold text-[#00ff66]">
+                price &lt;symbol&gt;
+              </div>
+              <div>Query DEX pair prices &amp; market metrics</div>
+
+              <div className="font-bold text-[#00ff66]">rain</div>
+              <div>Toggle background Matrix digital rain animation</div>
+
+              <div className="font-bold text-[#00ff66]">clear</div>
+              <div>Flush terminal buffer log</div>
             </div>
           </div>
         );
+        break;
+
+      case "network":
+      case "net":
+      case "chain":
+        if (!args[1]) {
+          const currentChainObj = SUPPORTED_CHAINS.find(
+            (c) => c.id === activeChainId
+          );
+          outputContent = (
+            <div className="my-2 p-3 border border-[#00ff66]/30 bg-[#001105]/80 rounded max-w-md text-xs">
+              <div className="font-bold text-[#00ff66] mb-2">
+                ACTIVE NETWORK:{" "}
+                {currentChainObj
+                  ? `${currentChainObj.name.toUpperCase()} (ID: ${currentChainObj.id})`
+                  : "NONE SELECTED"}
+              </div>
+              <div className="text-[#00ff66]/70 mb-1 font-bold">
+                SUPPORTED NETWORKS:
+              </div>
+              <div className="grid grid-cols-2 gap-1 text-[#00ff66]/60">
+                {SUPPORTED_CHAINS.map((c) => (
+                  <div key={c.id}>
+                    • {c.name}{" "}
+                    <span className="text-[10px] text-[#00ff66]/40">
+                      (ID: {c.id})
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="text-[#00ff66]/40 mt-2 text-[11px]">
+                Usage: network &lt;name|id&gt; • Type "net 0" to clear network
+                selection
+              </div>
+            </div>
+          );
+        } else if (args[1] === "0") {
+          setActiveChainId(null);
+          outputContent = (
+            <div className="text-yellow-400 my-1 font-bold">
+              [✓] ACTIVE NETWORK DESELECTED. NO NETWORK ACTIVE.
+            </div>
+          );
+        } else {
+          const targetChain = resolveChain(args[1]);
+          if (!targetChain) {
+            outputContent = (
+              <div className="text-red-400">
+                Error: Network "{args[1]}" not recognized. Type "network" to
+                list supported chains.
+              </div>
+            );
+          } else {
+            setActiveChainId(targetChain.id);
+            let walletSwitchNotice = "";
+
+            if (isConnected) {
+              try {
+                await switchChainAsync({ chainId: targetChain.id });
+                walletSwitchNotice = " WALLET CHAIN SYNCED.";
+              } catch {
+                walletSwitchNotice = " (WALLET SWITCH PENDING/REJECTED).";
+              }
+            }
+
+            outputContent = (
+              <div className="text-emerald-400 my-1 font-bold">
+                [✓] ACTIVE NETWORK SET TO: {targetChain.name.toUpperCase()}{" "}
+                (CHAIN ID: {targetChain.id}).{walletSwitchNotice}
+              </div>
+            );
+          }
+        }
         break;
 
       case "connect":
@@ -452,19 +604,59 @@ export default function TerminalShell({
             </div>
           );
         } else {
+          // Parse command arguments: bal [token/network] [network]
+          let targetChain = SUPPORTED_CHAINS.find(
+            (c) => c.id === activeChainId
+          );
+          let queryToken: string | undefined = undefined;
+
+          const arg1Chain = resolveChain(args[1]);
+          const arg2Chain = resolveChain(args[2]);
+
+          if (arg2Chain) {
+            targetChain = arg2Chain;
+            queryToken = args[1];
+          } else if (arg1Chain) {
+            targetChain = arg1Chain;
+            queryToken = args[2];
+          } else {
+            queryToken = args[1];
+          }
+
+          // Enforce active network requirement
+          if (!targetChain) {
+            outputContent = (
+              <div className="text-yellow-400/90 my-1">
+                [!] NO NETWORK SELECTED. PLEASE SELECT A NETWORK FIRST USING{" "}
+                <span
+                  className="font-bold underline cursor-pointer"
+                  onClick={() => handleCommand("network")}
+                >
+                  network &lt;name|id&gt;
+                </span>{" "}
+                OR SPECIFY ONE IN YOUR QUERY (e.g.,{" "}
+                <span className="font-bold">bal USDC base</span>).
+              </div>
+            );
+            break;
+          }
+
           setLogs((prev) => [
             ...prev,
             userLog,
             {
               id: (Date.now() + 1).toString(),
               type: "text",
-              content: "QUERYING ON-CHAIN BALANCE..."
+              content: `QUERYING ON-CHAIN BALANCE ON ${targetChain.name.toUpperCase()}...`
             }
           ]);
 
           try {
-            const tokenQuery = args[1];
-            const balanceWidget = await fetchTokenBalance(address, tokenQuery);
+            const balanceWidget = await fetchTokenBalance(
+              address,
+              targetChain,
+              queryToken
+            );
             setLogs((prev) => [
               ...prev.slice(0, -1),
               {
@@ -561,6 +753,8 @@ export default function TerminalShell({
     }
   };
 
+  const activeChainObj = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+
   return (
     <div
       className="relative z-10 w-full h-full p-6 pt-10 flex flex-col cursor-text overflow-hidden"
@@ -586,7 +780,9 @@ export default function TerminalShell({
 
       <div className="flex items-center mt-4 text-[#00ff66] border-t border-[#00ff66]/20 pt-3 shrink-0">
         <span className="mr-2 font-bold matrix-glow">
-          {mounted && isConnected ? `[${address?.slice(0, 6)}...] >` : ">"}
+          {mounted && isConnected
+            ? `[${activeChainObj ? activeChainObj.name.toUpperCase() : "NO NET"} | ${address?.slice(0, 6)}...] >`
+            : `${activeChainObj ? `[${activeChainObj.name.toUpperCase()}] ` : ""}>`}
         </span>
         <input
           ref={inputRef}
