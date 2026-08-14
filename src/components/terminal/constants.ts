@@ -111,7 +111,7 @@ export const DEX_REGISTRY: Record<number, DexProtocol[]> = {
   ],
   11155111: [
     { id: 'univ3', name: 'Uniswap V3', router: '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E', factory: '0x0227628f3F023bb0B980b67D528571c95c6DaC1c', positionManager: '0x1238536071E1c677A632429e3655c799b22cDA52', type: 'V3' },
-    { id: 'univ2-test', name: 'Uniswap V2 Clone', router: '0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008', factory: '0xF62c03E08ada871A0bEb309762E260a7a6a880E6', type: 'V2' },
+    { id: 'univ2-custom', name: 'Uniswap V2 (Custom)', router: '0x0000000000000000000000000000000000000000', factory: '0xb59cf62962B5740694166DCa3a178e3e5383ce40', type: 'V2' },
   ],
   42161: [
     { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },
