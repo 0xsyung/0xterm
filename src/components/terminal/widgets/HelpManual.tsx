@@ -22,6 +22,10 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
         <div className={`font-bold ${theme.primary}`}>dex &lt;id&gt;</div>
         <div>Set active DEX protocol</div>
         <div className={`font-bold ${theme.primary}`}>
+          register &lt;address&gt; [symbol]
+        </div>
+        <div>Verify and register a custom ERC20 token</div>
+        <div className={`font-bold ${theme.primary}`}>
           createpool &lt;tA&gt; &lt;tB&gt; [fee]
         </div>
         <div>Deploy pool contract</div>
