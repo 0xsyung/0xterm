@@ -31,10 +31,25 @@ import {
 } from "viem/chains";
 import SwapWidget from "./SwapWidget";
 
-type LogItem = {
+type ThemeMode = "matrix" | "mac" | "bloomberg" | "whatsapp";
+
+type LogEntry = {
   id: string;
-  type: "input" | "text" | "component";
-  content: React.ReactNode;
+  type:
+    | "input"
+    | "text"
+    | "help"
+    | "dexes"
+    | "createpool"
+    | "initialize"
+    | "getpool"
+    | "addliq"
+    | "swap"
+    | "balance"
+    | "pool";
+  text?: string;
+  payload?: any;
+  component?: React.ReactNode;
 };
 
 type DexProtocol = {
@@ -44,6 +59,89 @@ type DexProtocol = {
   factory: Address;
   positionManager?: Address;
   type: "V2" | "V3";
+};
+
+// ---------------------------------------------------------
+// THEME CONFIGURATIONS
+// ---------------------------------------------------------
+const THEMES: Record<
+  ThemeMode,
+  {
+    name: string;
+    bg: string;
+    cardBg: string;
+    text: string;
+    primary: string;
+    border: string;
+    glow: string;
+    font: string;
+    rounded: string;
+    promptSymbol: string;
+    headerStyle: "matrix" | "mac" | "bloomberg" | "whatsapp";
+    hasScanlines: boolean;
+    hasGrid: boolean;
+  }
+> = {
+  matrix: {
+    name: "Matrix Style",
+    bg: "bg-black",
+    cardBg: "bg-[#001105]/90",
+    text: "text-[#00ff66]",
+    primary: "text-[#00ff66]",
+    border: "border-[#00ff66]/50",
+    glow: "matrix-glow",
+    font: "font-mono",
+    rounded: "rounded-none",
+    promptSymbol: ">",
+    headerStyle: "matrix",
+    hasScanlines: true,
+    hasGrid: false
+  },
+  mac: {
+    name: "Mac Terminal",
+    bg: "bg-[#1e1e1e]",
+    cardBg: "bg-[#2d2d2d]/95",
+    text: "text-[#f1f1f1]",
+    primary: "text-[#38bdf8]",
+    border: "border-neutral-700",
+    glow: "shadow-2xl shadow-black/80 backdrop-blur-xl",
+    font: "font-mono",
+    rounded: "rounded-xl",
+    promptSymbol: "❯",
+    headerStyle: "mac",
+    hasScanlines: false,
+    hasGrid: false
+  },
+  bloomberg: {
+    name: "Bloomberg Terminal",
+    bg: "bg-[#0c0c0c]",
+    cardBg: "bg-[#141414]",
+    text: "text-[#ffb000]",
+    primary: "text-[#ffb000]",
+    border: "border-[#ffb000]/60",
+    glow: "shadow-md shadow-[#ffb000]/20",
+    font: "font-mono tracking-wider uppercase",
+    rounded: "rounded-none",
+    promptSymbol: "BBG>",
+    headerStyle: "bloomberg",
+    hasScanlines: false,
+    hasGrid: true
+  },
+  whatsapp: {
+    name: "WhatsApp Style",
+    bg: "bg-[#0b141a]",
+    cardBg: "bg-[#111b21]",
+    text: "text-[#e9edef]",
+    primary: "text-[#00a884]",
+    border: "border-[#00a884]/30",
+    glow: "shadow-lg shadow-black/60",
+    font: "font-sans",
+    rounded: "rounded-2xl",
+    promptSymbol: "WA >",
+    headerStyle: "whatsapp",
+    hasScanlines: false,
+    hasGrid: false
+  }
 };
 
 // ---------------------------------------------------------
@@ -182,6 +280,59 @@ const resolveChain = (query?: string): Chain | undefined => {
 };
 
 // ---------------------------------------------------------
+// COMPONENT: Help Manual
+// ---------------------------------------------------------
+function HelpManual({ theme }: { theme: any }) {
+  return (
+    <div
+      className={`text-xs space-y-2 my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.text} max-w-2xl`}
+    >
+      <div
+        className={`border-b ${theme.border} pb-1 font-bold ${theme.primary} tracking-wider`}
+      >
+        SYSTEM COMMAND MANUAL
+      </div>
+      <div className="grid grid-cols-[200px_1fr] gap-x-4 gap-y-2 pt-1">
+        <div className={`font-bold ${theme.primary}`}>
+          network &lt;name|id&gt;
+        </div>
+        <div>Switch active network</div>
+        <div className={`font-bold ${theme.primary}`}>dexes</div>
+        <div>List available DEXes</div>
+        <div className={`font-bold ${theme.primary}`}>dex &lt;id&gt;</div>
+        <div>Set active DEX protocol</div>
+        <div className={`font-bold ${theme.primary}`}>
+          createpool &lt;tA&gt; &lt;tB&gt; [fee]
+        </div>
+        <div>Deploy pool contract</div>
+        <div className={`font-bold ${theme.primary}`}>
+          getpool &lt;tA&gt; &lt;tB&gt; [fee]
+        </div>
+        <div>Query pool address</div>
+        <div className={`font-bold ${theme.primary}`}>
+          initialize &lt;tA&gt; &lt;tB&gt; [fee]
+        </div>
+        <div>Initialize V3 pool price curve</div>
+        <div className={`font-bold ${theme.primary}`}>
+          addliq &lt;tA&gt; &lt;tB&gt; &lt;amtA&gt; &lt;amtB&gt; [fee]
+        </div>
+        <div>Add liquidity position</div>
+        <div className={`font-bold ${theme.primary}`}>
+          swap &lt;amt&gt; &lt;from&gt; &lt;to&gt;
+        </div>
+        <div>Execute token swap</div>
+        <div className={`font-bold ${theme.primary}`}>pool &lt;address&gt;</div>
+        <div>Check V2/V3 pool metrics</div>
+        <div className={`font-bold ${theme.primary}`}>
+          balance &lt;token&gt;
+        </div>
+        <div>Check token balance</div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------
 // WIDGET: Create Pool
 // ---------------------------------------------------------
 function CreatePoolWidget({
@@ -191,7 +342,8 @@ function CreatePoolWidget({
   tokenB,
   addrA,
   addrB,
-  fee
+  fee,
+  theme
 }: any) {
   const { writeContractAsync } = useWriteContract();
   const [status, setStatus] = useState<
@@ -223,33 +375,37 @@ function CreatePoolWidget({
   const blockExplorer = targetChain.blockExplorers?.default.url;
 
   return (
-    <div className="my-2 p-4 border border-[#00ff66]/50 bg-[#001105]/90 rounded max-w-lg matrix-glow text-xs space-y-3">
-      <div className="flex justify-between items-center border-b border-[#00ff66]/20 pb-2">
-        <span className="font-bold text-[#00ff66]">
+    <div
+      className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} ${theme.font} text-xs space-y-3`}
+    >
+      <div
+        className={`flex justify-between items-center border-b ${theme.border} pb-2`}
+      >
+        <span className={`font-bold ${theme.primary}`}>
           DEPLOY POOL CONTRACT [FACTORY]
         </span>
-        <span className="text-[#00ff66]/70">
+        <span className={`${theme.text}/70`}>
           {activeDex.name} ({activeDex.type})
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-[#00ff66]/90 font-mono">
+      <div className={`grid grid-cols-2 gap-2 ${theme.text}`}>
         <div>
-          <div className="text-[10px] text-[#00ff66]/50">TOKEN A</div>
-          <div className="text-base font-bold text-[#00ff66]">
+          <div className={`text-[10px] ${theme.text}/50`}>TOKEN A</div>
+          <div className={`text-base font-bold ${theme.primary}`}>
             {tokenA.symbol}
           </div>
         </div>
         <div>
-          <div className="text-[10px] text-[#00ff66]/50">TOKEN B</div>
-          <div className="text-base font-bold text-[#00ff66]">
+          <div className={`text-[10px] ${theme.text}/50`}>TOKEN B</div>
+          <div className={`text-base font-bold ${theme.primary}`}>
             {tokenB.symbol}
           </div>
         </div>
       </div>
 
       {activeDex.type === "V3" && (
-        <div className="text-[10px] text-[#00ff66]/70 pt-1">
+        <div className={`text-[10px] ${theme.text}/70 pt-1`}>
           FEE TIER:{" "}
           <span className="font-bold">
             {fee / 10000}% ({fee})
@@ -272,7 +428,7 @@ function CreatePoolWidget({
               href={`${blockExplorer}/tx/${txHash}`}
               target="_blank"
               rel="noreferrer"
-              className="text-[10px] underline hover:text-emerald-300 block pt-0.5"
+              className="text-[10px] underline hover:opacity-80 block pt-0.5"
             >
               View on Explorer ↗
             </a>
@@ -284,7 +440,7 @@ function CreatePoolWidget({
         {(status === "ready" || status === "error") && (
           <button
             onClick={handleCreate}
-            className="px-4 py-1.5 border border-[#00ff66] bg-[#00ff66]/30 hover:bg-[#00ff66]/50 text-[#00ff66] font-bold rounded cursor-pointer matrix-glow transition-all"
+            className={`px-4 py-1.5 border ${theme.border} bg-current/10 hover:bg-current/20 ${theme.primary} font-bold ${theme.rounded} cursor-pointer transition-all`}
           >
             [ CALL CREATE POOL ]
           </button>
@@ -306,7 +462,8 @@ function InitializePoolWidget({
   targetChain,
   poolAddress,
   tokenA,
-  tokenB
+  tokenB,
+  theme
 }: any) {
   const { writeContractAsync } = useWriteContract();
   const [status, setStatus] = useState<
@@ -319,7 +476,7 @@ function InitializePoolWidget({
     setStatus("signing");
     setErrorMsg(null);
     try {
-      const initialSqrtPrice = 79228162514264337593543950336n; // sqrt(1) * 2^96
+      const initialSqrtPrice = 79228162514264337593543950336n;
       const hash = await writeContractAsync({
         address: poolAddress,
         abi: uniV3PoolAbi,
@@ -339,17 +496,23 @@ function InitializePoolWidget({
   const blockExplorer = targetChain.blockExplorers?.default.url;
 
   return (
-    <div className="my-2 p-4 border border-[#00ff66]/50 bg-[#001105]/90 rounded max-w-lg matrix-glow text-xs space-y-3">
-      <div className="flex justify-between items-center border-b border-[#00ff66]/20 pb-2">
-        <span className="font-bold text-[#00ff66]">
+    <div
+      className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} ${theme.font} text-xs space-y-3`}
+    >
+      <div
+        className={`flex justify-between items-center border-b ${theme.border} pb-2`}
+      >
+        <span className={`font-bold ${theme.primary}`}>
           INITIALIZE V3 PRICE CURVE
         </span>
-        <span className="text-[#00ff66]/70">
+        <span className={`${theme.text}/70`}>
           {tokenA.symbol} / {tokenB.symbol}
         </span>
       </div>
 
-      <div className="text-[11px] text-[#00ff66]/80 font-mono select-all p-2 bg-[#00ff66]/10 rounded border border-[#00ff66]/20">
+      <div
+        className={`text-[11px] ${theme.text}/80 select-all p-2 bg-current/10 rounded border ${theme.border}`}
+      >
         POOL: {poolAddress}
       </div>
 
@@ -368,7 +531,7 @@ function InitializePoolWidget({
               href={`${blockExplorer}/tx/${txHash}`}
               target="_blank"
               rel="noreferrer"
-              className="text-[10px] underline hover:text-emerald-300 block pt-0.5"
+              className="text-[10px] underline hover:opacity-80 block pt-0.5"
             >
               View on Explorer ↗
             </a>
@@ -380,7 +543,7 @@ function InitializePoolWidget({
         {(status === "ready" || status === "error") && (
           <button
             onClick={handleInitialize}
-            className="px-4 py-1.5 border border-[#00ff66] bg-[#00ff66]/30 hover:bg-[#00ff66]/50 text-[#00ff66] font-bold rounded cursor-pointer matrix-glow transition-all"
+            className={`px-4 py-1.5 border ${theme.border} bg-current/10 hover:bg-current/20 ${theme.primary} font-bold ${theme.rounded} cursor-pointer transition-all`}
           >
             [ EXECUTE INITIALIZE ]
           </button>
@@ -396,7 +559,7 @@ function InitializePoolWidget({
 }
 
 // ---------------------------------------------------------
-// WIDGET: Add Liquidity (Strictly Minting/Approvals)
+// WIDGET: Add Liquidity
 // ---------------------------------------------------------
 function AddLiquidityWidget({
   userAddress,
@@ -406,7 +569,8 @@ function AddLiquidityWidget({
   tokenB,
   amountAWei,
   amountBWei,
-  fee
+  fee,
+  theme
 }: any) {
   const { writeContractAsync } = useWriteContract();
   const [step, setStep] = useState<
@@ -495,7 +659,6 @@ function AddLiquidityWidget({
           );
         }
 
-        // Check if pool is initialized
         const slot0 = (await client.readContract({
           address: poolAddress,
           abi: uniV3PoolAbi,
@@ -581,24 +744,28 @@ function AddLiquidityWidget({
   const blockExplorer = targetChain.blockExplorers?.default.url;
 
   return (
-    <div className="my-2 p-4 border border-[#00ff66]/50 bg-[#001105]/90 rounded max-w-lg matrix-glow text-xs space-y-3">
-      <div className="flex justify-between items-center border-b border-[#00ff66]/20 pb-2">
-        <span className="font-bold text-[#00ff66]">
+    <div
+      className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} ${theme.font} text-xs space-y-3`}
+    >
+      <div
+        className={`flex justify-between items-center border-b ${theme.border} pb-2`}
+      >
+        <span className={`font-bold ${theme.primary}`}>
           PROVIDE LIQUIDITY WIDGET
         </span>
-        <span className="text-[#00ff66]/70">{activeDex.name}</span>
+        <span className={`${theme.text}/70`}>{activeDex.name}</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-[#00ff66]/90 font-mono">
+      <div className={`grid grid-cols-2 gap-2 ${theme.text}`}>
         <div>
-          <div className="text-[10px] text-[#00ff66]/50">TOKEN A</div>
-          <div className="text-base font-bold text-[#00ff66]">
+          <div className={`text-[10px] ${theme.text}/50`}>TOKEN A</div>
+          <div className={`text-base font-bold ${theme.primary}`}>
             {formatUnits(amountAWei, tokenA.decimals)} {tokenA.symbol}
           </div>
         </div>
         <div>
-          <div className="text-[10px] text-[#00ff66]/50">TOKEN B</div>
-          <div className="text-base font-bold text-[#00ff66]">
+          <div className={`text-[10px] ${theme.text}/50`}>TOKEN B</div>
+          <div className={`text-base font-bold ${theme.primary}`}>
             {formatUnits(amountBWei, tokenB.decimals)} {tokenB.symbol}
           </div>
         </div>
@@ -619,7 +786,7 @@ function AddLiquidityWidget({
               href={`${blockExplorer}/tx/${txHash}`}
               target="_blank"
               rel="noreferrer"
-              className="text-[10px] underline hover:text-emerald-300 block pt-0.5"
+              className="text-[10px] underline hover:opacity-80 block pt-0.5"
             >
               View on Explorer ↗
             </a>
@@ -631,7 +798,7 @@ function AddLiquidityWidget({
         {step === "check_approval" && (
           <button
             onClick={handleExecuteLiquidity}
-            className="px-4 py-2 border border-[#00ff66] bg-[#00ff66]/30 hover:bg-[#00ff66]/50 text-[#00ff66] font-bold rounded cursor-pointer matrix-glow transition-all text-center"
+            className={`px-4 py-2 border ${theme.border} bg-current/10 hover:bg-current/20 ${theme.primary} font-bold ${theme.rounded} cursor-pointer transition-all text-center`}
           >
             [ EXECUTE APPROVALS & ADD LIQUIDITY ]
           </button>
@@ -660,25 +827,26 @@ function AddLiquidityWidget({
 // COMPONENT
 // ---------------------------------------------------------
 export default function TerminalShell({
-  onToggleRain
+  onToggleRain,
+  currentThemeKey,
+  onThemeChange
 }: {
   onToggleRain: () => void;
+  currentThemeKey: ThemeMode;
+  onThemeChange: (theme: ThemeMode) => void;
 }) {
   const [mounted, setMounted] = useState(false);
   const [activeChainId, setActiveChainId] = useState<number | null>(null);
   const [activeDexId, setActiveDexId] = useState<string | null>(null);
 
-  const [logs, setLogs] = useState<LogItem[]>([
-    {
-      id: "1",
-      type: "text",
-      content: "0xTERM v1.4.1 [FULL ON-CHAIN DEFI SUITE]"
-    },
-    {
-      id: "2",
-      type: "text",
-      content: 'TYPE "help" TO SEE AVAILABLE COMMANDS.\n'
-    }
+  // Theme state
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+
+  const theme = THEMES[currentThemeKey];
+
+  const [logs, setLogs] = useState<LogEntry[]>([
+    { id: "1", type: "text", text: "0xTERM v1.4.8 [FULL ON-CHAIN DEFI SUITE]" },
+    { id: "2", type: "text", text: 'TYPE "help" TO SEE AVAILABLE COMMANDS.\n' }
   ]);
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<string[]>([]);
@@ -843,17 +1011,23 @@ export default function TerminalShell({
       }
 
       return (
-        <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow text-xs">
-          <div className="flex justify-between items-center text-[#00ff66]/70 mb-2 border-b border-[#00ff66]/20 pb-1">
+        <div
+          className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs`}
+        >
+          <div
+            className={`flex justify-between items-center ${theme.text}/70 mb-2 border-b ${theme.border} pb-1`}
+          >
             <span className="font-bold">ON-CHAIN POOL LOCATED</span>
             <span>
               {activeDex.name} ({activeDex.type})
             </span>
           </div>
-          <div className="text-lg font-bold text-[#00ff66] mb-1">
+          <div className={`text-lg font-bold ${theme.primary} mb-1`}>
             {tokenA.symbol} / {tokenB.symbol}
           </div>
-          <div className="text-[#00ff66]/90 font-mono select-all p-1 bg-[#00ff66]/10 rounded border border-[#00ff66]/20 text-center my-2">
+          <div
+            className={`${theme.text} select-all p-2 bg-current/10 rounded border ${theme.border} text-center my-2 font-mono`}
+          >
             {pairAddress}
           </div>
         </div>
@@ -943,38 +1117,44 @@ export default function TerminalShell({
       ]);
 
       return (
-        <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow text-xs space-y-2">
-          <div className="flex justify-between items-center text-[#00ff66]/70 border-b border-[#00ff66]/20 pb-1">
+        <div
+          className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
+        >
+          <div
+            className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+          >
             <span className="font-bold">UNISWAP V3 POOL METRICS</span>
             <span>{targetChain.name.toUpperCase()}</span>
           </div>
-          <div className="grid grid-cols-2 gap-2 font-mono">
+          <div className={`grid grid-cols-2 gap-2 ${theme.text}`}>
             <div>
-              <div className="text-[10px] text-[#00ff66]/50">PAIR</div>
-              <div className="font-bold text-[#00ff66]">
+              <div className={`text-[10px] ${theme.text}/50`}>PAIR</div>
+              <div className={`font-bold ${theme.primary}`}>
                 {sym0} / {sym1}
               </div>
             </div>
             <div>
-              <div className="text-[10px] text-[#00ff66]/50">FEE TIER</div>
-              <div className="font-bold text-[#00ff66]">
+              <div className={`text-[10px] ${theme.text}/50`}>FEE TIER</div>
+              <div className={`font-bold ${theme.primary}`}>
                 {Number(fee) / 10000}%
               </div>
             </div>
             <div>
-              <div className="text-[10px] text-[#00ff66]/50">
+              <div className={`text-[10px] ${theme.text}/50`}>
                 ACTIVE LIQUIDITY
               </div>
-              <div className="font-bold text-[#00ff66]">
+              <div className={`font-bold ${theme.primary}`}>
                 {liquidity.toString()}
               </div>
             </div>
             <div>
-              <div className="text-[10px] text-[#00ff66]/50">CURRENT TICK</div>
-              <div className="font-bold text-[#00ff66]">{slot0[1]}</div>
+              <div className={`text-[10px] ${theme.text}/50`}>CURRENT TICK</div>
+              <div className={`font-bold ${theme.primary}`}>{slot0[1]}</div>
             </div>
           </div>
-          <div className="text-[9px] text-[#00ff66]/40 truncate pt-1 border-t border-[#00ff66]/10">
+          <div
+            className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border}`}
+          >
             SQRT PRICE X96: {slot0[0].toString()}
           </div>
         </div>
@@ -1026,25 +1206,29 @@ export default function TerminalShell({
         ]);
 
         return (
-          <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow text-xs space-y-2">
-            <div className="flex justify-between items-center text-[#00ff66]/70 border-b border-[#00ff66]/20 pb-1">
+          <div
+            className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
+          >
+            <div
+              className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+            >
               <span className="font-bold">UNISWAP V2 POOL RESERVES</span>
               <span>{targetChain.name.toUpperCase()}</span>
             </div>
-            <div className="grid grid-cols-2 gap-4 font-mono">
+            <div className={`grid grid-cols-2 gap-4 ${theme.text}`}>
               <div>
-                <div className="text-[10px] text-[#00ff66]/50">
+                <div className={`text-[10px] ${theme.text}/50`}>
                   {sym0} RESERVE
                 </div>
-                <div className="text-base font-bold text-[#00ff66]">
+                <div className={`text-base font-bold ${theme.primary}`}>
                   {parseFloat(formatUnits(reserves[0], dec0)).toLocaleString()}
                 </div>
               </div>
               <div>
-                <div className="text-[10px] text-[#00ff66]/50">
+                <div className={`text-[10px] ${theme.text}/50`}>
                   {sym1} RESERVE
                 </div>
-                <div className="text-base font-bold text-[#00ff66]">
+                <div className={`text-base font-bold ${theme.primary}`}>
                   {parseFloat(formatUnits(reserves[1], dec1)).toLocaleString()}
                 </div>
               </div>
@@ -1076,7 +1260,9 @@ export default function TerminalShell({
     if (!queryToken) {
       const bal = await client.getBalance({ address: userAddress });
       return (
-        <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md text-xs font-bold">
+        <div
+          className={`my-3 p-3 border ${theme.border} ${theme.cardBg} ${theme.rounded} max-w-md text-xs font-bold ${theme.primary}`}
+        >
           {formatEther(bal)} {targetChain.nativeCurrency.symbol}
         </div>
       );
@@ -1085,7 +1271,9 @@ export default function TerminalShell({
     if (token.isNative) {
       const bal = await client.getBalance({ address: userAddress });
       return (
-        <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md text-xs font-bold">
+        <div
+          className={`my-3 p-3 border ${theme.border} ${theme.cardBg} ${theme.rounded} max-w-md text-xs font-bold ${theme.primary}`}
+        >
           {formatEther(bal)} {token.symbol}
         </div>
       );
@@ -1097,7 +1285,9 @@ export default function TerminalShell({
       args: [userAddress]
     });
     return (
-      <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md text-xs font-bold">
+      <div
+        className={`my-3 p-3 border ${theme.border} ${theme.cardBg} ${theme.rounded} max-w-md text-xs font-bold ${theme.primary}`}
+      >
         {formatUnits(bal as bigint, token.decimals)} {token.symbol}
       </div>
     );
@@ -1107,15 +1297,15 @@ export default function TerminalShell({
     const trimmed = cmd.trim();
     if (!trimmed) return;
 
-    const userLog: LogItem = {
+    const userLog: LogEntry = {
       id: Date.now().toString(),
       type: "input",
-      content: `$ ${trimmed}`
+      text: `$ ${trimmed}`
     };
     const args = trimmed.split(" ");
     const command = args[0].toLowerCase();
 
-    let outputContent: React.ReactNode;
+    let newEntry: LogEntry = userLog;
 
     switch (command) {
       case "clear":
@@ -1123,169 +1313,116 @@ export default function TerminalShell({
         return;
 
       case "help":
-        outputContent = (
-          <div className="text-xs space-y-2 my-2 text-[#00ff66]/90 max-w-2xl">
-            <div className="border-b border-[#00ff66]/20 pb-1 font-bold text-[#00ff66] tracking-wider">
-              SYSTEM COMMAND MANUAL
-            </div>
-            <div className="grid grid-cols-[200px_1fr] gap-x-4 gap-y-2 pt-1">
-              <div className="font-bold text-[#00ff66]">
-                network &lt;name|id&gt;
-              </div>
-              <div>Switch active network</div>
-              <div className="font-bold text-[#00ff66]">dexes</div>
-              <div>List available DEXes</div>
-              <div className="font-bold text-[#00ff66]">dex &lt;id&gt;</div>
-              <div>Set active DEX protocol</div>
-              <div className="font-bold text-[#00ff66]">
-                createpool &lt;tA&gt; &lt;tB&gt; [fee]
-              </div>
-              <div>Deploy pool contract</div>
-              <div className="font-bold text-[#00ff66]">
-                getpool &lt;tA&gt; &lt;tB&gt; [fee]
-              </div>
-              <div>Query pool address</div>
-              <div className="font-bold text-[#00ff66]">
-                initialize &lt;tA&gt; &lt;tB&gt; [fee]
-              </div>
-              <div>Initialize V3 pool price curve</div>
-              <div className="font-bold text-[#00ff66]">
-                addliq &lt;tA&gt; &lt;tB&gt; &lt;amtA&gt; &lt;amtB&gt; [fee]
-              </div>
-              <div>Add liquidity position</div>
-              <div className="font-bold text-[#00ff66]">
-                swap &lt;amt&gt; &lt;from&gt; &lt;to&gt;
-              </div>
-              <div>Execute token swap</div>
-              <div className="font-bold text-[#00ff66]">
-                pool &lt;address&gt;
-              </div>
-              <div>Check V2/V3 pool metrics</div>
-              <div className="font-bold text-[#00ff66]">
-                balance &lt;token&gt;
-              </div>
-              <div>Check token balance</div>
-            </div>
-          </div>
-        );
-        break;
+        setLogs((prev) => [
+          ...prev,
+          userLog,
+          { id: (Date.now() + 1).toString(), type: "help" }
+        ]);
+        setHistory((prev) => [...prev, trimmed]);
+        setHistoryIdx(-1);
+        return;
 
       case "network":
       case "net":
+        let netText = "";
         if (!args[1]) {
           const currentChainObj = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
           );
-          outputContent = (
-            <div className="text-xs text-[#00ff66]">
-              Active Network: {currentChainObj?.name || "None"}
-            </div>
-          );
+          netText = `Active Network: ${currentChainObj?.name || "None"}`;
         } else if (args[1] === "0") {
           setActiveChainId(null);
           setActiveDexId(null);
-          outputContent = (
-            <div className="text-yellow-400">Network cleared.</div>
-          );
+          netText = "Network cleared.";
         } else {
           const targetChain = resolveChain(args[1]);
-          if (!targetChain)
-            outputContent = (
-              <div className="text-red-400">Network not recognized.</div>
-            );
+          if (!targetChain) netText = "Network not recognized.";
           else {
             handleChainSwitch(targetChain.id);
             if (isConnected)
               await switchChainAsync({ chainId: targetChain.id }).catch(
                 () => {}
               );
-            outputContent = (
-              <div className="text-emerald-400 font-bold">
-                [✓] Network set to {targetChain.name}
-              </div>
-            );
+            netText = `[✓] Network set to ${targetChain.name}`;
           }
         }
+        newEntry = {
+          id: (Date.now() + 1).toString(),
+          type: "text",
+          text: netText
+        };
         break;
 
       case "dexes":
-        if (!activeChainId)
-          outputContent = (
-            <div className="text-yellow-400">Select network first.</div>
-          );
-        else {
-          const dexList = DEX_REGISTRY[activeChainId] || [];
-          outputContent = (
-            <div className="text-xs space-y-1 my-2">
-              {dexList.map((d) => (
-                <div key={d.id}>
-                  • {d.name} ({d.type}) - ID:{" "}
-                  <span className="font-bold">{d.id}</span>
-                </div>
-              ))}
-            </div>
-          );
+        if (!activeChainId) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Select network first."
+          };
+        } else {
+          setLogs((prev) => [
+            ...prev,
+            userLog,
+            { id: (Date.now() + 1).toString(), type: "dexes" }
+          ]);
+          setHistory((prev) => [...prev, trimmed]);
+          setHistoryIdx(-1);
+          return;
         }
         break;
 
       case "dex":
-        if (!activeChainId)
-          outputContent = (
-            <div className="text-yellow-400">Select network first.</div>
-          );
+        let dexText = "";
+        if (!activeChainId) dexText = "Select network first.";
         else if (!args[1]) {
           const activeDexObj = DEX_REGISTRY[activeChainId]?.find(
             (d) => d.id === activeDexId
           );
-          outputContent = (
-            <div className="text-xs">
-              Active DEX: {activeDexObj?.name || "None"}
-            </div>
-          );
+          dexText = `Active DEX: ${activeDexObj?.name || "None"}`;
         } else {
           const targetDex = DEX_REGISTRY[activeChainId]?.find(
             (d) => d.id === args[1].toLowerCase()
           );
-          if (!targetDex)
-            outputContent = <div className="text-red-400">DEX not found.</div>;
+          if (!targetDex) dexText = "DEX not found.";
           else {
             setActiveDexId(targetDex.id);
-            outputContent = (
-              <div className="text-emerald-400 font-bold">
-                [✓] DEX set to {targetDex.name}
-              </div>
-            );
+            dexText = `[✓] DEX set to ${targetDex.name}`;
           }
         }
+        newEntry = {
+          id: (Date.now() + 1).toString(),
+          type: "text",
+          text: dexText
+        };
         break;
 
       case "createpool":
-        if (!isConnected || !address)
-          outputContent = (
-            <div className="text-yellow-400">Wallet not connected.</div>
-          );
-        else if (!activeChainId || !activeDexId)
-          outputContent = (
-            <div className="text-yellow-400">Select network and DEX first.</div>
-          );
-        else if (!args[1] || !args[2])
-          outputContent = "Usage: createpool <tokenA> <tokenB> [fee]";
-        else {
+        if (!isConnected || !address) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Wallet not connected."
+          };
+        } else if (!activeChainId || !activeDexId) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Select network and DEX first."
+          };
+        } else if (!args[1] || !args[2]) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Usage: createpool <tokenA> <tokenB> [fee]"
+          };
+        } else {
           const targetChain = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
           )!;
           const activeDex = DEX_REGISTRY[activeChainId].find(
             (d) => d.id === activeDexId
           )!;
-          setLogs((prev) => [
-            ...prev,
-            userLog,
-            {
-              id: (Date.now() + 1).toString(),
-              type: "text",
-              content: "Preparing factory payload..."
-            }
-          ]);
           try {
             const [tokenA, tokenB] = await Promise.all([
               resolveTokenDetails(args[1], targetChain),
@@ -1299,47 +1436,57 @@ export default function TerminalShell({
               : tokenB.address;
             const fee = args[3] ? parseInt(args[3]) : 3000;
 
-            const createWidget = (
-              <CreatePoolWidget
-                targetChain={targetChain}
-                activeDex={activeDex}
-                tokenA={tokenA}
-                tokenB={tokenB}
-                addrA={addrA}
-                addrB={addrB}
-                fee={fee}
-              />
-            );
             setLogs((prev) => [
-              ...prev.slice(0, -1),
+              ...prev,
+              userLog,
               {
-                id: Date.now().toString(),
-                type: "component",
-                content: createWidget
+                id: (Date.now() + 1).toString(),
+                type: "createpool",
+                payload: {
+                  targetChain,
+                  activeDex,
+                  tokenA,
+                  tokenB,
+                  addrA,
+                  addrB,
+                  fee
+                }
               }
             ]);
             setHistory((prev) => [...prev, trimmed]);
             setHistoryIdx(-1);
             return;
           } catch (err: any) {
-            outputContent = `ERROR: ${err.message}`;
+            newEntry = {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              text: `ERROR: ${err.message}`
+            };
           }
         }
         break;
 
       case "initialize":
       case "initpool":
-        if (!isConnected || !address)
-          outputContent = (
-            <div className="text-yellow-400">Wallet not connected.</div>
-          );
-        else if (!activeChainId || !activeDexId)
-          outputContent = (
-            <div className="text-yellow-400">Select network and DEX first.</div>
-          );
-        else if (!args[1] || !args[2])
-          outputContent = "Usage: initialize <tokenA> <tokenB> [fee]";
-        else {
+        if (!isConnected || !address) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Wallet not connected."
+          };
+        } else if (!activeChainId || !activeDexId) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Select network and DEX first."
+          };
+        } else if (!args[1] || !args[2]) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Usage: initialize <tokenA> <tokenB> [fee]"
+          };
+        } else {
           const targetChain = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
           )!;
@@ -1347,22 +1494,13 @@ export default function TerminalShell({
             (d) => d.id === activeDexId
           )!;
           if (activeDex.type !== "V3") {
-            outputContent = (
-              <div className="text-yellow-400">
-                Initialization is only applicable to Uniswap V3 pools.
-              </div>
-            );
-            break;
-          }
-          setLogs((prev) => [
-            ...prev,
-            userLog,
-            {
+            newEntry = {
               id: (Date.now() + 1).toString(),
               type: "text",
-              content: "Resolving V3 pool address..."
-            }
-          ]);
+              text: "Initialization is only applicable to Uniswap V3 pools."
+            };
+            break;
+          }
           try {
             const [tokenA, tokenB] = await Promise.all([
               resolveTokenDetails(args[1], targetChain),
@@ -1397,55 +1535,49 @@ export default function TerminalShell({
               );
             }
 
-            const initWidget = (
-              <InitializePoolWidget
-                targetChain={targetChain}
-                poolAddress={poolAddress}
-                tokenA={tokenA}
-                tokenB={tokenB}
-              />
-            );
             setLogs((prev) => [
-              ...prev.slice(0, -1),
+              ...prev,
+              userLog,
               {
-                id: Date.now().toString(),
-                type: "component",
-                content: initWidget
+                id: (Date.now() + 1).toString(),
+                type: "initialize",
+                payload: { targetChain, poolAddress, tokenA, tokenB }
               }
             ]);
             setHistory((prev) => [...prev, trimmed]);
             setHistoryIdx(-1);
             return;
           } catch (err: any) {
-            outputContent = `ERROR: ${err.message}`;
+            newEntry = {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              text: `ERROR: ${err.message}`
+            };
           }
         }
         break;
 
       case "getpool":
       case "findpool":
-        if (!activeChainId || !activeDexId)
-          outputContent = (
-            <div className="text-yellow-400">Select network and DEX first.</div>
-          );
-        else if (!args[1] || !args[2])
-          outputContent = "Usage: getpool <tokenA> <tokenB> [fee]";
-        else {
+        if (!activeChainId || !activeDexId) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Select network and DEX first."
+          };
+        } else if (!args[1] || !args[2]) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Usage: getpool <tokenA> <tokenB> [fee]"
+          };
+        } else {
           const targetChain = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
           )!;
           const activeDex = DEX_REGISTRY[activeChainId].find(
             (d) => d.id === activeDexId
           )!;
-          setLogs((prev) => [
-            ...prev,
-            userLog,
-            {
-              id: (Date.now() + 1).toString(),
-              type: "text",
-              content: "Querying factory..."
-            }
-          ]);
           try {
             const poolWidget = await fetchPoolAddress(
               args[1],
@@ -1455,50 +1587,54 @@ export default function TerminalShell({
               args[3]
             );
             setLogs((prev) => [
-              ...prev.slice(0, -1),
+              ...prev,
+              userLog,
               {
-                id: Date.now().toString(),
+                id: (Date.now() + 1).toString(),
                 type: "component",
-                content: poolWidget
+                component: poolWidget
               }
             ]);
             setHistory((prev) => [...prev, trimmed]);
             setHistoryIdx(-1);
             return;
           } catch (err: any) {
-            outputContent = `ERROR: ${err.message}`;
+            newEntry = {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              text: `ERROR: ${err.message}`
+            };
           }
         }
         break;
 
       case "addliq":
       case "provideliq":
-        if (!isConnected || !address)
-          outputContent = (
-            <div className="text-yellow-400">Wallet not connected.</div>
-          );
-        else if (!activeChainId || !activeDexId)
-          outputContent = (
-            <div className="text-yellow-400">Select network and DEX first.</div>
-          );
-        else if (!args[1] || !args[2] || !args[3] || !args[4])
-          outputContent = "Usage: addliq <tokenA> <tokenB> <amtA> <amtB> [fee]";
-        else {
+        if (!isConnected || !address) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Wallet not connected."
+          };
+        } else if (!activeChainId || !activeDexId) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Select network and DEX first."
+          };
+        } else if (!args[1] || !args[2] || !args[3] || !args[4]) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Usage: addliq <tokenA> <tokenB> <amtA> <amtB> [fee]"
+          };
+        } else {
           const targetChain = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
           )!;
           const activeDex = DEX_REGISTRY[activeChainId].find(
             (d) => d.id === activeDexId
           )!;
-          setLogs((prev) => [
-            ...prev,
-            userLog,
-            {
-              id: (Date.now() + 1).toString(),
-              type: "text",
-              content: "Preparing liquidity widget..."
-            }
-          ]);
           try {
             const [tokenA, tokenB] = await Promise.all([
               resolveTokenDetails(args[1], targetChain),
@@ -1508,62 +1644,63 @@ export default function TerminalShell({
             const amountBWei = parseUnits(args[4], tokenB.decimals);
             const fee = args[5] ? parseInt(args[5]) : 3000;
 
-            const addLiqWidget = (
-              <AddLiquidityWidget
-                userAddress={address}
-                targetChain={targetChain}
-                activeDex={activeDex}
-                tokenA={tokenA}
-                tokenB={tokenB}
-                amountAWei={amountAWei}
-                amountBWei={amountBWei}
-                fee={fee}
-              />
-            );
             setLogs((prev) => [
-              ...prev.slice(0, -1),
+              ...prev,
+              userLog,
               {
-                id: Date.now().toString(),
-                type: "component",
-                content: addLiqWidget
+                id: (Date.now() + 1).toString(),
+                type: "addliq",
+                payload: {
+                  userAddress: address,
+                  targetChain,
+                  activeDex,
+                  tokenA,
+                  tokenB,
+                  amountAWei,
+                  amountBWei,
+                  fee
+                }
               }
             ]);
             setHistory((prev) => [...prev, trimmed]);
             setHistoryIdx(-1);
             return;
           } catch (err: any) {
-            outputContent = `ERROR: ${err.message}`;
+            newEntry = {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              text: `ERROR: ${err.message}`
+            };
           }
         }
         break;
 
       case "swap":
-        if (!isConnected || !address)
-          outputContent = (
-            <div className="text-yellow-400">Wallet not connected.</div>
-          );
-        else if (!activeChainId || !activeDexId)
-          outputContent = (
-            <div className="text-yellow-400">Select network and DEX first.</div>
-          );
-        else if (!args[1] || !args[2] || !args[3])
-          outputContent = "Usage: swap <amount> <fromToken> <toToken>";
-        else {
+        if (!isConnected || !address) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Wallet not connected."
+          };
+        } else if (!activeChainId || !activeDexId) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Select network and DEX first."
+          };
+        } else if (!args[1] || !args[2] || !args[3]) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Usage: swap <amount> <fromToken> <toToken>"
+          };
+        } else {
           const targetChain = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
           )!;
           const activeDex = DEX_REGISTRY[activeChainId].find(
             (d) => d.id === activeDexId
           )!;
-          setLogs((prev) => [
-            ...prev,
-            userLog,
-            {
-              id: (Date.now() + 1).toString(),
-              type: "text",
-              content: "Encoding swap..."
-            }
-          ]);
           try {
             const [fromToken, toToken] = await Promise.all([
               resolveTokenDetails(args[2], targetChain),
@@ -1640,41 +1777,39 @@ export default function TerminalShell({
               />
             );
             setLogs((prev) => [
-              ...prev.slice(0, -1),
+              ...prev,
+              userLog,
               {
-                id: Date.now().toString(),
+                id: (Date.now() + 1).toString(),
                 type: "component",
-                content: swapWidget
+                component: swapWidget
               }
             ]);
             setHistory((prev) => [...prev, trimmed]);
             setHistoryIdx(-1);
             return;
           } catch (err: any) {
-            outputContent = `ERROR: ${err.message}`;
+            newEntry = {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              text: `ERROR: ${err.message}`
+            };
           }
         }
         break;
 
       case "balance":
       case "bal":
-        if (!isConnected || !address)
-          outputContent = (
-            <div className="text-yellow-400">Wallet not connected.</div>
-          );
-        else {
+        if (!isConnected || !address) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Wallet not connected."
+          };
+        } else {
           const targetChain =
             SUPPORTED_CHAINS.find((c) => c.id === activeChainId) ||
             SUPPORTED_CHAINS[5];
-          setLogs((prev) => [
-            ...prev,
-            userLog,
-            {
-              id: (Date.now() + 1).toString(),
-              type: "text",
-              content: "Querying balance..."
-            }
-          ]);
           try {
             const balWidget = await fetchTokenBalance(
               address,
@@ -1682,49 +1817,53 @@ export default function TerminalShell({
               args[1]
             );
             setLogs((prev) => [
-              ...prev.slice(0, -1),
+              ...prev,
+              userLog,
               {
-                id: Date.now().toString(),
+                id: (Date.now() + 1).toString(),
                 type: "component",
-                content: balWidget
+                component: balWidget
               }
             ]);
             setHistory((prev) => [...prev, trimmed]);
             setHistoryIdx(-1);
             return;
           } catch (err: any) {
-            outputContent = `ERROR: ${err.message}`;
+            newEntry = {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              text: `ERROR: ${err.message}`
+            };
           }
         }
         break;
 
       case "pool":
       case "liquidity":
-        if (!activeChainId)
-          outputContent = (
-            <div className="text-yellow-400">Select network first.</div>
-          );
-        else if (!args[1]) outputContent = "Usage: pool <poolAddress>";
-        else {
+        if (!activeChainId) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Select network first."
+          };
+        } else if (!args[1]) {
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Usage: pool <poolAddress>"
+          };
+        } else {
           const targetChain = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
           )!;
+          const poolWidget = await fetchOnChainLiquidity(args[1], targetChain);
           setLogs((prev) => [
             ...prev,
             userLog,
             {
               id: (Date.now() + 1).toString(),
-              type: "text",
-              content: "Reading pool..."
-            }
-          ]);
-          const poolWidget = await fetchOnChainLiquidity(args[1], targetChain);
-          setLogs((prev) => [
-            ...prev.slice(0, -1),
-            {
-              id: Date.now().toString(),
               type: "component",
-              content: poolWidget
+              component: poolWidget
             }
           ]);
           setHistory((prev) => [...prev, trimmed]);
@@ -1735,28 +1874,41 @@ export default function TerminalShell({
 
       case "connect":
         if (isConnected) connect({ connector: connectors[0] });
-        else outputContent = "Initiating handshake...";
+        else
+          newEntry = {
+            id: (Date.now() + 1).toString(),
+            type: "text",
+            text: "Initiating handshake..."
+          };
         break;
 
       case "disconnect":
         disconnect();
-        outputContent = "Disconnected.";
+        newEntry = {
+          id: (Date.now() + 1).toString(),
+          type: "text",
+          text: "Disconnected."
+        };
         break;
 
       case "rain":
         onToggleRain();
-        outputContent = "Rain toggled.";
+        newEntry = {
+          id: (Date.now() + 1).toString(),
+          type: "text",
+          text: "Rain toggled."
+        };
         break;
 
       default:
-        outputContent = `Command not recognized: "${command}". Type "help".`;
+        newEntry = {
+          id: (Date.now() + 1).toString(),
+          type: "text",
+          text: `Command not recognized: "${command}". Type "help".`
+        };
     }
 
-    setLogs((prev) => [
-      ...prev,
-      userLog,
-      { id: (Date.now() + 1).toString(), type: "text", content: outputContent }
-    ]);
+    setLogs((prev) => [...prev, userLog, newEntry]);
     setHistory((prev) => [...prev, trimmed]);
     setHistoryIdx(-1);
   };
@@ -1790,43 +1942,174 @@ export default function TerminalShell({
 
   return (
     <div
-      className="relative z-10 w-full h-full p-6 pt-10 flex flex-col cursor-text overflow-hidden"
-      onClick={() => inputRef.current?.focus()}
+      className={`relative z-10 w-full h-full flex flex-col cursor-text overflow-hidden transition-all duration-300 ${theme.bg} ${theme.text} ${theme.font}`}
     >
+      {/* EXCLUSIVE SCANLINE OVERLAY: Strictly restricted to Matrix theme */}
+      {currentThemeKey === "matrix" && (
+        <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.35)_50%)] bg-[length:100%_4px] opacity-70 z-20"></div>
+      )}
+      {currentThemeKey === "bloomberg" && (
+        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(#ffb000_1px,transparent_1px)] [background-size:16px_16px] opacity-10 z-20"></div>
+      )}
+
+      {/* TOP HEADER BAR */}
       <div
-        ref={logContainerRef}
-        className="flex-1 overflow-y-auto space-y-2 pt-2 pr-2"
+        className={`absolute top-0 left-0 right-0 h-14 px-6 flex items-center justify-between border-b ${theme.border} ${theme.cardBg} backdrop-blur-md z-30`}
       >
-        {logs.map((log) => (
-          <div
-            key={log.id}
-            className={
-              log.type === "input"
-                ? "text-[#00ff66] font-bold matrix-glow"
-                : "text-[#00ff66]/90"
-            }
-          >
-            {log.content}
+        <div className="flex items-center space-x-3">
+          {theme.headerStyle === "mac" && (
+            <div className="flex items-center space-x-1.5 mr-2">
+              <div className="w-3 h-3 rounded-full bg-red-500/80 shadow-inner"></div>
+              <div className="w-3 h-3 rounded-full bg-yellow-500/80 shadow-inner"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500/80 shadow-inner"></div>
+            </div>
+          )}
+          {theme.headerStyle === "bloomberg" && (
+            <div className="px-2 py-0.5 bg-[#ffb000] text-black font-bold text-[10px] rounded-none">
+              BBG
+            </div>
+          )}
+          {theme.headerStyle === "whatsapp" && (
+            <div className="w-8 h-8 rounded-full bg-[#00a884]/20 flex items-center justify-center text-[#00a884] font-bold text-xs">
+              WA
+            </div>
+          )}
+          <span
+            className={`inline-block w-2.5 h-2.5 rounded-full bg-current animate-pulse ${theme.primary}`}
+          ></span>
+          <span className={`font-bold tracking-wider text-xs ${theme.primary}`}>
+            0xTERM TERMINAL
+          </span>
+        </div>
+
+        <div className="flex items-center space-x-3 relative">
+          {/* THEME SWITCHER DROPDOWN */}
+          <div className="relative">
+            <button
+              onClick={() => setThemeMenuOpen(!themeMenuOpen)}
+              className={`px-3 py-1.5 text-xs font-bold border ${theme.border} bg-current/5 hover:bg-current/15 ${theme.rounded} transition-all flex items-center space-x-1.5 ${theme.primary}`}
+            >
+              <span>🎨 THEME: {theme.name.toUpperCase()}</span>
+              <span className="text-[10px]">▼</span>
+            </button>
+
+            {themeMenuOpen && (
+              <div
+                className={`absolute right-0 mt-2 w-48 border ${theme.border} ${theme.cardBg} ${theme.rounded} shadow-2xl py-1 z-50 text-xs`}
+              >
+                {(Object.keys(THEMES) as ThemeMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => {
+                      onThemeChange(mode);
+                      setThemeMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 hover:bg-current/10 flex items-center justify-between transition-colors ${currentThemeKey === mode ? `${theme.primary} font-bold` : `${theme.text}/80`}`}
+                  >
+                    <span>{THEMES[mode].name}</span>
+                    {currentThemeKey === mode && <span>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        ))}
+        </div>
       </div>
 
-      <div className="flex items-center mt-4 text-[#00ff66] border-t border-[#00ff66]/20 pt-3 shrink-0">
-        <span className="mr-2 font-bold matrix-glow shrink-0 whitespace-nowrap">
-          {mounted && isConnected
-            ? `[${activeChainObj ? activeChainObj.name.toUpperCase() : "NO NET"} | ${activeDexObj ? activeDexObj.id.toUpperCase() : "NO DEX"} | ${address?.slice(0, 6)}...] >`
-            : `>`}
-        </span>
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="w-full bg-transparent outline-none text-[#00ff66] caret-[#00ff66] matrix-glow"
-          autoFocus
-          spellCheck={false}
-        />
+      {/* TERMINAL CONTENT CONTAINER */}
+      <div
+        className="flex-1 flex flex-col p-6 pt-20 overflow-hidden relative z-10"
+        onClick={() => inputRef.current?.focus()}
+      >
+        <div
+          ref={logContainerRef}
+          className="flex-1 overflow-y-auto space-y-2.5 pt-2 pr-2"
+        >
+          {logs.map((log) => {
+            if (log.type === "input") {
+              return (
+                <div
+                  key={log.id}
+                  className={`${theme.primary} font-bold ${theme.glow}`}
+                >
+                  {log.text}
+                </div>
+              );
+            }
+            if (log.type === "help") {
+              return <HelpManual key={log.id} theme={theme} />;
+            }
+            if (log.type === "dexes") {
+              const dexList = DEX_REGISTRY[activeChainId!] || [];
+              return (
+                <div
+                  key={log.id}
+                  className={`text-xs space-y-1 my-2 ${theme.text}`}
+                >
+                  {dexList.map((d) => (
+                    <div key={d.id}>
+                      • {d.name} ({d.type}) - ID:{" "}
+                      <span className={`font-bold ${theme.primary}`}>
+                        {d.id}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            if (log.type === "createpool") {
+              return (
+                <CreatePoolWidget key={log.id} {...log.payload} theme={theme} />
+              );
+            }
+            if (log.type === "initialize") {
+              return (
+                <InitializePoolWidget
+                  key={log.id}
+                  {...log.payload}
+                  theme={theme}
+                />
+              );
+            }
+            if (log.type === "addliq") {
+              return (
+                <AddLiquidityWidget
+                  key={log.id}
+                  {...log.payload}
+                  theme={theme}
+                />
+              );
+            }
+            return (
+              <div key={log.id} className={`${theme.text}/90`}>
+                {log.text}
+                {log.component}
+              </div>
+            );
+          })}
+        </div>
+
+        <div
+          className={`flex items-center mt-4 border-t ${theme.border} pt-3 shrink-0`}
+        >
+          <span
+            className={`mr-2 font-bold ${theme.glow} shrink-0 whitespace-nowrap ${theme.primary}`}
+          >
+            {mounted && isConnected
+              ? `[${activeChainObj ? activeChainObj.name.toUpperCase() : "NO NET"} | ${activeDexObj ? activeDexObj.id.toUpperCase() : "NO DEX"} | ${address?.slice(0, 6)}...] ${theme.promptSymbol}`
+              : `${theme.promptSymbol}`}
+          </span>
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className={`w-full bg-transparent outline-none ${theme.text} caret-current ${theme.glow}`}
+            autoFocus
+            spellCheck={false}
+          />
+        </div>
       </div>
     </div>
   );
