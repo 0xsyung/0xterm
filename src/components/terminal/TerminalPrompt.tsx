@@ -1,20 +1,6 @@
 import React from "react";
+import type { ThemeConfig } from "./types";
 import { SUPPORTED_CHAINS, DEX_REGISTRY } from "./constants";
-
-interface TerminalPromptProps {
-  theme: any;
-  input: string;
-  setInput: (val: string) => void;
-  handleKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  inputRef: React.RefObject<HTMLInputElement | null>;
-  suggestions: string[];
-  suggestionIdx: number;
-  activeChainId: number | null;
-  activeDexId: string | null;
-  isConnected: boolean;
-  address?: string;
-  mounted: boolean;
-}
 
 export default function TerminalPrompt({
   theme,
@@ -29,70 +15,106 @@ export default function TerminalPrompt({
   isConnected,
   address,
   mounted
-}: TerminalPromptProps) {
-  const activeChainObj = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
-  const activeDexObj = activeChainId
-    ? DEX_REGISTRY[activeChainId]?.find((d) => d.id === activeDexId)
-    : null;
+}: {
+  theme: ThemeConfig;
+  input: string;
+  setInput: (val: string) => void;
+  handleKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  suggestions: string[];
+  suggestionIdx: number;
+  activeChainId: number | null;
+  activeDexId: string | null;
+  isConnected: boolean;
+  address: string | undefined;
+  mounted: boolean;
+}) {
+  const chainObj = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+  const activeDexObj = DEX_REGISTRY[activeChainId!]?.find(
+    (d) => d.id === activeDexId
+  );
 
   return (
     <div
-      className={`mt-4 border-t ${theme.border} pt-3 shrink-0 flex flex-col space-y-1.5`}
+      className={`mt-2 border ${theme.border} ${theme.cardBg} ${theme.rounded} p-3 flex flex-col gap-2 ${theme.glow} shadow-xl`}
     >
-      {/* Line 1: Status Bar */}
-      {mounted && (
-        <div
-          className={`text-[11px] ${theme.text}/70 flex items-center space-x-2 px-1`}
-        >
-          <span className={`font-bold ${theme.primary}`}>
-            [{activeChainObj ? activeChainObj.name.toUpperCase() : "NO NET"} |{" "}
-            {activeDexObj ? activeDexObj.id.toUpperCase() : "NO DEX"} |{" "}
-            {isConnected && address
-              ? `${address.slice(0, 6)}...${address.slice(-4)}`
-              : "DISCONNECTED"}
-            ]
-          </span>
+      {/* LINE 1: Status Bar Metadata */}
+      <div className="flex flex-wrap items-center justify-between text-[11px] gap-2">
+        <div className="flex items-center gap-2">
+          {mounted && isConnected && address ? (
+            <span
+              className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 font-mono ${theme.primary}`}
+            >
+              WALLET: {address.slice(0, 6)}...{address.slice(-4)}
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded border border-yellow-500/50 bg-yellow-500/10 text-yellow-400 font-mono">
+              WALLET: DISCONNECTED (Type `connect`)
+            </span>
+          )}
+          {chainObj ? (
+            <span
+              className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 font-mono ${theme.primary}`}
+            >
+              NET: {chainObj.name}
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded border border-orange-500/50 bg-orange-500/10 text-orange-400 font-mono">
+              NET: NOT SELECTED (Type `networks`)
+            </span>
+          )}
+          {activeDexObj && (
+            <span
+              className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 font-mono ${theme.primary} hidden sm:inline-block`}
+            >
+              DEX: {activeDexObj.name}
+            </span>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Line 2: Input */}
-      <div className="flex items-center">
-        <span
-          className={`mr-2 font-bold ${theme.glow} shrink-0 whitespace-nowrap ${theme.primary}`}
-        >
-          &gt;
-        </span>
+      {/* LINE 2: Interactive Input Field */}
+      <div className="flex items-center gap-2 relative">
+        <span className={`font-bold ${theme.primary} tracking-widest`}>$</span>
         <input
           ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          className={`w-full bg-transparent outline-none ${theme.text} caret-current ${theme.glow}`}
+          placeholder='Type "help" to view available commands...'
+          className={`flex-1 bg-transparent outline-none font-mono text-xs ${theme.text} placeholder:opacity-40 placeholder:${theme.text}`}
           autoFocus
           spellCheck={false}
+          autoComplete="off"
         />
-      </div>
 
-      {/* Line 3: Autocomplete */}
-      {suggestions.length > 0 && (
-        <div
-          className={`flex flex-wrap gap-3 px-4 pb-1 text-[11px] ${theme.text}/80`}
-        >
-          {suggestions.map((s, idx) => (
-            <span
-              key={s}
-              className={`transition-colors ${
-                idx === suggestionIdx
-                  ? `bg-current/20 font-bold ${theme.primary} px-2 py-0.5 rounded`
-                  : "px-2 py-0.5"
-              }`}
+        {/* Autocomplete Popup */}
+        {suggestions.length > 0 && (
+          <div
+            className={`absolute bottom-full left-6 mb-2 max-h-40 overflow-y-auto border ${theme.border} ${theme.cardBg} ${theme.rounded} shadow-2xl z-50 text-xs p-1 min-w-[180px]`}
+          >
+            <div
+              className={`text-[9px] uppercase px-2 py-1 opacity-50 border-b ${theme.border} mb-1 flex justify-between`}
             >
-              {s}
-            </span>
-          ))}
-        </div>
-      )}
+              <span>Suggestions</span>
+              <span>[Tab / ← → to cycle]</span>
+            </div>
+            {suggestions.map((s, idx) => (
+              <div
+                key={s}
+                className={`px-2 py-1.5 rounded font-mono cursor-pointer transition-colors ${
+                  idx === suggestionIdx
+                    ? `${theme.primary} bg-current/20 font-bold`
+                    : `${theme.text} hover:bg-current/10`
+                }`}
+              >
+                {s}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
