@@ -4,5 +4,20 @@
       "name": "v1.16.2",
       "rev": "bf647bd6046f2f7da30d0c2bf435e5c76a780c1b"
     }
+  },
+  "lib/solidity-lib": {
+    "tag": {
+      "name": "v2.1.0",
+      "rev": "3fcc8ee6d5c7dea3283416cbcee601d89504a243"
+    }
+  },
+  "lib/v2-core": {
+    "tag": {
+      "name": "v1.0.1",
+      "rev": "4dd59067c76dea4a0e8e4bfdda41877a6b16dedc"
+    }
+  },
+  "lib/v2-periphery": {
+    "rev": "ed24991304291297c3b4a52818d02f46a17aa9a2"
   }
 }
