@@ -7,6 +7,9 @@
       "nodeGypDependencies": true
     }
   },
+  "remoteEnv": {
+    "PATH": "/home/node/.foundry/bin:${containerEnv:PATH}"
+  },
   "customizations": {
     "vscode": {
       "settings": {
@@ -29,5 +32,5 @@
       "onAutoForward": "openPreview"
     }
   },
-  "postCreateCommand": "curl -L https://foundry.paradigm.xyz | bash && source /home/node/.bashrc && foundryup && npm install"
+  "postCreateCommand": "bash -c 'curl -L https://foundry.paradigm.xyz | bash && /home/node/.foundry/bin/foundryup && npm install'"
 }
