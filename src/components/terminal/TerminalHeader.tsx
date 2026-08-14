@@ -19,13 +19,13 @@ export default function TerminalHeader({
     <div
       className={`absolute top-0 left-0 right-0 h-14 px-6 flex items-center justify-between border-b ${theme.border} ${theme.cardBg} backdrop-blur-md z-30`}
     >
-      <div className="flex items-center space-x-3">
-        <span
-          className={`inline-block w-2.5 h-2.5 rounded-full bg-current animate-pulse ${theme.primary}`}
-        ></span>
-        <span className={`font-bold tracking-wider text-xs ${theme.primary}`}>
-          0xTERM
-        </span>
+      <div className="flex items-center">
+        <img
+          src="/logo.svg"
+          alt="0xTERM"
+          className="h-9 w-9"
+          draggable={false}
+        />
       </div>
     </div>
   );
