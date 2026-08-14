@@ -81,6 +81,10 @@ export default function TerminalShell({
   const [history, setHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
 
+  // Autocomplete State
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestionIdx, setSuggestionIdx] = useState(-1);
+
   const logContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -156,7 +160,7 @@ export default function TerminalShell({
                   id: Date.now().toString(),
                   type: "text",
                   text: `[✓] Profile loaded for wallet ${address.slice(0, 6)}...${address.slice(-4)} (${loadedDetails.join(" | ")})`
-                }
+                } as LogEntry
               ].slice(-MAX_LOGS)
             );
           }
@@ -982,7 +986,7 @@ export default function TerminalShell({
             data: txData,
             value: txValue
           }}
-          approvalAddress={approvalAddress} // SwapWidget will handle the pre-flight allowance checks
+          approvalAddress={approvalAddress}
         />
       );
 
@@ -1057,6 +1061,8 @@ export default function TerminalShell({
   commands.bal = commands.balance;
   commands.liquidity = commands.pool;
 
+  const availableCommands = Object.keys(commands);
+
   const handleCommand = async (cmd: string) => {
     const trimmed = cmd.trim();
     if (!trimmed) return;
@@ -1084,7 +1090,7 @@ export default function TerminalShell({
             id: generateId(),
             type: "text",
             text: `Command not recognized: "${command}". Type "help".`
-          }
+          } as LogEntry
         ].slice(-MAX_LOGS)
       );
       return;
@@ -1105,30 +1111,73 @@ export default function TerminalShell({
             id: generateId(),
             type: "text",
             text: formatViemError(err)
-          }
+          } as LogEntry
         ].slice(-MAX_LOGS)
       );
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      handleCommand(input);
-      setInput("");
-    } else if (e.key === "ArrowUp") {
+    if (e.key === "Tab") {
       e.preventDefault();
-      if (history.length > 0 && historyIdx + 1 < history.length) {
-        setHistoryIdx(historyIdx + 1);
-        setInput(history[history.length - 1 - (historyIdx + 1)]);
+
+      if (suggestions.length > 0) {
+        setInput(suggestions[suggestionIdx] + " ");
+        setSuggestions([]);
+        setSuggestionIdx(-1);
+        return;
       }
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      if (historyIdx > 0) {
-        setHistoryIdx(historyIdx - 1);
-        setInput(history[history.length - 1 - (historyIdx - 1)]);
-      } else {
-        setHistoryIdx(-1);
+
+      const val = input.trim().toLowerCase();
+      // Only autocomplete if we are typing the first word without spaces
+      if (!val || input.includes(" ")) return;
+
+      const matches = availableCommands.filter((c) => c.startsWith(val)).sort();
+
+      if (matches.length === 1) {
+        setInput(matches[0] + " ");
+      } else if (matches.length > 1) {
+        setSuggestions(matches);
+        setSuggestionIdx(0);
+      }
+    } else if (suggestions.length > 0) {
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setSuggestionIdx((prev) => (prev + 1) % suggestions.length);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setSuggestionIdx(
+          (prev) => (prev - 1 + suggestions.length) % suggestions.length
+        );
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        setInput(suggestions[suggestionIdx] + " ");
+        setSuggestions([]);
+        setSuggestionIdx(-1);
+      } else if (e.key === "Escape") {
+        setSuggestions([]);
+        setSuggestionIdx(-1);
+      }
+    } else {
+      // Standard terminal command behavior
+      if (e.key === "Enter") {
+        handleCommand(input);
         setInput("");
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (history.length > 0 && historyIdx + 1 < history.length) {
+          setHistoryIdx(historyIdx + 1);
+          setInput(history[history.length - 1 - (historyIdx + 1)]);
+        }
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (historyIdx > 0) {
+          setHistoryIdx(historyIdx - 1);
+          setInput(history[history.length - 1 - (historyIdx - 1)]);
+        } else {
+          setHistoryIdx(-1);
+          setInput("");
+        }
       }
     }
   };
@@ -1269,13 +1318,39 @@ export default function TerminalShell({
               ref={inputRef}
               type="text"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                if (suggestions.length > 0) {
+                  setSuggestions([]);
+                  setSuggestionIdx(-1);
+                }
+              }}
               onKeyDown={handleKeyDown}
               className={`w-full bg-transparent outline-none ${theme.text} caret-current ${theme.glow}`}
               autoFocus
               spellCheck={false}
             />
           </div>
+
+          {/* Line 3: Autocomplete Suggestions */}
+          {suggestions.length > 0 && (
+            <div
+              className={`flex flex-wrap gap-3 px-4 pb-1 text-[11px] ${theme.text}/80`}
+            >
+              {suggestions.map((s, idx) => (
+                <span
+                  key={s}
+                  className={`transition-colors ${
+                    idx === suggestionIdx
+                      ? `bg-current/20 font-bold ${theme.primary} px-2 py-0.5 rounded`
+                      : "px-2 py-0.5"
+                  }`}
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
