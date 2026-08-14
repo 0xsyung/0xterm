@@ -300,7 +300,103 @@ function CreatePoolWidget({
 }
 
 // ---------------------------------------------------------
-// WIDGET: Add Liquidity
+// WIDGET: Initialize Pool (V3)
+// ---------------------------------------------------------
+function InitializePoolWidget({
+  targetChain,
+  poolAddress,
+  tokenA,
+  tokenB
+}: any) {
+  const { writeContractAsync } = useWriteContract();
+  const [status, setStatus] = useState<
+    "ready" | "signing" | "success" | "error"
+  >("ready");
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleInitialize = async () => {
+    setStatus("signing");
+    setErrorMsg(null);
+    try {
+      const initialSqrtPrice = 79228162514264337593543950336n; // sqrt(1) * 2^96
+      const hash = await writeContractAsync({
+        address: poolAddress,
+        abi: uniV3PoolAbi,
+        functionName: "initialize",
+        args: [initialSqrtPrice]
+      });
+      setTxHash(hash);
+      setStatus("success");
+    } catch (err: any) {
+      setStatus("error");
+      setErrorMsg(
+        err.shortMessage || err.message || "Initialization failed or rejected."
+      );
+    }
+  };
+
+  const blockExplorer = targetChain.blockExplorers?.default.url;
+
+  return (
+    <div className="my-2 p-4 border border-[#00ff66]/50 bg-[#001105]/90 rounded max-w-lg matrix-glow text-xs space-y-3">
+      <div className="flex justify-between items-center border-b border-[#00ff66]/20 pb-2">
+        <span className="font-bold text-[#00ff66]">
+          INITIALIZE V3 PRICE CURVE
+        </span>
+        <span className="text-[#00ff66]/70">
+          {tokenA.symbol} / {tokenB.symbol}
+        </span>
+      </div>
+
+      <div className="text-[11px] text-[#00ff66]/80 font-mono select-all p-2 bg-[#00ff66]/10 rounded border border-[#00ff66]/20">
+        POOL: {poolAddress}
+      </div>
+
+      {status === "error" && (
+        <div className="p-2 border border-red-500/50 bg-red-950/40 text-red-400 rounded">
+          ERROR: {errorMsg}
+        </div>
+      )}
+
+      {status === "success" && txHash && (
+        <div className="p-2 border border-emerald-500/50 bg-emerald-950/40 text-emerald-400 rounded space-y-1">
+          <div className="font-bold">[✓] POOL INITIALIZED SUCCESSFULLY!</div>
+          <div className="text-[10px] truncate">TX HASH: {txHash}</div>
+          {blockExplorer && (
+            <a
+              href={`${blockExplorer}/tx/${txHash}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[10px] underline hover:text-emerald-300 block pt-0.5"
+            >
+              View on Explorer ↗
+            </a>
+          )}
+        </div>
+      )}
+
+      <div className="pt-2 flex gap-2">
+        {(status === "ready" || status === "error") && (
+          <button
+            onClick={handleInitialize}
+            className="px-4 py-1.5 border border-[#00ff66] bg-[#00ff66]/30 hover:bg-[#00ff66]/50 text-[#00ff66] font-bold rounded cursor-pointer matrix-glow transition-all"
+          >
+            [ EXECUTE INITIALIZE ]
+          </button>
+        )}
+        {status === "signing" && (
+          <div className="text-yellow-400 font-bold animate-pulse">
+            SIGN INITIALIZATION IN WALLET...
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------
+// WIDGET: Add Liquidity (Strictly Minting/Approvals)
 // ---------------------------------------------------------
 function AddLiquidityWidget({
   userAddress,
@@ -317,7 +413,6 @@ function AddLiquidityWidget({
     | "check_approval"
     | "approving_a"
     | "approving_b"
-    | "initializing"
     | "minting"
     | "success"
     | "error"
@@ -377,7 +472,6 @@ function AddLiquidityWidget({
       }
 
       if (activeDex.type === "V3" && activeDex.positionManager) {
-        setStep("initializing");
         const [token0, token1] =
           tokenA.address.toLowerCase() < tokenB.address.toLowerCase()
             ? [tokenA, tokenB]
@@ -401,22 +495,17 @@ function AddLiquidityWidget({
           );
         }
 
+        // Check if pool is initialized
         const slot0 = (await client.readContract({
           address: poolAddress,
           abi: uniV3PoolAbi,
           functionName: "slot0"
         })) as [bigint, number, number, number, number, number, boolean];
 
-        const sqrtPriceX96 = slot0[0];
-        if (sqrtPriceX96 === 0n) {
-          const initialSqrtPrice = 79228162514264337593543950336n;
-          const initHash = await writeContractAsync({
-            address: poolAddress,
-            abi: uniV3PoolAbi,
-            functionName: "initialize",
-            args: [initialSqrtPrice]
-          });
-          await client.waitForTransactionReceipt({ hash: initHash });
+        if (slot0[0] === 0n) {
+          throw new Error(
+            `Pool is not initialized. Run 'initialize ${tokenA.symbol} ${tokenB.symbol} ${fee}' first.`
+          );
         }
 
         setStep("minting");
@@ -557,11 +646,6 @@ function AddLiquidityWidget({
             APPROVING TOKEN B...
           </div>
         )}
-        {step === "initializing" && (
-          <div className="text-yellow-400 font-bold animate-pulse">
-            INITIALIZING V3 PRICE CURVE...
-          </div>
-        )}
         {step === "minting" && (
           <div className="text-yellow-400 font-bold animate-pulse">
             MINTING LIQUIDITY POSITION...
@@ -588,7 +672,7 @@ export default function TerminalShell({
     {
       id: "1",
       type: "text",
-      content: "0xTERM v1.4.0 [FULL ON-CHAIN DEFI SUITE]"
+      content: "0xTERM v1.4.1 [FULL ON-CHAIN DEFI SUITE]"
     },
     {
       id: "2",
@@ -793,31 +877,42 @@ export default function TerminalShell({
     if (!isAddress(poolAddress)) {
       return (
         <div className="text-red-400">
-          Error: Provide a valid pool contract address.
+          Error: Provide a valid pool contract address (0x...).
         </div>
       );
     }
 
+    const client = createPublicClient({
+      chain: targetChain,
+      transport: http()
+    });
+
     try {
-      const client = createPublicClient({
-        chain: targetChain,
-        transport: http()
-      });
-      const [token0, token1, reserves] = await Promise.all([
+      const [token0, token1, fee, liquidity, slot0] = await Promise.all([
         client.readContract({
           address: poolAddress as Address,
-          abi: uniV2PairAbi,
+          abi: parseAbi(["function token0() view returns (address)"]),
           functionName: "token0"
         }),
         client.readContract({
           address: poolAddress as Address,
-          abi: uniV2PairAbi,
+          abi: parseAbi(["function token1() view returns (address)"]),
           functionName: "token1"
         }),
         client.readContract({
           address: poolAddress as Address,
-          abi: uniV2PairAbi,
-          functionName: "getReserves"
+          abi: parseAbi(["function fee() view returns (uint24)"]),
+          functionName: "fee"
+        }),
+        client.readContract({
+          address: poolAddress as Address,
+          abi: parseAbi(["function liquidity() view returns (uint128)"]),
+          functionName: "liquidity"
+        }),
+        client.readContract({
+          address: poolAddress as Address,
+          abi: uniV3PoolAbi,
+          functionName: "slot0"
         })
       ]);
 
@@ -848,24 +943,124 @@ export default function TerminalShell({
       ]);
 
       return (
-        <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow text-xs">
-          <div className="font-bold text-[#00ff66] mb-1">POOL RESERVES</div>
+        <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow text-xs space-y-2">
+          <div className="flex justify-between items-center text-[#00ff66]/70 border-b border-[#00ff66]/20 pb-1">
+            <span className="font-bold">UNISWAP V3 POOL METRICS</span>
+            <span>{targetChain.name.toUpperCase()}</span>
+          </div>
           <div className="grid grid-cols-2 gap-2 font-mono">
             <div>
-              {sym0}: {formatUnits(reserves[0], dec0)}
+              <div className="text-[10px] text-[#00ff66]/50">PAIR</div>
+              <div className="font-bold text-[#00ff66]">
+                {sym0} / {sym1}
+              </div>
             </div>
             <div>
-              {sym1}: {formatUnits(reserves[1], dec1)}
+              <div className="text-[10px] text-[#00ff66]/50">FEE TIER</div>
+              <div className="font-bold text-[#00ff66]">
+                {Number(fee) / 10000}%
+              </div>
             </div>
+            <div>
+              <div className="text-[10px] text-[#00ff66]/50">
+                ACTIVE LIQUIDITY
+              </div>
+              <div className="font-bold text-[#00ff66]">
+                {liquidity.toString()}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-[#00ff66]/50">CURRENT TICK</div>
+              <div className="font-bold text-[#00ff66]">{slot0[1]}</div>
+            </div>
+          </div>
+          <div className="text-[9px] text-[#00ff66]/40 truncate pt-1 border-t border-[#00ff66]/10">
+            SQRT PRICE X96: {slot0[0].toString()}
           </div>
         </div>
       );
     } catch {
-      return (
-        <div className="text-red-400">
-          Failed to read reserves. Ensure it's a V2 pair contract.
-        </div>
-      );
+      try {
+        const [token0, token1, reserves] = await Promise.all([
+          client.readContract({
+            address: poolAddress as Address,
+            abi: uniV2PairAbi,
+            functionName: "token0"
+          }),
+          client.readContract({
+            address: poolAddress as Address,
+            abi: uniV2PairAbi,
+            functionName: "token1"
+          }),
+          client.readContract({
+            address: poolAddress as Address,
+            abi: uniV2PairAbi,
+            functionName: "getReserves"
+          })
+        ]);
+
+        const [dec0, sym0] = await Promise.all([
+          client.readContract({
+            address: token0,
+            abi: erc20Abi,
+            functionName: "decimals"
+          }),
+          client.readContract({
+            address: token0,
+            abi: erc20Abi,
+            functionName: "symbol"
+          })
+        ]);
+
+        const [dec1, sym1] = await Promise.all([
+          client.readContract({
+            address: token1,
+            abi: erc20Abi,
+            functionName: "decimals"
+          }),
+          client.readContract({
+            address: token1,
+            abi: erc20Abi,
+            functionName: "symbol"
+          })
+        ]);
+
+        return (
+          <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow text-xs space-y-2">
+            <div className="flex justify-between items-center text-[#00ff66]/70 border-b border-[#00ff66]/20 pb-1">
+              <span className="font-bold">UNISWAP V2 POOL RESERVES</span>
+              <span>{targetChain.name.toUpperCase()}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 font-mono">
+              <div>
+                <div className="text-[10px] text-[#00ff66]/50">
+                  {sym0} RESERVE
+                </div>
+                <div className="text-base font-bold text-[#00ff66]">
+                  {parseFloat(formatUnits(reserves[0], dec0)).toLocaleString()}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] text-[#00ff66]/50">
+                  {sym1} RESERVE
+                </div>
+                <div className="text-base font-bold text-[#00ff66]">
+                  {parseFloat(formatUnits(reserves[1], dec1)).toLocaleString()}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      } catch {
+        return (
+          <div className="text-red-400 my-1 p-2 border border-red-900/50 bg-red-950/30 rounded max-w-md text-xs">
+            <div className="font-bold">Failed to read pool contract.</div>
+            <div>
+              Ensure {poolAddress} is a valid V2 pair or V3 pool address.
+            </div>
+          </div>
+        );
+      }
     }
   };
 
@@ -951,9 +1146,13 @@ export default function TerminalShell({
               </div>
               <div>Query pool address</div>
               <div className="font-bold text-[#00ff66]">
+                initialize &lt;tA&gt; &lt;tB&gt; [fee]
+              </div>
+              <div>Initialize V3 pool price curve</div>
+              <div className="font-bold text-[#00ff66]">
                 addliq &lt;tA&gt; &lt;tB&gt; &lt;amtA&gt; &lt;amtB&gt; [fee]
               </div>
-              <div>Add liquidity & initialize V3 curve</div>
+              <div>Add liquidity position</div>
               <div className="font-bold text-[#00ff66]">
                 swap &lt;amt&gt; &lt;from&gt; &lt;to&gt;
               </div>
@@ -961,7 +1160,7 @@ export default function TerminalShell({
               <div className="font-bold text-[#00ff66]">
                 pool &lt;address&gt;
               </div>
-              <div>Check V2 reserves</div>
+              <div>Check V2/V3 pool metrics</div>
               <div className="font-bold text-[#00ff66]">
                 balance &lt;token&gt;
               </div>
@@ -1117,6 +1316,101 @@ export default function TerminalShell({
                 id: Date.now().toString(),
                 type: "component",
                 content: createWidget
+              }
+            ]);
+            setHistory((prev) => [...prev, trimmed]);
+            setHistoryIdx(-1);
+            return;
+          } catch (err: any) {
+            outputContent = `ERROR: ${err.message}`;
+          }
+        }
+        break;
+
+      case "initialize":
+      case "initpool":
+        if (!isConnected || !address)
+          outputContent = (
+            <div className="text-yellow-400">Wallet not connected.</div>
+          );
+        else if (!activeChainId || !activeDexId)
+          outputContent = (
+            <div className="text-yellow-400">Select network and DEX first.</div>
+          );
+        else if (!args[1] || !args[2])
+          outputContent = "Usage: initialize <tokenA> <tokenB> [fee]";
+        else {
+          const targetChain = SUPPORTED_CHAINS.find(
+            (c) => c.id === activeChainId
+          )!;
+          const activeDex = DEX_REGISTRY[activeChainId].find(
+            (d) => d.id === activeDexId
+          )!;
+          if (activeDex.type !== "V3") {
+            outputContent = (
+              <div className="text-yellow-400">
+                Initialization is only applicable to Uniswap V3 pools.
+              </div>
+            );
+            break;
+          }
+          setLogs((prev) => [
+            ...prev,
+            userLog,
+            {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              content: "Resolving V3 pool address..."
+            }
+          ]);
+          try {
+            const [tokenA, tokenB] = await Promise.all([
+              resolveTokenDetails(args[1], targetChain),
+              resolveTokenDetails(args[2], targetChain)
+            ]);
+            const addrA = tokenA.isNative
+              ? WRAPPED_NATIVE[targetChain.id] || tokenA.address
+              : tokenA.address;
+            const addrB = tokenB.isNative
+              ? WRAPPED_NATIVE[targetChain.id] || tokenB.address
+              : tokenB.address;
+            const fee = args[3] ? parseInt(args[3]) : 3000;
+
+            const [token0, token1] =
+              addrA.toLowerCase() < addrB.toLowerCase()
+                ? [addrA, addrB]
+                : [addrB, addrA];
+            const client = createPublicClient({
+              chain: targetChain,
+              transport: http()
+            });
+            const poolAddress = (await client.readContract({
+              address: activeDex.factory,
+              abi: uniV3FactoryAbi,
+              functionName: "getPool",
+              args: [token0, token1, fee]
+            })) as Address;
+
+            if (!poolAddress || poolAddress === NATIVE_TOKEN_ADDRESS) {
+              throw new Error(
+                `Pool does not exist. Run 'createpool ${tokenA.symbol} ${tokenB.symbol} ${fee}' first.`
+              );
+            }
+
+            const initWidget = (
+              <InitializePoolWidget
+                targetChain={targetChain}
+                poolAddress={poolAddress}
+                tokenA={tokenA}
+                tokenB={tokenB}
+              />
+            );
+            setLogs((prev) => [
+              ...prev.slice(0, -1),
+              {
+                id: Date.now().toString(),
+                type: "component",
+                content: initWidget
               }
             ]);
             setHistory((prev) => [...prev, trimmed]);
