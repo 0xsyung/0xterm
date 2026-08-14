@@ -1,11 +1,10 @@
-import { createAppKit } from '@reown/appkit'
+import { createAppKit } from '@reown/appkit/react'
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
 import { mainnet, arbitrum, base, polygon, optimism, sepolia, arbitrumSepolia, baseSepolia, polygonAmoy, optimismSepolia } from '@reown/appkit/networks'
 import type { AppKitNetwork } from '@reown/appkit/networks'
 
 const projectId = '5b2bbdbe0deaa155601b8aaa96f96aaf'
 
-// 1. Define supported networks with explicit AppKitNetwork tuple typing
 const networks: [AppKitNetwork, ...AppKitNetwork[]] = [
   mainnet as AppKitNetwork,
   sepolia as AppKitNetwork,
@@ -19,13 +18,11 @@ const networks: [AppKitNetwork, ...AppKitNetwork[]] = [
   optimismSepolia as AppKitNetwork
 ]
 
-// 2. Set up Wagmi Adapter
 const wagmiAdapter = new WagmiAdapter({
   projectId,
   networks
 })
 
-// 3. Initialize AppKit Modal
 const metadata = {
   name: '0xTERM',
   description: 'Full On-Chain DeFi Terminal Suite',
@@ -44,5 +41,4 @@ export const modal = createAppKit({
   }
 })
 
-// Export the wagmi config for WagmiProvider
 export const config = wagmiAdapter.wagmiConfig

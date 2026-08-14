@@ -1216,7 +1216,6 @@ export default function TerminalShell({
 
       case "connect":
         if (!isConnected) {
-          // Opens the native WalletConnect / Injected selection modal safely on mobile & desktop
           open();
           newEntry = {
             id: (Date.now() + 1).toString(),
