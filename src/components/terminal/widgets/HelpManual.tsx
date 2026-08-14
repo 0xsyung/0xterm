@@ -34,9 +34,9 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
         <div className={`font-bold ${theme.primary}`}>theme &lt;name&gt;</div>
         <div>Switch terminal color theme / style</div>
         <div className={`font-bold ${theme.primary}`}>
-          register &lt;address&gt; [symbol]
+          register &lt;address&gt; [symbol] [erc20|erc721]
         </div>
-        <div>Verify and register a custom ERC20 token</div>
+        <div>Verify and register a custom ERC20 or ERC721/NFT token</div>
         <div className={`font-bold ${theme.primary}`}>
           price &lt;tA&gt; [tB] [pool|api]
         </div>
@@ -71,6 +71,10 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
           balance &lt;token&gt;
         </div>
         <div>Check token balance</div>
+        <div className={`font-bold ${theme.primary}`}>
+          is &lt;erc20|erc721&gt; &lt;address&gt;
+        </div>
+        <div>Check if address is a valid ERC20 or ERC721/NFT contract</div>
       </div>
       <div
         className={`border-t ${theme.border} pt-2 mt-1 text-[10px] opacity-60`}

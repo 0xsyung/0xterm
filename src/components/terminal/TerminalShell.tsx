@@ -43,6 +43,12 @@ import {
   uniV2FactoryAbi,
   uniV3FactoryAbi,
   uniV2PairAbi,
+  erc165Abi,
+  erc20FullAbi,
+  erc721Abi,
+  INTERFACE_ID_ERC165,
+  INTERFACE_ID_ERC20,
+  INTERFACE_ID_ERC721,
   COMMON_TOKENS,
   resolveChain
 } from "./constants";
@@ -198,7 +204,8 @@ export default function TerminalShell({
           address: Address;
           symbol: string;
           name: string;
-          decimals: number;
+          decimals?: number; // ERC-20 only; ERC-721 has no decimals
+          tokenType?: "erc20" | "erc721";
           isNative: boolean;
         }
       >
@@ -218,6 +225,13 @@ export default function TerminalShell({
   // Autocomplete State
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionIdx, setSuggestionIdx] = useState(-1);
+
+  // Pending interactive confirmation (e.g. register an unverified contract).
+  // When set, the next Enter routes the typed input through this resolver.
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    onYes: () => void;
+    onNo: () => void;
+  } | null>(null);
 
   const logContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -339,6 +353,119 @@ export default function TerminalShell({
   const handleThemeSwitch = (newTheme: ThemeMode) => {
     onThemeChange(newTheme);
     savePreference("theme", newTheme);
+  };
+
+  // Detect whether an address is a valid ERC-20 or ERC-721 contract by probing
+  // its interface (ERC-165) and core standard functions. Returns the verified
+  // type plus metadata, or null if it doesn't clearly match either standard.
+  const detectTokenType = async (
+    address: Address,
+    chain: Chain,
+    hint?: "erc20" | "erc721"
+  ): Promise<
+    | { type: "erc20"; name: string; symbol: string; decimals: number }
+    | { type: "erc721"; name: string; symbol: string }
+    | null
+  > => {
+    const client = getClient(chain);
+
+    // ERC-165 interface probe
+    let erc165 = false;
+    try {
+      erc165 = Boolean(
+        await client.readContract({
+          address,
+          abi: erc165Abi,
+          functionName: "supportsInterface",
+          args: [INTERFACE_ID_ERC165]
+        })
+      );
+    } catch {
+      erc165 = false;
+    }
+
+    if (erc165) {
+      // Confirm it is NOT ERC-721 when checking for ERC-20 and vice versa
+      if (hint !== "erc20") {
+        try {
+          const is721 = Boolean(
+            await client.readContract({
+              address,
+              abi: erc165Abi,
+              functionName: "supportsInterface",
+              args: [INTERFACE_ID_ERC721]
+            })
+          );
+          if (is721) {
+            let name = "", symbol = "";
+            try {
+              const [n, s] = await Promise.all([
+                client.readContract({ address, abi: erc721Abi, functionName: "name" }),
+                client.readContract({ address, abi: erc721Abi, functionName: "symbol" })
+              ]);
+              name = String(n); symbol = String(s);
+            } catch {}
+            return { type: "erc721", name, symbol };
+          }
+        } catch {}
+      }
+      try {
+        const is20 = Boolean(
+          await client.readContract({
+            address,
+            abi: erc165Abi,
+            functionName: "supportsInterface",
+            args: [INTERFACE_ID_ERC20]
+          })
+        );
+        if (is20 && hint !== "erc721") {
+          const [decimals, sym, name] = await Promise.all([
+            client.readContract({ address, abi: erc20FullAbi, functionName: "decimals" }),
+            client.readContract({ address, abi: erc20FullAbi, functionName: "symbol" }),
+            client.readContract({ address, abi: erc20FullAbi, functionName: "name" })
+          ]);
+          return { type: "erc20", name: String(name), symbol: String(sym), decimals: Number(decimals) };
+        }
+      } catch {}
+    }
+
+    // Fallback: probe core functions directly (many tokens lack ERC-165).
+    const erc721Candidates = hint === "erc20" ? [] : ["ownerOf", "tokenURI"];
+    for (const fn of erc721Candidates) {
+      try {
+        await client.readContract({ address, abi: erc721Abi, functionName: fn as any });
+        let name = "", symbol = "";
+        try {
+          const [n, s] = await Promise.all([
+            client.readContract({ address, abi: erc721Abi, functionName: "name" }),
+            client.readContract({ address, abi: erc721Abi, functionName: "symbol" })
+          ]);
+          name = String(n); symbol = String(s);
+        } catch {}
+        return { type: "erc721", name, symbol };
+      } catch {}
+    }
+
+    // ERC-20 fallback: totalSupply + decimals + symbol + name must all succeed
+    if (hint !== "erc721") {
+      try {
+        const [total, dec, sym, name] = await Promise.all([
+          client.readContract({ address, abi: erc20FullAbi, functionName: "totalSupply" }),
+          client.readContract({ address, abi: erc20FullAbi, functionName: "decimals" }),
+          client.readContract({ address, abi: erc20FullAbi, functionName: "symbol" }),
+          client.readContract({ address, abi: erc20FullAbi, functionName: "name" })
+        ]);
+        return {
+          type: "erc20",
+          name: String(name),
+          symbol: String(sym),
+          decimals: Number(dec)
+        };
+      } catch {
+        return null;
+      }
+    }
+    return null;
   };
 
   const handleChainSwitch = (chainId: number) => {
@@ -1107,85 +1234,261 @@ export default function TerminalShell({
         return {
           id: generateId(),
           type: "text",
-          text: "Usage: register <tokenAddress> [customSymbol]"
+          text: "Usage: register <tokenAddress> [customSymbol] [erc20|erc721]"
         };
 
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
       const tokenAddress = args[1] as Address;
-      const client = getClient(targetChain);
+      const hint = args[3]?.toLowerCase() === "erc721" || args[3]?.toLowerCase() === "nft"
+        ? "erc721"
+        : args[3]?.toLowerCase() === "erc20"
+          ? "erc20"
+          : undefined;
 
-      let contractSymbol: string,
-        contractDecimals: number,
-        contractName: string;
-      try {
-        const [symRes, decRes, nameRes] = await Promise.all([
-          client.readContract({
-            address: tokenAddress,
-            abi: erc20Abi,
-            functionName: "symbol"
-          }),
-          client.readContract({
-            address: tokenAddress,
-            abi: erc20Abi,
-            functionName: "decimals"
-          }),
-          client.readContract({
-            address: tokenAddress,
-            abi: erc20Abi,
-            functionName: "name"
-          })
-        ]);
-        contractSymbol = String(symRes);
-        contractDecimals = Number(decRes);
-        contractName = String(nameRes);
-      } catch {
-        return {
-          id: generateId(),
-          type: "text",
-          text: `[!] Error: Address ${tokenAddress} is not a valid ERC20 token on ${targetChain.name} (failed to read contract methods).`
+      const detected = await detectTokenType(tokenAddress, targetChain, hint);
+
+      // Confirmation resolver: register anyway or cancel
+      const doRegister = (info: { name: string; symbol: string; decimals?: number; tokenType: "erc20" | "erc721" }) => {
+        const symbolToUse = (args[2] ? args[2] : info.symbol).toUpperCase();
+
+        const existingCommon = COMMON_TOKENS[targetChain.id]?.[symbolToUse];
+        const existingCustom = customTokens[targetChain.id]?.[symbolToUse];
+        const isNative =
+          symbolToUse === targetChain.nativeCurrency.symbol.toUpperCase();
+
+        if (existingCommon || existingCustom || isNative) {
+          setLogs((prev) => [
+            ...prev,
+            {
+              id: generateId(),
+              type: "text",
+              text: `[!] Error: Symbol "${symbolToUse}" already exists on ${targetChain.name}. Please register with a unique symbol (e.g., 'register ${tokenAddress} UNIQUE_SYMBOL').`
+            } as LogEntry
+          ].slice(-MAX_LOGS));
+          return;
+        }
+
+        const newToken = {
+          address: tokenAddress,
+          symbol: symbolToUse,
+          name: info.name,
+          decimals: info.decimals,
+          tokenType: info.tokenType,
+          isNative: false
         };
+
+        const updatedChainTokens = {
+          ...(customTokens[targetChain.id] || {}),
+          [symbolToUse]: newToken
+        };
+        const updatedAllTokens = {
+          ...customTokens,
+          [targetChain.id]: updatedChainTokens
+        };
+
+        setCustomTokens(updatedAllTokens);
+        saveCustomTokenToStorage(updatedAllTokens);
+
+        setLogs((prev) => [
+          ...prev,
+          {
+            id: generateId(),
+            type: "text",
+            text: `[✓] Successfully registered ${info.tokenType === "erc721" ? "NFT" : "token"} "${symbolToUse}" (${info.name}${info.decimals !== undefined ? `, ${info.decimals} decimals` : ""}) at ${tokenAddress} on ${targetChain.name}.`
+          } as LogEntry
+        ].slice(-MAX_LOGS));
+      };
+
+      if (detected) {
+        doRegister({
+          name: detected.name,
+          symbol: detected.symbol,
+          decimals: detected.type === "erc20" ? detected.decimals : undefined,
+          tokenType: detected.type
+        });
+        return null;
       }
 
-      const symbolToUse = (args[2] ? args[2] : contractSymbol).toUpperCase();
-
-      const existingCommon = COMMON_TOKENS[targetChain.id]?.[symbolToUse];
-      const existingCustom = customTokens[targetChain.id]?.[symbolToUse];
-      const isNative =
-        symbolToUse === targetChain.nativeCurrency.symbol.toUpperCase();
-
-      if (existingCommon || existingCustom || isNative) {
-        return {
-          id: generateId(),
-          type: "text",
-          text: `[!] Error: Symbol "${symbolToUse}" already exists on ${targetChain.name}. Please register with a unique symbol (e.g., 'register ${tokenAddress} UNIQUE_SYMBOL').`
-        };
-      }
-
-      const newToken = {
-        address: tokenAddress,
-        symbol: symbolToUse,
-        name: contractName,
-        decimals: contractDecimals,
-        isNative: false
-      };
-
-      const updatedChainTokens = {
-        ...(customTokens[targetChain.id] || {}),
-        [symbolToUse]: newToken
-      };
-      const updatedAllTokens = {
-        ...customTokens,
-        [targetChain.id]: updatedChainTokens
-      };
-
-      setCustomTokens(updatedAllTokens);
-      saveCustomTokenToStorage(updatedAllTokens);
+      // Invalid contract: ask for confirmation before registering anyway
+      setPendingConfirm({
+        onYes: () =>
+          doRegister({
+            name: "",
+            symbol: args[2] ? args[2] : "UNKNOWN",
+            decimals: undefined,
+            tokenType: hint === "erc721" ? "erc721" : "erc20"
+          }),
+        onNo: () =>
+          setLogs((prev) => [
+            ...prev,
+            {
+              id: generateId(),
+              type: "text",
+              text: `[✓] Cancelled. ${tokenAddress} was not registered.`
+            } as LogEntry
+          ].slice(-MAX_LOGS))
+      });
 
       return {
         id: generateId(),
         type: "text",
-        text: `[✓] Successfully registered token "${symbolToUse}" (${contractName}, ${contractDecimals} decimals) at ${tokenAddress} on ${targetChain.name}.`
+        text: `[!] Address ${tokenAddress} does not look like a valid ERC20/ERC721 contract on ${targetChain.name}. Register it anyway? (y/n)`
       };
+    },
+    is: async (args) => {
+      if (!activeChainId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network first using 'network <name>'."
+        };
+      const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
+      const target = args[1]?.toLowerCase();
+      const kind = target === "erc721" || target === "nft" ? "erc721" : "erc20";
+      const addrArg = kind === "erc721" ? args[2] : args[1];
+
+      if (!addrArg || !isAddress(addrArg))
+        return {
+          id: generateId(),
+          type: "text",
+          text:
+            kind === "erc721"
+              ? "Usage: is erc721 <contractAddress>"
+              : "Usage: is erc20 <contractAddress>"
+        };
+
+      const client = getClient(targetChain);
+      const address = addrArg as Address;
+      const isErc721 = kind === "erc721";
+
+      // 1) ERC-165 supportsInterface — the canonical signal
+      let erc165 = false;
+      try {
+        erc165 = Boolean(
+          await client.readContract({
+            address,
+            abi: erc165Abi,
+            functionName: "supportsInterface",
+            args: [INTERFACE_ID_ERC165]
+          })
+        );
+      } catch {
+        erc165 = false;
+      }
+
+      const wantsId = isErc721 ? INTERFACE_ID_ERC721 : INTERFACE_ID_ERC20;
+      let interfaceSupported = false;
+      if (erc165) {
+        try {
+          interfaceSupported = Boolean(
+            await client.readContract({
+              address,
+              abi: erc165Abi,
+              functionName: "supportsInterface",
+              args: [wantsId]
+            })
+          );
+        } catch {
+          interfaceSupported = false;
+        }
+      }
+
+      if (interfaceSupported) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[✓] ${address} is ${isErc721 ? "an ERC-721 (NFT)" : "an ERC-20"} contract on ${targetChain.name} (via ERC-165 interface ${wantsId}).`
+        };
+      }
+
+      // 2) Fallback: verify all core standard functions are callable
+      const checks: string[] = [];
+      const verified: string[] = [];
+
+      if (isErc721) {
+        const fnChecks: [string, string][] = [
+          ["balanceOf", "balanceOf(address) → uint256"],
+          ["ownerOf", "ownerOf(uint256) → address"],
+          ["safeTransferFrom", "safeTransferFrom(address,address,uint256)"]
+        ];
+        for (const [fn, label] of fnChecks) {
+          try {
+            await client.readContract({
+              address,
+              abi: erc721Abi,
+              functionName: fn as any
+            });
+            verified.push(label);
+          } catch {
+            checks.push(label);
+          }
+        }
+      } else {
+        const fnChecks: [string, string][] = [
+          ["totalSupply", "totalSupply() → uint256"],
+          ["balanceOf", "balanceOf(address) → uint256"],
+          ["transfer", "transfer(address,uint256) → bool"],
+          ["transferFrom", "transferFrom(address,address,uint256) → bool"],
+          ["approve", "approve(address,uint256) → bool"],
+          ["allowance", "allowance(address,address) → uint256"]
+        ];
+        for (const [fn, label] of fnChecks) {
+          try {
+            await client.readContract({
+              address,
+              abi: erc20FullAbi,
+              functionName: fn as any
+            });
+            verified.push(label);
+          } catch {
+            checks.push(label);
+          }
+        }
+      }
+
+      const okCount = verified.length;
+      const missingCount = checks.length;
+      const allCore = okCount === (isErc721 ? 3 : 6);
+
+      // Report optional metadata too
+      let meta = "";
+      try {
+        const [sym, name] = await Promise.all([
+          client.readContract({ address, abi: erc20FullAbi, functionName: "symbol" }),
+          client.readContract({ address, abi: erc20FullAbi, functionName: "name" })
+        ]);
+        meta = ` (${String(name)} / ${String(sym)})`;
+      } catch {
+        meta = "";
+      }
+
+      const resultLines = [
+        `Interface check for ${address} on ${targetChain.name}:`,
+        `ERC-165: ${erc165 ? "supported" : "not supported"}`,
+        `${
+          isErc721 ? "ERC-721" : "ERC-20"
+        } interface (${wantsId}): ${interfaceSupported ? "yes" : "no"}`,
+        `Core functions callable: ${okCount}/${isErc721 ? 3 : 6}`,
+        ...verified.map((v) => `  ✓ ${v}`),
+        ...checks.map((c) => `  ✗ ${c}`),
+        ``
+      ];
+
+      if (allCore) {
+        resultLines.push(
+          `[✓] ${address} appears to be a valid ${isErc721 ? "ERC-721 (NFT)" : "ERC-20"} contract${meta}.`
+        );
+      } else if (okCount > 0) {
+        resultLines.push(
+          `[?] ${address} has some ${isErc721 ? "ERC-721" : "ERC-20"} characteristics but is missing: ${checks.join(", ")}.`
+        );
+      } else {
+        resultLines.push(
+          `[✗] ${address} does not look like a ${isErc721 ? "ERC-721" : "ERC-20"} contract.`
+        );
+      }
+
+      return { id: generateId(), type: "text", text: resultLines.join("\n") };
     },
     export: () => {
       if (!isConnected || !address)
@@ -2174,6 +2477,10 @@ export default function TerminalShell({
           currentArgIdx === 1
         ) {
           candidates = Object.keys(THEMES);
+        } else if (command === "is" && currentArgIdx === 1) {
+          candidates = ["erc20", "erc721", "nft"];
+        } else if (command === "register" && currentArgIdx === 3) {
+          candidates = ["erc20", "erc721"];
         } else if (command === "rpc") {
           if (currentArgIdx === 1) {
             candidates = [
@@ -2267,8 +2574,20 @@ export default function TerminalShell({
       }
     } else {
       if (e.key === "Enter") {
-        handleCommand(input);
-        setInput("");
+        if (pendingConfirm) {
+          const { onYes, onNo } = pendingConfirm;
+          setPendingConfirm(null);
+          const answer = input.trim().toLowerCase();
+          if (answer === "y" || answer === "yes" || answer === "") {
+            onYes();
+          } else {
+            onNo();
+          }
+          setInput("");
+        } else {
+          handleCommand(input);
+          setInput("");
+        }
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         if (history.length > 0 && historyIdx + 1 < history.length) {

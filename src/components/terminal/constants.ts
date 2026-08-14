@@ -193,6 +193,38 @@ export const uniV2PairAbi = parseAbi([
   'function token1() view returns (address)',
 ])
 
+// ERC-165 / ERC-721 interface detection (for the `is` command)
+export const erc165Abi = parseAbi([
+  'function supportsInterface(bytes4 interfaceId) view returns (bool)',
+])
+
+// Full ERC-20 standard interface (6 core functions)
+export const erc20FullAbi = parseAbi([
+  'function totalSupply() view returns (uint256)',
+  'function balanceOf(address account) view returns (uint256)',
+  'function transfer(address to, uint256 value) returns (bool)',
+  'function transferFrom(address from, address to, uint256 value) returns (bool)',
+  'function approve(address spender, uint256 value) returns (bool)',
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function name() view returns (string)',
+  'function symbol() view returns (string)',
+  'function decimals() view returns (uint8)',
+])
+
+// ERC-721 core interface (ownerOf is the key discriminator vs ERC-20)
+export const erc721Abi = parseAbi([
+  'function balanceOf(address owner) view returns (uint256)',
+  'function ownerOf(uint256 tokenId) view returns (address)',
+  'function name() view returns (string)',
+  'function symbol() view returns (string)',
+  'function tokenURI(uint256 tokenId) view returns (string)',
+])
+
+// ERC-165 interface IDs
+export const INTERFACE_ID_ERC165 = '0x01ffc9a7'
+export const INTERFACE_ID_ERC20 = '0x36372b07' // XOR of the 6 ERC-20 core function selectors
+export const INTERFACE_ID_ERC721 = '0x80ac58cd' // XOR of the 9 ERC-721 function selectors
+
 export const COMMON_TOKENS: Record<number, Record<string, { address: Address; decimals: number; symbol: string; name: string }>> = {
   11155111: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Sepolia Ethereum' } },
   421614: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Arbitrum Sepolia Ether' } },
