@@ -4,11 +4,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // NOTE: If your repository name is NOT '<username>.github.io', 
-  // uncomment the lines below and replace 'YOUR_REPO_NAME' with your actual GitHub repository name:
-  // basePath: '/YOUR_REPO_NAME',
-  // assetPrefix: '/YOUR_REPO_NAME/',
+  basePath: '/0xterm',
+  assetPrefix: '/0xterm/',
 };
 
 export default nextConfig;
-
