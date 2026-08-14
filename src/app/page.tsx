@@ -1,3 +1,9 @@
+/**
+ * @file page.tsx
+ * @description Home page entry
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
 "use client";
 
 import dynamic from "next/dynamic";

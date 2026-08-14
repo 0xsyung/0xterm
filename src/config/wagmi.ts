@@ -1,3 +1,9 @@
+/**
+ * @file wagmi.ts
+ * @description Wagmi & AppKit configuration
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
 import { createAppKit } from '@reown/appkit/react'
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
 import { mainnet, arbitrum, base, polygon, optimism, sepolia, arbitrumSepolia, baseSepolia, polygonAmoy, optimismSepolia } from '@reown/appkit/networks'

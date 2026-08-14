@@ -1,3 +1,9 @@
+/**
+ * @file types.ts
+ * @description Shared type definitions
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
 import type React from 'react'
 import type { Address, Chain } from 'viem'
 

@@ -1,3 +1,9 @@
+/**
+ * @file NetworksList.tsx
+ * @description Networks list widget
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
 import { SUPPORTED_CHAINS } from "../constants";
 import type { ThemeConfig } from "../types";
 

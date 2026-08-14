@@ -1,3 +1,9 @@
+/**
+ * @file MatrixRain.tsx
+ * @description Matrix rain background animation
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
 "use client";
 
 import { useEffect, useRef } from "react";

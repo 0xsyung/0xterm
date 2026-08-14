@@ -1,3 +1,9 @@
+/**
+ * @file TerminalHeader.tsx
+ * @description Terminal header component
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
 import type { ThemeConfig, ThemeMode } from "./types";
 
 export default function TerminalHeader({

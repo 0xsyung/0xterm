@@ -1,3 +1,9 @@
+/**
+ * @file TerminalPrompt.tsx
+ * @description Terminal prompt input component
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
 import React from "react";
 import type { ThemeConfig } from "./types";
 import { SUPPORTED_CHAINS, DEX_REGISTRY } from "./constants";

@@ -1,3 +1,9 @@
+/**
+ * @file constants.ts
+ * @description Shared constants and ABIs
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
 import {
   mainnet,
   arbitrum,

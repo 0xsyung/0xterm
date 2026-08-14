@@ -1,3 +1,9 @@
+/**
+ * @file TerminalLogList.tsx
+ * @description Terminal log list component
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
 import React from "react";
 import HelpManual from "./widgets/HelpManual";
 import NetworksList from "./widgets/NetworksList";

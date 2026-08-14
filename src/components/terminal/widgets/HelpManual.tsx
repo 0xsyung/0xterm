@@ -1,3 +1,9 @@
+/**
+ * @file HelpManual.tsx
+ * @description Help manual widget
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
 import type { ThemeConfig } from "../types";
 
 export default function HelpManual({ theme }: { theme: ThemeConfig }) {
@@ -65,6 +71,12 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
           balance &lt;token&gt;
         </div>
         <div>Check token balance</div>
+      </div>
+      <div
+        className={`border-t ${theme.border} pt-2 mt-1 text-[10px] opacity-60`}
+      >
+        © 2026 0xTERM. All rights reserved. Proprietary and confidential.
+        Unauthorized copying or distribution is strictly prohibited.
       </div>
     </div>
   );

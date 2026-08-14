@@ -1,3 +1,9 @@
+/**
+ * @file layout.tsx
+ * @description Root layout component
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
 import type { Metadata } from "next";
 import "./globals.css";
 
