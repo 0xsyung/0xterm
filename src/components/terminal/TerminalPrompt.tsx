@@ -95,29 +95,17 @@ export default function TerminalPrompt({
           autoComplete="off"
         />
 
-        {/* Autocomplete Popup */}
-        {suggestions.length > 0 && (
-          <div
-            className={`absolute bottom-full left-6 mb-2 max-h-40 overflow-y-auto border ${theme.border} ${theme.cardBg} ${theme.rounded} shadow-2xl z-50 text-xs p-1 min-w-[180px]`}
-          >
-            <div
-              className={`text-[9px] uppercase px-2 py-1 opacity-50 border-b ${theme.border} mb-1 flex justify-between`}
+        {/* Inline Suggestion Bubble */}
+        {suggestions.length > 0 && suggestionIdx >= 0 && (
+          <div className="flex items-center gap-1 shrink-0">
+            <span
+              className={`px-2 py-0.5 rounded border ${theme.border} ${theme.cardBg} font-mono text-xs ${theme.primary} whitespace-nowrap`}
             >
-              <span>Suggestions</span>
-              <span>[Tab / ← → to cycle]</span>
-            </div>
-            {suggestions.map((s, idx) => (
-              <div
-                key={s}
-                className={`px-2 py-1.5 rounded font-mono cursor-pointer transition-colors ${
-                  idx === suggestionIdx
-                    ? `${theme.primary} bg-current/20 font-bold`
-                    : `${theme.text} hover:bg-current/10`
-                }`}
-              >
-                {s}
-              </div>
-            ))}
+              {suggestions[suggestionIdx]}
+            </span>
+            <span className="text-[9px] opacity-40 font-mono whitespace-nowrap">
+              [← →]
+            </span>
           </div>
         )}
       </div>
