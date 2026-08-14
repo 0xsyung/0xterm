@@ -26,6 +26,10 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
         </div>
         <div>Verify and register a custom ERC20 token</div>
         <div className={`font-bold ${theme.primary}`}>
+          price &lt;tA&gt; [tB] [pool|api]
+        </div>
+        <div>Query token price from on-chain pool or API</div>
+        <div className={`font-bold ${theme.primary}`}>
           createpool &lt;tA&gt; &lt;tB&gt; [fee]
         </div>
         <div>Deploy pool contract</div>
