@@ -58,6 +58,108 @@ const formatViemError = (err: any): string => {
   return `ERROR: ${msg.split("\n")[0]}`;
 };
 
+// --- Click-to-Copy Address Component ---
+function CopyableAddress({
+  address,
+  theme,
+  className = ""
+}: {
+  address: string;
+  theme: any;
+  className?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <span
+      onClick={(e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(address);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      className={`cursor-pointer font-mono transition-colors relative group inline-flex items-center gap-1 ${
+        copied ? "text-green-400 font-bold" : "hover:underline"
+      } ${className}`}
+      title="Click to copy address"
+    >
+      <span>{address}</span>
+      <span className="text-[10px] opacity-60 group-hover:opacity-100">
+        {copied ? "[COPIED!]" : "📋"}
+      </span>
+    </span>
+  );
+}
+
+// --- Export Widget Component with Copy Icon ---
+function ExportWidget({
+  exportData,
+  theme,
+  address
+}: {
+  exportData: any;
+  theme: any;
+  address: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const jsonString = JSON.stringify(exportData, null, 2);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(jsonString);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div
+      className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2 max-w-xl`}
+    >
+      <div
+        className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+      >
+        <span className="font-bold">EXPORT CONFIG & CUSTOM TOKENS</span>
+        <div className="flex items-center gap-3">
+          <CopyableAddress address={address} theme={theme} />
+          <button
+            onClick={handleCopy}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded border ${theme.border} bg-current/5 hover:bg-current/15 transition-all text-[11px] font-mono`}
+            title="Copy JSON to clipboard"
+          >
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012-2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+              />
+            </svg>
+            {copied ? (
+              <span className="text-green-400 font-bold">COPIED!</span>
+            ) : (
+              <span>COPY</span>
+            )}
+          </button>
+        </div>
+      </div>
+      <div className={`text-[10px] ${theme.text}/60`}>
+        Copy the JSON below and run{" "}
+        <span className={theme.primary}>import &lt;json&gt;</span> in your new
+        wallet terminal:
+      </div>
+      <pre
+        className={`p-3 bg-black/40 rounded border ${theme.border} font-mono text-[10px] overflow-x-auto select-all max-h-48 text-green-400`}
+      >
+        {jsonString}
+      </pre>
+    </div>
+  );
+}
+
 export default function TerminalShell({
   onToggleRain,
   currentThemeKey,
@@ -398,9 +500,9 @@ export default function TerminalShell({
             {tokenA.symbol} / {tokenB.symbol}
           </div>
           <div
-            className={`${theme.text} select-all p-2 bg-current/10 rounded border ${theme.border} text-center my-2 font-mono`}
+            className={`${theme.text} p-2 bg-current/10 rounded border ${theme.border} text-center my-2 font-mono flex items-center justify-center gap-2`}
           >
-            {pairAddress}
+            <CopyableAddress address={pairAddress} theme={theme} />
           </div>
         </div>
       );
@@ -863,31 +965,9 @@ export default function TerminalShell({
         preferences: prefs,
         customTokens: tokens
       };
-      const jsonString = JSON.stringify(exportData, null, 2);
 
       const exportWidget = (
-        <div
-          className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2 max-w-xl`}
-        >
-          <div
-            className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
-          >
-            <span className="font-bold">EXPORT CONFIG & CUSTOM TOKENS</span>
-            <span>
-              {address.slice(0, 6)}...{address.slice(-4)}
-            </span>
-          </div>
-          <div className={`text-[10px] ${theme.text}/60`}>
-            Copy the JSON below and run{" "}
-            <span className={theme.primary}>import &lt;json&gt;</span> in your
-            new wallet terminal:
-          </div>
-          <pre
-            className={`p-3 bg-black/40 rounded border ${theme.border} font-mono text-[10px] overflow-x-auto select-all max-h-48 text-green-400`}
-          >
-            {jsonString}
-          </pre>
-        </div>
+        <ExportWidget exportData={exportData} theme={theme} address={address} />
       );
       return { id: generateId(), type: "component", component: exportWidget };
     },
@@ -1170,9 +1250,10 @@ export default function TerminalShell({
                 </div>
               </div>
               <div
-                className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border}`}
+                className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border} flex items-center gap-1`}
               >
-                POOL ADDRESS: {pairAddress}
+                <span>POOL ADDRESS:</span>{" "}
+                <CopyableAddress address={pairAddress} theme={theme} />
               </div>
             </div>
           );
