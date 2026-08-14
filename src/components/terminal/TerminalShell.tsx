@@ -1490,6 +1490,81 @@ export default function TerminalShell({
 
       return { id: generateId(), type: "text", text: resultLines.join("\n") };
     },
+    info: async (args) => {
+      if (!activeChainId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network first using 'network <name>'."
+        };
+      const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
+      const addrArg = args[1];
+      if (!addrArg || !isAddress(addrArg))
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: info <contractAddress>"
+        };
+
+      const tokenAddress = addrArg as Address;
+      const detected = await detectTokenType(tokenAddress, targetChain);
+      if (!detected)
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[✗] ${tokenAddress} does not look like a valid ERC20 or ERC721 contract on ${targetChain.name}.`
+        };
+
+      const client = getClient(targetChain);
+      const lines = [
+        `Token info for ${tokenAddress} on ${targetChain.name}:`,
+        `Type:      ${detected.type === "erc20" ? "ERC-20 (fungible token)" : "ERC-721 (non-fungible token / NFT)"}`,
+        `Name:      ${detected.name || "—"}`,
+        `Symbol:    ${detected.symbol || "—"}`
+      ];
+
+      if (detected.type === "erc20") {
+        lines.push(`Decimals:  ${detected.decimals}`);
+        try {
+          const total = (await client.readContract({
+            address: tokenAddress,
+            abi: erc20FullAbi,
+            functionName: "totalSupply"
+          })) as bigint;
+          lines.push(
+            `Total:     ${formatUnits(total, detected.decimals)} ${detected.symbol}`
+          );
+        } catch {
+          lines.push(`Total:     n/a`);
+        }
+        if (isConnected && address) {
+          try {
+            const bal = (await client.readContract({
+              address: tokenAddress,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [address]
+            })) as bigint;
+            lines.push(
+              `Balance:   ${formatUnits(bal, detected.decimals)} ${detected.symbol} (connected wallet)`
+            );
+          } catch {}
+        }
+      } else {
+        try {
+          const total = (await client.readContract({
+            address: tokenAddress,
+            abi: erc20FullAbi,
+            functionName: "totalSupply"
+          })) as bigint;
+          lines.push(`Total:     ${String(total)} items`);
+        } catch {
+          lines.push(`Total:     n/a`);
+        }
+      }
+
+      return { id: generateId(), type: "text", text: lines.join("\n") };
+    },
     export: () => {
       if (!isConnected || !address)
         return {
