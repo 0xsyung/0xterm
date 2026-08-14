@@ -1279,22 +1279,14 @@ export default function TerminalShell({
     <div
       className={`relative z-10 w-full h-full flex flex-col cursor-text overflow-hidden transition-all duration-300 ${theme.bg} ${theme.text} ${theme.font}`}
     >
-      {/* EXCLUSIVE SCANLINE OVERLAY */}
-      {currentThemeKey === "matrix" && (
-        <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.35)_50%)] bg-[length:100%_4px] opacity-70 z-20"></div>
-      )}
-      {currentThemeKey === "bloomberg" && (
-        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(#ffb000_1px,transparent_1px)] [background-size:16px_16px] opacity-10 z-20"></div>
-      )}
+      {/* OVERLAYS... */}
 
-      {/* TOP HEADER BAR */}
       <TerminalHeader
         theme={theme}
         currentThemeKey={currentThemeKey}
         onThemeChange={handleThemeSwitch}
       />
 
-      {/* TERMINAL CONTENT CONTAINER */}
       <div
         className="flex-1 flex flex-col p-6 pt-20 overflow-hidden relative z-10"
         onClick={() => inputRef.current?.focus()}
@@ -1303,143 +1295,33 @@ export default function TerminalShell({
           ref={logContainerRef}
           className="flex-1 overflow-y-auto space-y-2.5 pt-2 pr-2"
         >
-          {logs.map((log) => {
-            if (log.type === "input") {
-              return (
-                <div
-                  key={log.id}
-                  className={`${theme.primary} font-bold ${theme.glow}`}
-                >
-                  {log.text}
-                </div>
-              );
-            }
-            if (log.type === "help") {
-              return <HelpManual key={log.id} theme={theme} />;
-            }
-            if (log.type === "dexes") {
-              const dexList = DEX_REGISTRY[activeChainId!] || [];
-              return (
-                <div
-                  key={log.id}
-                  className={`text-xs space-y-1 my-2 ${theme.text}`}
-                >
-                  {dexList.map((d) => (
-                    <div key={d.id}>
-                      • {d.name} ({d.type}) - ID:{" "}
-                      <span className={`font-bold ${theme.primary}`}>
-                        {d.id}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              );
-            }
-            if (log.type === "networks") {
-              return <NetworksList key={log.id} theme={theme} />;
-            }
-            if (log.type === "createpool") {
-              return (
-                <CreatePoolWidget key={log.id} {...log.payload} theme={theme} />
-              );
-            }
-            if (log.type === "initialize") {
-              return (
-                <InitializePoolWidget
-                  key={log.id}
-                  {...log.payload}
-                  theme={theme}
-                />
-              );
-            }
-            if (log.type === "addliq") {
-              return (
-                <AddLiquidityWidget
-                  key={log.id}
-                  {...log.payload}
-                  theme={theme}
-                />
-              );
-            }
-            if (log.type === "balance") {
-              return (
-                <BalanceWidget key={log.id} {...log.payload} theme={theme} />
-              );
-            }
-            return (
-              <div key={log.id} className={`${theme.text}/90`}>
-                {log.text}
-                {log.component}
-              </div>
-            );
-          })}
+          <TerminalLogList
+            logs={logs}
+            theme={theme}
+            activeChainId={activeChainId}
+          />
         </div>
 
-        {/* TWO-LINE PROMPT LAYOUT */}
-        <div
-          className={`mt-4 border-t ${theme.border} pt-3 shrink-0 flex flex-col space-y-1.5`}
-        >
-          {/* Line 1: Status Bar (Network, DEX, Address) */}
-          {mounted && (
-            <div
-              className={`text-[11px] ${theme.text}/70 flex items-center space-x-2 px-1`}
-            >
-              <span className={`font-bold ${theme.primary}`}>
-                [{activeChainObj ? activeChainObj.name.toUpperCase() : "NO NET"}{" "}
-                | {activeDexObj ? activeDexObj.id.toUpperCase() : "NO DEX"} |{" "}
-                {isConnected && address
-                  ? `${address.slice(0, 6)}...${address.slice(-4)}`
-                  : "DISCONNECTED"}
-                ]
-              </span>
-            </div>
-          )}
-
-          {/* Line 2: Prompt Indicator and Input */}
-          <div className="flex items-center">
-            <span
-              className={`mr-2 font-bold ${theme.glow} shrink-0 whitespace-nowrap ${theme.primary}`}
-            >
-              &gt;
-            </span>
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                if (suggestions.length > 0) {
-                  setSuggestions([]);
-                  setSuggestionIdx(-1);
-                }
-              }}
-              onKeyDown={handleKeyDown}
-              className={`w-full bg-transparent outline-none ${theme.text} caret-current ${theme.glow}`}
-              autoFocus
-              spellCheck={false}
-            />
-          </div>
-
-          {/* Line 3: Autocomplete Suggestions */}
-          {suggestions.length > 0 && (
-            <div
-              className={`flex flex-wrap gap-3 px-4 pb-1 text-[11px] ${theme.text}/80`}
-            >
-              {suggestions.map((s, idx) => (
-                <span
-                  key={s}
-                  className={`transition-colors ${
-                    idx === suggestionIdx
-                      ? `bg-current/20 font-bold ${theme.primary} px-2 py-0.5 rounded`
-                      : "px-2 py-0.5"
-                  }`}
-                >
-                  {s}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+        <TerminalPrompt
+          theme={theme}
+          input={input}
+          setInput={(val) => {
+            setInput(val);
+            if (suggestions.length > 0) {
+              setSuggestions([]);
+              setSuggestionIdx(-1);
+            }
+          }}
+          handleKeyDown={handleKeyDown}
+          inputRef={inputRef}
+          suggestions={suggestions}
+          suggestionIdx={suggestionIdx}
+          activeChainId={activeChainId}
+          activeDexId={activeDexId}
+          isConnected={isConnected}
+          address={address}
+          mounted={mounted}
+        />
       </div>
     </div>
   );
