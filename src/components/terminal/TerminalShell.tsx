@@ -1118,22 +1118,15 @@ export default function TerminalShell({
   };
 
   const applySuggestion = (suggestion: string) => {
-    const rawArgs = input.trimStart().split(/\s+/);
-    if (
-      !input.includes(" ") ||
-      (rawArgs.length === 1 && !input.endsWith(" "))
-    ) {
-      // Completing a command
-      setInput(suggestion + " ");
+    if (input.endsWith(" ")) {
+      setInput(input + suggestion + " ");
     } else {
-      // Completing a parameter
-      const newArgs = [...rawArgs];
-      if (input.endsWith(" ")) {
-        newArgs.push(suggestion);
+      const lastSpaceIdx = input.lastIndexOf(" ");
+      if (lastSpaceIdx === -1) {
+        setInput(suggestion + " ");
       } else {
-        newArgs[newArgs.length - 1] = suggestion;
+        setInput(input.substring(0, lastSpaceIdx + 1) + suggestion + " ");
       }
-      setInput(newArgs.join(" ") + " ");
     }
     setSuggestions([]);
     setSuggestionIdx(-1);
@@ -1149,13 +1142,14 @@ export default function TerminalShell({
         return;
       }
 
-      const rawArgs = input.trimStart().split(/\s+/);
+      // Safe split removing empty strings caused by trailing/multiple spaces
+      const rawArgs = input.trimStart().split(/\s+/).filter(Boolean);
+      if (rawArgs.length === 0) return;
+
       const isTypingCommand = rawArgs.length === 1 && !input.endsWith(" ");
 
       if (isTypingCommand) {
         const val = input.trim().toLowerCase();
-        if (!val) return;
-
         const matches = availableCommands
           .filter((c) => c.startsWith(val))
           .sort();
@@ -1169,7 +1163,11 @@ export default function TerminalShell({
       } else {
         // Parameter Autocomplete
         const command = rawArgs[0].toLowerCase();
-        const currentArgIdx = rawArgs.length - (input.endsWith(" ") ? 0 : 1);
+
+        // If input ends with space, the user is starting a new argument slot.
+        const currentArgIdx = input.endsWith(" ")
+          ? rawArgs.length
+          : rawArgs.length - 1;
         const partialArg = input.endsWith(" ")
           ? ""
           : rawArgs[rawArgs.length - 1].toLowerCase();
