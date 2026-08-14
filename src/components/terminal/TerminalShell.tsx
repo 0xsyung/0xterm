@@ -14,6 +14,7 @@ import {
   formatUnits,
   parseUnits,
   isAddress,
+  getAddress,
   createPublicClient,
   http,
   encodeFunctionData,
@@ -1230,26 +1231,46 @@ export default function TerminalShell({
           type: "text",
           text: "Select network first using 'network <name>'."
         };
-      if (!args[1] || !isAddress(args[1]))
+      if (!args[1])
         return {
           id: generateId(),
           type: "text",
           text: "Usage: register <tokenAddress> [customSymbol] [erc20|erc721]"
         };
 
+      // Accept addresses with an invalid EIP-55 checksum by normalizing them.
+      let rawAddress = args[1];
+      if (!isAddress(rawAddress)) {
+        try {
+          rawAddress = getAddress(rawAddress);
+        } catch {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] Error: "${rawAddress}" is not a valid address.`
+          };
+        }
+      }
+      const tokenAddress = rawAddress as Address;
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
-      const tokenAddress = args[1] as Address;
-      const hint = args[3]?.toLowerCase() === "erc721" || args[3]?.toLowerCase() === "nft"
-        ? "erc721"
-        : args[3]?.toLowerCase() === "erc20"
-          ? "erc20"
-          : undefined;
+
+      // Type hint may appear as the 2nd or 3rd argument.
+      const lowerArgs = args.slice(2).map((a) => a.toLowerCase());
+      const hint =
+        lowerArgs.includes("erc721") || lowerArgs.includes("nft")
+          ? "erc721"
+          : lowerArgs.includes("erc20")
+            ? "erc20"
+            : undefined;
+      const symbolArg = args[2] && !lowerArgs[0].match(/^(erc20|erc721|nft)$/)
+        ? args[2]
+        : undefined;
 
       const detected = await detectTokenType(tokenAddress, targetChain, hint);
 
       // Confirmation resolver: register anyway or cancel
       const doRegister = (info: { name: string; symbol: string; decimals?: number; tokenType: "erc20" | "erc721" }) => {
-        const symbolToUse = (args[2] ? args[2] : info.symbol).toUpperCase();
+        const symbolToUse = (symbolArg ? symbolArg : info.symbol).toUpperCase();
 
         const existingCommon = COMMON_TOKENS[targetChain.id]?.[symbolToUse];
         const existingCustom = customTokens[targetChain.id]?.[symbolToUse];
@@ -1314,7 +1335,7 @@ export default function TerminalShell({
         onYes: () =>
           doRegister({
             name: "",
-            symbol: args[2] ? args[2] : "UNKNOWN",
+            symbol: symbolArg ? symbolArg : "UNKNOWN",
             decimals: undefined,
             tokenType: hint === "erc721" ? "erc721" : "erc20"
           }),
@@ -1345,9 +1366,18 @@ export default function TerminalShell({
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
       const target = args[1]?.toLowerCase();
       const kind = target === "erc721" || target === "nft" ? "erc721" : "erc20";
-      const addrArg = kind === "erc721" ? args[2] : args[1];
+      let addrArg = kind === "erc721" ? args[2] : args[1];
 
-      if (!addrArg || !isAddress(addrArg))
+      // Normalize addresses with an invalid EIP-55 checksum.
+      if (addrArg && !isAddress(addrArg)) {
+        try {
+          addrArg = getAddress(addrArg);
+        } catch {
+          addrArg = "";
+        }
+      }
+
+      if (!addrArg)
         return {
           id: generateId(),
           type: "text",
@@ -1498,8 +1528,15 @@ export default function TerminalShell({
           text: "Select network first using 'network <name>'."
         };
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
-      const addrArg = args[1];
-      if (!addrArg || !isAddress(addrArg))
+      let addrArg = args[1];
+      if (addrArg && !isAddress(addrArg)) {
+        try {
+          addrArg = getAddress(addrArg);
+        } catch {
+          addrArg = "";
+        }
+      }
+      if (!addrArg)
         return {
           id: generateId(),
           type: "text",
