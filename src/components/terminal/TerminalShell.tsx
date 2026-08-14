@@ -71,10 +71,27 @@ export default function TerminalShell({
   const [activeChainId, setActiveChainId] = useState<number | null>(null);
   const [activeDexId, setActiveDexId] = useState<string | null>(null);
 
+  // Custom User-Registered Tokens Map: ChainId -> { SYMBOL: TokenDetails }
+  const [customTokens, setCustomTokens] = useState<
+    Record<
+      number,
+      Record<
+        string,
+        {
+          address: Address;
+          symbol: string;
+          name: string;
+          decimals: number;
+          isNative: boolean;
+        }
+      >
+    >
+  >({});
+
   const theme = THEMES[currentThemeKey];
 
   const [logs, setLogs] = useState<LogEntry[]>([
-    { id: "1", type: "text", text: "0xTERM v1.4.9 [FULL ON-CHAIN DEFI SUITE]" },
+    { id: "1", type: "text", text: "0xTERM v1.5.0 [FULL ON-CHAIN DEFI SUITE]" },
     { id: "2", type: "text", text: 'TYPE "help" TO SEE AVAILABLE COMMANDS.\n' }
   ]);
   const [input, setInput] = useState("");
@@ -120,10 +137,26 @@ export default function TerminalShell({
     }
   };
 
+  const saveCustomTokenToStorage = (updatedTokens: typeof customTokens) => {
+    if (!isConnected || !address) return;
+    const storageKey = `0xterm_custom_tokens_${address.toLowerCase()}`;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(updatedTokens));
+    } catch (e) {
+      console.error("Failed to save custom tokens", e);
+    }
+  };
+
   useEffect(() => {
     if (isConnected && address) {
       const storageKey = `0xterm_user_${address.toLowerCase()}`;
+      const tokensKey = `0xterm_custom_tokens_${address.toLowerCase()}`;
       try {
+        const savedTokens = localStorage.getItem(tokensKey);
+        if (savedTokens) {
+          setCustomTokens(JSON.parse(savedTokens));
+        }
+
         const saved = localStorage.getItem(storageKey);
         if (saved) {
           const prefs = JSON.parse(saved);
@@ -204,7 +237,9 @@ export default function TerminalShell({
         isNative: true
       };
 
-    const preset = COMMON_TOKENS[chain.id]?.[sym];
+    // Check Preset Common Tokens and User Registered Custom Tokens
+    const preset =
+      COMMON_TOKENS[chain.id]?.[sym] || customTokens[chain.id]?.[sym];
     if (preset) return { ...preset, isNative: false };
 
     const client = createPublicClient({ chain, transport: http() });
@@ -287,7 +322,7 @@ export default function TerminalShell({
     }
 
     throw new Error(
-      `Unable to resolve token "${queryToken}" on ${chain.name}.`
+      `Unable to resolve token "${queryToken}" on ${chain.name}. Register it first using 'register <address>'.`
     );
   };
 
@@ -686,6 +721,101 @@ export default function TerminalShell({
       }
       return { id: generateId(), type: "text", text: dexText };
     },
+    register: async (args) => {
+      if (!activeChainId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network first using 'network <name>'."
+        };
+      if (!args[1] || !isAddress(args[1]))
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: register <tokenAddress> [customSymbol]"
+        };
+
+      const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
+      const tokenAddress = args[1] as Address;
+      const client = createPublicClient({
+        chain: targetChain,
+        transport: http()
+      });
+
+      let contractSymbol: string,
+        contractDecimals: number,
+        contractName: string;
+      try {
+        const [symRes, decRes, nameRes] = await Promise.all([
+          client.readContract({
+            address: tokenAddress,
+            abi: erc20Abi,
+            functionName: "symbol"
+          }),
+          client.readContract({
+            address: tokenAddress,
+            abi: erc20Abi,
+            functionName: "decimals"
+          }),
+          client.readContract({
+            address: tokenAddress,
+            abi: erc20Abi,
+            functionName: "name"
+          })
+        ]);
+        contractSymbol = String(symRes);
+        contractDecimals = Number(decRes);
+        contractName = String(nameRes);
+      } catch {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] Error: Address ${tokenAddress} is not a valid ERC20 token on ${targetChain.name} (failed to read contract methods).`
+        };
+      }
+
+      const symbolToUse = (args[2] ? args[2] : contractSymbol).toUpperCase();
+
+      // Check conflict with common tokens, custom tokens, or native currency
+      const existingCommon = COMMON_TOKENS[targetChain.id]?.[symbolToUse];
+      const existingCustom = customTokens[targetChain.id]?.[symbolToUse];
+      const isNative =
+        symbolToUse === targetChain.nativeCurrency.symbol.toUpperCase();
+
+      if (existingCommon || existingCustom || isNative) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] Error: Symbol "${symbolToUse}" already exists on ${targetChain.name}. Please register with a unique symbol (e.g., 'register ${tokenAddress} UNIQUE_SYMBOL').`
+        };
+      }
+
+      const newToken = {
+        address: tokenAddress,
+        symbol: symbolToUse,
+        name: contractName,
+        decimals: contractDecimals,
+        isNative: false
+      };
+
+      const updatedChainTokens = {
+        ...(customTokens[targetChain.id] || {}),
+        [symbolToUse]: newToken
+      };
+      const updatedAllTokens = {
+        ...customTokens,
+        [targetChain.id]: updatedChainTokens
+      };
+
+      setCustomTokens(updatedAllTokens);
+      saveCustomTokenToStorage(updatedAllTokens);
+
+      return {
+        id: generateId(),
+        type: "text",
+        text: `[✓] Successfully registered token "${symbolToUse}" (${contractName}, ${contractDecimals} decimals) at ${tokenAddress} on ${targetChain.name}.`
+      };
+    },
     price: async (args) => {
       if (!args[1])
         return {
@@ -956,7 +1086,6 @@ export default function TerminalShell({
 
         const chainName = targetChain ? targetChain.name.toLowerCase() : "";
 
-        // Try to find exact chain, and optionally filter by queryB if provided
         let pair = data.pairs.find((p: any) => {
           const matchesChain = p.chainId.toLowerCase() === chainName;
           const matchesQuote = queryB
@@ -965,7 +1094,6 @@ export default function TerminalShell({
           return matchesChain && matchesQuote;
         });
 
-        // Fallback to closest match
         if (!pair)
           pair = data.pairs.find(
             (p: any) => p.chainId.toLowerCase() === chainName
@@ -1419,6 +1547,7 @@ export default function TerminalShell({
   commands.provideliq = commands.addliq;
   commands.bal = commands.balance;
   commands.liquidity = commands.pool;
+  commands.reg = commands.register;
 
   const availableCommands = Object.keys(commands);
 
@@ -1432,7 +1561,6 @@ export default function TerminalShell({
       text: `$ ${trimmed}`
     };
 
-    // IMMEDIATE UPDATE: Echo user command so UI doesn't hang
     setLogs((prev) => [...prev, userLog].slice(-MAX_LOGS));
     setHistory((prev) => [...prev, trimmed]);
     setHistoryIdx(-1);
@@ -1500,7 +1628,6 @@ export default function TerminalShell({
         return;
       }
 
-      // Safe split removing empty strings caused by trailing/multiple spaces
       const rawArgs = input.trimStart().split(/\s+/).filter(Boolean);
       if (rawArgs.length === 0) return;
 
@@ -1519,10 +1646,7 @@ export default function TerminalShell({
           setSuggestionIdx(0);
         }
       } else {
-        // Parameter Autocomplete
         const command = rawArgs[0].toLowerCase();
-
-        // If input ends with space, the user is starting a new argument slot.
         const currentArgIdx = input.endsWith(" ")
           ? rawArgs.length
           : rawArgs.length - 1;
@@ -1542,7 +1666,6 @@ export default function TerminalShell({
             candidates = DEX_REGISTRY[activeChainId].map((d) => d.id);
           }
         } else {
-          // Token Autocomplete Checks
           let isTokenArg = false;
           if (
             command === "swap" &&
@@ -1568,12 +1691,16 @@ export default function TerminalShell({
 
           if (isTokenArg && activeChainId) {
             candidates = Object.keys(COMMON_TOKENS[activeChainId] || {});
+            const customForChain = Object.keys(
+              customTokens[activeChainId] || {}
+            );
+            candidates.push(...customForChain);
             const chainObj = SUPPORTED_CHAINS.find(
               (c) => c.id === activeChainId
             );
             if (chainObj) candidates.push(chainObj.nativeCurrency.symbol);
             if (command === "price") candidates.push("pool", "api");
-            candidates = Array.from(new Set(candidates)); // Deduplicate
+            candidates = Array.from(new Set(candidates));
           } else if (command === "price" && currentArgIdx === 3) {
             candidates = ["pool", "api"];
           }
@@ -1609,7 +1736,6 @@ export default function TerminalShell({
         setSuggestionIdx(-1);
       }
     } else {
-      // Standard terminal command behavior
       if (e.key === "Enter") {
         handleCommand(input);
         setInput("");
