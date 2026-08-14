@@ -21,6 +21,8 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
         <div>List available DEXes</div>
         <div className={`font-bold ${theme.primary}`}>dex &lt;id&gt;</div>
         <div>Set active DEX protocol</div>
+        <div className={`font-bold ${theme.primary}`}>theme &lt;name&gt;</div>
+        <div>Switch terminal color theme / style</div>
         <div className={`font-bold ${theme.primary}`}>
           register &lt;address&gt; [symbol]
         </div>
