@@ -237,7 +237,6 @@ export default function TerminalShell({
         isNative: true
       };
 
-    // Check Preset Common Tokens and User Registered Custom Tokens
     const preset =
       COMMON_TOKENS[chain.id]?.[sym] || customTokens[chain.id]?.[sym];
     if (preset) return { ...preset, isNative: false };
@@ -776,7 +775,6 @@ export default function TerminalShell({
 
       const symbolToUse = (args[2] ? args[2] : contractSymbol).toUpperCase();
 
-      // Check conflict with common tokens, custom tokens, or native currency
       const existingCommon = COMMON_TOKENS[targetChain.id]?.[symbolToUse];
       const existingCustom = customTokens[targetChain.id]?.[symbolToUse];
       const isNative =
@@ -840,7 +838,6 @@ export default function TerminalShell({
         ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
         : null;
 
-      // 🛑 FAILSafe: Dexscreener API does not support testnets
       if (
         source === "api" &&
         targetChain &&
@@ -1050,7 +1047,6 @@ export default function TerminalShell({
           };
         }
       } else {
-        // API Source (DexScreener)
         const encodedQuery = encodeURIComponent(queryA);
         let res;
 
@@ -1062,7 +1058,7 @@ export default function TerminalShell({
           return {
             id: generateId(),
             type: "text",
-            text: "[!] API Fetch Failed: Request timed out or was blocked. Ensure your ad-blocker (uBlock, Brave Shields) isn't blocking 'api.dexscreener.com'."
+            text: "[!] API Fetch Failed: Request timed out or was blocked. Ensure your ad-blocker isn't blocking 'api.dexscreener.com'."
           };
         }
 
@@ -1565,7 +1561,8 @@ export default function TerminalShell({
     setHistory((prev) => [...prev, trimmed]);
     setHistoryIdx(-1);
 
-    const args = trimmed.split(" ");
+    // FIXED: Split by 1 or more whitespace characters and filter out empty strings
+    const args = trimmed.split(/\s+/).filter(Boolean);
     const command = args[0].toLowerCase();
     const handler = commands[command];
 
