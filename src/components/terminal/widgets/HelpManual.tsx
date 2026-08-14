@@ -29,6 +29,10 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
           price &lt;tA&gt; [tB] [pool|api]
         </div>
         <div>Query token price from on-chain pool or API</div>
+        <div className={`font-bold ${theme.primary}`}>export</div>
+        <div>Export settings & custom tokens to JSON</div>
+        <div className={`font-bold ${theme.primary}`}>import &lt;json&gt;</div>
+        <div>Import settings & custom tokens from JSON</div>
         <div className={`font-bold ${theme.primary}`}>
           createpool &lt;tA&gt; &lt;tB&gt; [fee]
         </div>

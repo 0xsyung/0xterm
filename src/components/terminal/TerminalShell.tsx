@@ -654,7 +654,8 @@ export default function TerminalShell({
 
   // COMMAND REGISTRY
   type CommandHandler = (
-    args: string[]
+    args: string[],
+    rawInput: string
   ) => Promise<LogEntry | LogEntry[] | null> | LogEntry | LogEntry[] | null;
 
   const commands: Record<string, CommandHandler> = {
@@ -813,6 +814,123 @@ export default function TerminalShell({
         type: "text",
         text: `[✓] Successfully registered token "${symbolToUse}" (${contractName}, ${contractDecimals} decimals) at ${tokenAddress} on ${targetChain.name}.`
       };
+    },
+    export: () => {
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected. Connect a wallet to export its profile and custom tokens."
+        };
+      const userKey = `0xterm_user_${address.toLowerCase()}`;
+      const tokensKey = `0xterm_custom_tokens_${address.toLowerCase()}`;
+      const prefs = localStorage.getItem(userKey)
+        ? JSON.parse(localStorage.getItem(userKey)!)
+        : {};
+      const tokens = localStorage.getItem(tokensKey)
+        ? JSON.parse(localStorage.getItem(tokensKey)!)
+        : {};
+
+      const exportData = {
+        version: "1.0",
+        wallet: address,
+        preferences: prefs,
+        customTokens: tokens
+      };
+      const jsonString = JSON.stringify(exportData, null, 2);
+
+      const exportWidget = (
+        <div
+          className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2 max-w-xl`}
+        >
+          <div
+            className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+          >
+            <span className="font-bold">EXPORT CONFIG & CUSTOM TOKENS</span>
+            <span>
+              {address.slice(0, 6)}...{address.slice(-4)}
+            </span>
+          </div>
+          <div className={`text-[10px] ${theme.text}/60`}>
+            Copy the JSON below and run{" "}
+            <span className={theme.primary}>import &lt;json&gt;</span> in your
+            new wallet terminal:
+          </div>
+          <pre
+            className={`p-3 bg-black/40 rounded border ${theme.border} font-mono text-[10px] overflow-x-auto select-all max-h-48 text-green-400`}
+          >
+            {jsonString}
+          </pre>
+        </div>
+      );
+      return { id: generateId(), type: "component", component: exportWidget };
+    },
+    import: (args, rawInput) => {
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected. Connect your target wallet first before importing."
+        };
+
+      // Extract everything after 'import ' or 'imp ' using raw input to preserve JSON spaces
+      const match = rawInput.trim().match(/^(import|imp)\s+([\s\S]+)$/i);
+      if (!match || !match[2]) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: import <json_payload>"
+        };
+      }
+
+      const jsonStr = match[2].trim();
+
+      try {
+        const data = JSON.parse(jsonStr);
+        if (!data.preferences && !data.customTokens) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: "[!] Error: Invalid configuration JSON format."
+          };
+        }
+
+        const userKey = `0xterm_user_${address.toLowerCase()}`;
+        const tokensKey = `0xterm_custom_tokens_${address.toLowerCase()}`;
+
+        if (data.preferences) {
+          localStorage.setItem(userKey, JSON.stringify(data.preferences));
+          if (
+            data.preferences.theme &&
+            THEMES[data.preferences.theme as ThemeMode]
+          ) {
+            onThemeChange(data.preferences.theme as ThemeMode);
+          }
+          if (data.preferences.chainId) {
+            setActiveChainId(data.preferences.chainId);
+            if (data.preferences.dexId) {
+              setActiveDexId(data.preferences.dexId);
+            }
+          }
+        }
+
+        if (data.customTokens) {
+          localStorage.setItem(tokensKey, JSON.stringify(data.customTokens));
+          setCustomTokens(data.customTokens);
+        }
+
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[✓] Successfully imported settings and custom tokens to wallet ${address.slice(0, 6)}...${address.slice(-4)}!`
+        };
+      } catch (e: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] Error parsing JSON: ${e.message}`
+        };
+      }
     },
     price: async (args) => {
       if (!args[1])
@@ -1544,6 +1662,8 @@ export default function TerminalShell({
   commands.bal = commands.balance;
   commands.liquidity = commands.pool;
   commands.reg = commands.register;
+  commands.exp = commands.export;
+  commands.imp = commands.import;
 
   const availableCommands = Object.keys(commands);
 
@@ -1561,7 +1681,6 @@ export default function TerminalShell({
     setHistory((prev) => [...prev, trimmed]);
     setHistoryIdx(-1);
 
-    // FIXED: Split by 1 or more whitespace characters and filter out empty strings
     const args = trimmed.split(/\s+/).filter(Boolean);
     const command = args[0].toLowerCase();
     const handler = commands[command];
@@ -1581,7 +1700,7 @@ export default function TerminalShell({
     }
 
     try {
-      const result = await handler(args);
+      const result = await handler(args, trimmed);
       if (result !== null) {
         const newEntries = Array.isArray(result) ? result : [result];
         setLogs((prev) => [...prev, ...newEntries].slice(-MAX_LOGS));
