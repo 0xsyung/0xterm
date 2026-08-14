@@ -94,21 +94,28 @@ export default function TerminalPrompt({
           spellCheck={false}
           autoComplete="off"
         />
-
-        {/* Inline Suggestion Bubble */}
-        {suggestions.length > 0 && suggestionIdx >= 0 && (
-          <div className="flex items-center gap-1 shrink-0">
-            <span
-              className={`px-2 py-0.5 rounded border ${theme.border} ${theme.cardBg} font-mono text-xs ${theme.primary} whitespace-nowrap`}
-            >
-              {suggestions[suggestionIdx]}
-            </span>
-            <span className="text-[9px] opacity-40 font-mono whitespace-nowrap">
-              [← →]
-            </span>
-          </div>
-        )}
       </div>
+
+      {/* LINE 3: Inline Suggestion Choices */}
+      {suggestions.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-0.5">
+          <span className="text-[9px] opacity-40 font-mono shrink-0">
+            CHOICES [← →]:
+          </span>
+          {suggestions.map((s, idx) => (
+            <span
+              key={s}
+              className={`px-2 py-0.5 rounded border font-mono whitespace-nowrap shrink-0 transition-colors ${
+                idx === suggestionIdx
+                  ? `${theme.primary} bg-current/15 border-current font-bold`
+                  : `${theme.border} ${theme.text} opacity-60`
+              }`}
+            >
+              {s}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
