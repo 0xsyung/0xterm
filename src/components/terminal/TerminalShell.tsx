@@ -5,6 +5,7 @@ import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import {
   formatEther,
   formatUnits,
+  parseUnits,
   isAddress,
   parseAbi,
   createPublicClient,
@@ -20,6 +21,7 @@ import {
   optimism,
   sepolia
 } from "viem/chains";
+import SwapWidget from "./SwapWidget";
 
 type LogItem = {
   id: string;
@@ -36,6 +38,8 @@ const SUPPORTED_CHAINS: Chain[] = [
   optimism,
   sepolia
 ];
+
+const NATIVE_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 // Standard ERC-20 ABI
 const erc20Abi = parseAbi([
@@ -55,6 +59,12 @@ const COMMON_TOKENS: Record<
 > = {
   1: {
     // Ethereum Mainnet
+    ETH: {
+      address: NATIVE_TOKEN_ADDRESS,
+      decimals: 18,
+      symbol: "ETH",
+      name: "Ethereum"
+    },
     USDC: {
       address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
       decimals: 6,
@@ -82,6 +92,12 @@ const COMMON_TOKENS: Record<
   },
   42161: {
     // Arbitrum One
+    ETH: {
+      address: NATIVE_TOKEN_ADDRESS,
+      decimals: 18,
+      symbol: "ETH",
+      name: "Ethereum"
+    },
     USDC: {
       address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
       decimals: 6,
@@ -103,6 +119,12 @@ const COMMON_TOKENS: Record<
   },
   8453: {
     // Base
+    ETH: {
+      address: NATIVE_TOKEN_ADDRESS,
+      decimals: 18,
+      symbol: "ETH",
+      name: "Ethereum"
+    },
     USDC: {
       address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
       decimals: 6,
@@ -118,6 +140,12 @@ const COMMON_TOKENS: Record<
   },
   137: {
     // Polygon
+    MATIC: {
+      address: NATIVE_TOKEN_ADDRESS,
+      decimals: 18,
+      symbol: "MATIC",
+      name: "Polygon"
+    },
     USDC: {
       address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
       decimals: 6,
@@ -133,6 +161,12 @@ const COMMON_TOKENS: Record<
   },
   10: {
     // Optimism
+    ETH: {
+      address: NATIVE_TOKEN_ADDRESS,
+      decimals: 18,
+      symbol: "ETH",
+      name: "Ethereum"
+    },
     USDC: {
       address: "0x0b2C639c533813f4Aa9D7837CAf62653d097F853",
       decimals: 6,
@@ -148,7 +182,6 @@ const COMMON_TOKENS: Record<
   }
 };
 
-// Utility to resolve network name or chain ID
 const resolveChain = (query?: string): Chain | undefined => {
   if (!query) return undefined;
   const q = query.toLowerCase().trim();
@@ -205,6 +238,90 @@ export default function TerminalShell({
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
   }, [logs]);
+
+  const resolveTokenDetails = async (queryToken: string, chain: Chain) => {
+    const sym = queryToken.toUpperCase();
+    const isNative =
+      sym === chain.nativeCurrency.symbol ||
+      sym === "ETH" ||
+      queryToken === NATIVE_TOKEN_ADDRESS;
+
+    if (isNative) {
+      return {
+        address: NATIVE_TOKEN_ADDRESS as Address,
+        symbol: chain.nativeCurrency.symbol,
+        name: chain.nativeCurrency.name,
+        decimals: 18,
+        isNative: true
+      };
+    }
+
+    const preset = COMMON_TOKENS[chain.id]?.[sym];
+    if (preset) {
+      return { ...preset, isNative: preset.address === NATIVE_TOKEN_ADDRESS };
+    }
+
+    const client = createPublicClient({ chain, transport: http() });
+
+    if (isAddress(queryToken)) {
+      const addr = queryToken as Address;
+      const [decimals, tokenSymbol, name] = await Promise.all([
+        client.readContract({
+          address: addr,
+          abi: erc20Abi,
+          functionName: "decimals"
+        }),
+        client.readContract({
+          address: addr,
+          abi: erc20Abi,
+          functionName: "symbol"
+        }),
+        client.readContract({
+          address: addr,
+          abi: erc20Abi,
+          functionName: "name"
+        })
+      ]);
+      return {
+        address: addr,
+        symbol: String(tokenSymbol),
+        name: String(name),
+        decimals: Number(decimals),
+        isNative: false
+      };
+    }
+
+    // DexScreener Fallback
+    const res = await fetch(
+      `https://api.dexscreener.com/latest/dex/search?q=${queryToken}`
+    );
+    const data = await res.json();
+    const pair = data.pairs?.find(
+      (p: { chainId: string }) =>
+        p.chainId.toLowerCase() === chain.name.toLowerCase() ||
+        p.chainId === "ethereum"
+    );
+
+    if (pair?.baseToken?.address && isAddress(pair.baseToken.address)) {
+      const addr = pair.baseToken.address as Address;
+      const decimals = await client.readContract({
+        address: addr,
+        abi: erc20Abi,
+        functionName: "decimals"
+      });
+      return {
+        address: addr,
+        symbol: pair.baseToken.symbol,
+        name: pair.baseToken.name,
+        decimals: Number(decimals),
+        isNative: false
+      };
+    }
+
+    throw new Error(
+      `Unable to resolve token "${queryToken}" on ${chain.name}.`
+    );
+  };
 
   const fetchPrice = async (symbol: string) => {
     try {
@@ -269,11 +386,9 @@ export default function TerminalShell({
       chain: targetChain,
       transport: http()
     });
-
     const chainId = targetChain.id;
     const chainName = targetChain.name;
 
-    // 1. Native Token Balance
     if (!queryToken) {
       const rawBalance = await client.getBalance({ address: userAddress });
       const formatted = parseFloat(formatEther(rawBalance)).toLocaleString(
@@ -303,107 +418,45 @@ export default function TerminalShell({
       );
     }
 
-    let tokenAddress: Address | null = null;
-    let tokenDecimals = 18;
-    let tokenSymbol = queryToken.toUpperCase();
-    let tokenName = "ERC-20 Token";
+    const token = await resolveTokenDetails(queryToken, targetChain);
 
-    // 2. Direct Address Input
-    if (isAddress(queryToken)) {
-      tokenAddress = queryToken as Address;
-      try {
-        const [rawDec, sym, name] = await Promise.all([
-          client.readContract({
-            address: tokenAddress,
-            abi: erc20Abi,
-            functionName: "decimals"
-          }),
-          client.readContract({
-            address: tokenAddress,
-            abi: erc20Abi,
-            functionName: "symbol"
-          }),
-          client.readContract({
-            address: tokenAddress,
-            abi: erc20Abi,
-            functionName: "name"
-          })
-        ]);
-        tokenDecimals = Number(rawDec);
-        tokenSymbol = String(sym);
-        tokenName = String(name);
-      } catch {
-        return (
-          <div className="text-red-400">
-            Error: Address {queryToken} is not a valid ERC-20 contract on{" "}
-            {chainName}.
-          </div>
-        );
-      }
-    } else {
-      // 3. Preset Lookup
-      const preset = COMMON_TOKENS[chainId]?.[tokenSymbol];
-      if (preset) {
-        tokenAddress = preset.address;
-        tokenDecimals = preset.decimals;
-        tokenSymbol = preset.symbol;
-        tokenName = preset.name;
-      } else {
-        // Fallback: DexScreener search
-        try {
-          const res = await fetch(
-            `https://api.dexscreener.com/latest/dex/search?q=${queryToken}`
-          );
-          const data = await res.json();
-          const pair = data.pairs?.find(
-            (p: { chainId: string }) =>
-              p.chainId.toLowerCase() === chainName.toLowerCase() ||
-              p.chainId === "ethereum"
-          );
-
-          if (pair?.baseToken?.address && isAddress(pair.baseToken.address)) {
-            tokenAddress = pair.baseToken.address as Address;
-            tokenSymbol = pair.baseToken.symbol;
-            tokenName = pair.baseToken.name;
-            tokenDecimals = Number(
-              await client.readContract({
-                address: tokenAddress,
-                abi: erc20Abi,
-                functionName: "decimals"
-              })
-            );
-          }
-        } catch {
-          // Pass-through
-        }
-      }
-    }
-
-    if (!tokenAddress) {
+    if (token.isNative) {
+      const rawBalance = await client.getBalance({ address: userAddress });
+      const formatted = parseFloat(formatEther(rawBalance)).toLocaleString(
+        undefined,
+        { maximumFractionDigits: 4 }
+      );
       return (
-        <div className="text-red-400">
-          Error: Could not resolve token "{queryToken}" on {chainName}. Try
-          passing contract address.
+        <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow">
+          <div className="flex justify-between items-center text-xs text-[#00ff66]/70 mb-1">
+            <span>NATIVE BALANCE</span>
+            <span>{chainName.toUpperCase()}</span>
+          </div>
+          <div className="text-2xl font-bold my-1 text-[#00ff66]">
+            {formatted}{" "}
+            <span className="text-sm font-normal text-[#00ff66]/80">
+              {token.symbol}
+            </span>
+          </div>
         </div>
       );
     }
 
-    // 4. Query ERC-20 balanceOf
     const rawBal = await client.readContract({
-      address: tokenAddress,
+      address: token.address,
       abi: erc20Abi,
       functionName: "balanceOf",
       args: [userAddress]
     });
 
     const formattedBal = parseFloat(
-      formatUnits(rawBal as bigint, tokenDecimals)
+      formatUnits(rawBal as bigint, token.decimals)
     ).toLocaleString(undefined, { maximumFractionDigits: 4 });
 
     return (
       <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow">
         <div className="flex justify-between items-center text-xs text-[#00ff66]/70 mb-1">
-          <span>{tokenName.toUpperCase()}</span>
+          <span>{token.name.toUpperCase()}</span>
           <span>
             {chainName.toUpperCase()} (ID: {chainId})
           </span>
@@ -411,11 +464,11 @@ export default function TerminalShell({
         <div className="text-2xl font-bold my-1 text-[#00ff66]">
           {formattedBal}{" "}
           <span className="text-sm font-normal text-[#00ff66]/80">
-            {tokenSymbol}
+            {token.symbol}
           </span>
         </div>
         <div className="text-xs text-[#00ff66]/50 truncate mt-2 border-t border-[#00ff66]/10 pt-2 flex flex-col gap-0.5">
-          <div>CONTRACT: {tokenAddress}</div>
+          <div>CONTRACT: {token.address}</div>
           <div>HOLDER: {userAddress}</div>
         </div>
       </div>
@@ -451,15 +504,7 @@ export default function TerminalShell({
               <div className="font-bold text-[#00ff66]">
                 network &lt;name|id&gt;
               </div>
-              <div>
-                Switch active network session (or view available)
-                <div className="text-[#00ff66]/50 text-[11px]">
-                  Alias: <span className="text-[#00ff66]/80">net</span> • E.g.:{" "}
-                  <span className="text-[#00ff66]/80">net mainnet</span>,{" "}
-                  <span className="text-[#00ff66]/80">net 8453</span>,{" "}
-                  <span className="text-[#00ff66]/80">net arbitrum</span>
-                </div>
-              </div>
+              <div>Switch active network session (or "net 0" to clear)</div>
 
               <div className="font-bold text-[#00ff66]">connect</div>
               <div>Authenticate Web3 wallet session</div>
@@ -468,15 +513,21 @@ export default function TerminalShell({
               <div>Disconnect active wallet session</div>
 
               <div className="font-bold text-[#00ff66]">
-                balance [token] [network]
+                balance [token] [net]
+              </div>
+              <div>Query native or ERC-20 token balance</div>
+
+              <div className="font-bold text-[#00ff66]">
+                swap &lt;amt&gt; &lt;from&gt; &lt;to&gt; [slip]
               </div>
               <div>
-                Query native or ERC-20 token balance
+                Route and execute DEX token swaps
                 <div className="text-[#00ff66]/50 text-[11px]">
-                  Alias: <span className="text-[#00ff66]/80">bal</span> • E.g.:{" "}
-                  <span className="text-[#00ff66]/80">bal</span>,{" "}
-                  <span className="text-[#00ff66]/80">bal USDC</span>,{" "}
-                  <span className="text-[#00ff66]/80">bal USDC base</span>
+                  E.g.:{" "}
+                  <span className="text-[#00ff66]/80">swap 0.1 ETH USDC</span>,{" "}
+                  <span className="text-[#00ff66]/80">
+                    swap 100 USDC ETH 0.5%
+                  </span>
                 </div>
               </div>
 
@@ -588,12 +639,142 @@ export default function TerminalShell({
         outputContent = "SESSION TERMINATED. WALLET DISCONNECTED.";
         break;
 
+      case "swap":
+        if (!isConnected || !address) {
+          outputContent = (
+            <div className="text-yellow-400/90 my-1">
+              [!] WALLET NOT CONNECTED. TYPE{" "}
+              <span
+                className="font-bold underline cursor-pointer"
+                onClick={() => handleCommand("connect")}
+              >
+                connect
+              </span>{" "}
+              TO AUTHENTICATE.
+            </div>
+          );
+        } else if (!activeChainId) {
+          outputContent = (
+            <div className="text-yellow-400/90 my-1">
+              [!] NO NETWORK SELECTED. SELECT ONE USING{" "}
+              <span
+                className="font-bold underline cursor-pointer"
+                onClick={() => handleCommand("network")}
+              >
+                network &lt;name|id&gt;
+              </span>{" "}
+              BEFORE SWAPPING.
+            </div>
+          );
+        } else {
+          const amountInput = args[1];
+          const fromQuery = args[2];
+          const toQuery = args[3];
+          const slippageStr = args[4] || "0.5%";
+
+          if (
+            !amountInput ||
+            !fromQuery ||
+            !toQuery ||
+            isNaN(parseFloat(amountInput))
+          ) {
+            outputContent =
+              "Usage: swap <amount> <fromToken> <toToken> [slippage] (e.g., swap 0.1 ETH USDC 0.5%)";
+          } else {
+            const targetChain = SUPPORTED_CHAINS.find(
+              (c) => c.id === activeChainId
+            )!;
+            setLogs((prev) => [
+              ...prev,
+              userLog,
+              {
+                id: (Date.now() + 1).toString(),
+                type: "text",
+                content: `FETCHING DEX SWAP ROUTE ON ${targetChain.name.toUpperCase()}...`
+              }
+            ]);
+
+            try {
+              const [fromToken, toToken] = await Promise.all([
+                resolveTokenDetails(fromQuery, targetChain),
+                resolveTokenDetails(toQuery, targetChain)
+              ]);
+
+              const amountInWei = parseUnits(amountInput, fromToken.decimals);
+              const slippageDecimal =
+                parseFloat(slippageStr.replace("%", "")) / 100 || 0.005;
+
+              // Fetch route quote via Li.Fi Aggregator API
+              const url = `https://li.quest/v1/quote?fromChain=${targetChain.id}&toChain=${targetChain.id}&fromToken=${fromToken.address}&toToken=${toToken.address}&fromAmount=${amountInWei.toString()}&fromAddress=${address}&slippage=${slippageDecimal}`;
+              const res = await fetch(url);
+              const quote = await res.json();
+
+              if (!res.ok || !quote.transactionRequest) {
+                throw new Error(
+                  quote.message ||
+                    "No swap route found for selected pair/liquidity."
+                );
+              }
+
+              const toAmountFormatted = parseFloat(
+                formatUnits(BigInt(quote.estimate.toAmount), toToken.decimals)
+              ).toLocaleString(undefined, { maximumFractionDigits: 6 });
+              const estimatedGasUsd =
+                quote.estimate.feeCosts?.[0]?.amountUSD || "0.05";
+
+              const swapWidget = (
+                <SwapWidget
+                  userAddress={address}
+                  targetChain={targetChain}
+                  fromToken={fromToken}
+                  toToken={toToken}
+                  fromAmountFormatted={amountInput}
+                  toAmountFormatted={toAmountFormatted}
+                  amountInWei={amountInWei}
+                  transactionRequest={{
+                    to: quote.transactionRequest.to as Address,
+                    data: quote.transactionRequest.data,
+                    value: quote.transactionRequest.value || "0x0"
+                  }}
+                  approvalAddress={
+                    quote.estimate.approvalAddress as Address | undefined
+                  }
+                  estimatedGasUsd={estimatedGasUsd}
+                />
+              );
+
+              setLogs((prev) => [
+                ...prev.slice(0, -1),
+                {
+                  id: Date.now().toString(),
+                  type: "component",
+                  content: swapWidget
+                }
+              ]);
+              setHistory((prev) => [...prev, trimmed]);
+              setHistoryIdx(-1);
+              return;
+            } catch (err: any) {
+              setLogs((prev) => [
+                ...prev.slice(0, -1),
+                {
+                  id: Date.now().toString(),
+                  type: "text",
+                  content: `ERROR: ${err.message || "Failed to fetch swap route."}`
+                }
+              ]);
+              return;
+            }
+          }
+        }
+        break;
+
       case "balance":
       case "bal":
         if (!isConnected || !address) {
           outputContent = (
             <div className="text-yellow-400/90 my-1">
-              [!] WALLET NOT CONNECTED. PLEASE TYPE{" "}
+              [!] WALLET NOT CONNECTED. TYPE{" "}
               <span
                 className="font-bold underline cursor-pointer"
                 onClick={() => handleCommand("connect")}
@@ -604,7 +785,6 @@ export default function TerminalShell({
             </div>
           );
         } else {
-          // Parse command arguments: bal [token/network] [network]
           let targetChain = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
           );
@@ -623,19 +803,17 @@ export default function TerminalShell({
             queryToken = args[1];
           }
 
-          // Enforce active network requirement
           if (!targetChain) {
             outputContent = (
               <div className="text-yellow-400/90 my-1">
-                [!] NO NETWORK SELECTED. PLEASE SELECT A NETWORK FIRST USING{" "}
+                [!] NO NETWORK SELECTED. SELECT ONE USING{" "}
                 <span
                   className="font-bold underline cursor-pointer"
                   onClick={() => handleCommand("network")}
                 >
                   network &lt;name|id&gt;
                 </span>{" "}
-                OR SPECIFY ONE IN YOUR QUERY (e.g.,{" "}
-                <span className="font-bold">bal USDC base</span>).
+                OR SPECIFY ONE IN QUERY.
               </div>
             );
             break;
@@ -647,7 +825,7 @@ export default function TerminalShell({
             {
               id: (Date.now() + 1).toString(),
               type: "text",
-              content: `QUERYING ON-CHAIN BALANCE ON ${targetChain.name.toUpperCase()}...`
+              content: `QUERYING BALANCE ON ${targetChain.name.toUpperCase()}...`
             }
           ]);
 
@@ -668,13 +846,13 @@ export default function TerminalShell({
             setHistory((prev) => [...prev, trimmed]);
             setHistoryIdx(-1);
             return;
-          } catch {
+          } catch (err: any) {
             setLogs((prev) => [
               ...prev.slice(0, -1),
               {
                 id: Date.now().toString(),
                 type: "text",
-                content: "ERROR: FAILED TO FETCH BALANCE FROM RPC."
+                content: `ERROR: ${err.message || "FAILED TO FETCH BALANCE."}`
               }
             ]);
             return;
@@ -778,8 +956,8 @@ export default function TerminalShell({
         ))}
       </div>
 
-      <div className="flex items-center mt-4 text-[#00ff66] border-t border-[#00ff66]/20 pt-3 shrink-0">
-        <span className="mr-2 font-bold matrix-glow">
+      <div className="mt-4 flex items-center whitespace-nowrap border-t border-[#00ff66]/20 pt-3 text-[#00ff66] shrink-0">
+        <span className="mr-2 shrink-0 font-bold matrix-glow">
           {mounted && isConnected
             ? `[${activeChainObj ? activeChainObj.name.toUpperCase() : "NO NET"} | ${address?.slice(0, 6)}...] >`
             : `${activeChainObj ? `[${activeChainObj.name.toUpperCase()}] ` : ""}>`}
@@ -790,7 +968,7 @@ export default function TerminalShell({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="w-full bg-transparent outline-none text-[#00ff66] caret-[#00ff66] matrix-glow"
+          className="min-w-0 flex-1 bg-transparent outline-none text-[#00ff66] caret-[#00ff66] matrix-glow"
           autoFocus
           spellCheck={false}
         />

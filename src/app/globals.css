@@ -1,20 +1,17 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-:root {
-  --background: #030503;
-  --foreground: #00ff66;
-}
-
+html,
 body {
-  background-color: var(--background);
-  color: var(--foreground);
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #030503 !important;
+  color: #00ff66;
   font-family: "Courier New", Courier, monospace;
   overflow: hidden;
 }
 
-/* CRT Scanline and Bloom Effects */
 .matrix-glow {
   text-shadow:
     0 0 8px rgba(0, 255, 102, 0.6),
@@ -35,7 +32,6 @@ body {
   pointer-events: none;
 }
 
-/* Hide scrollbars for clean terminal aesthetic */
 ::-webkit-scrollbar {
   display: none;
 }

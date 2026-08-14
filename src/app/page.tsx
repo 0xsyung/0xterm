@@ -14,7 +14,7 @@ export default function Home() {
 
   return (
     <Providers>
-      <main className="relative w-screen h-screen crt-overlay bg-[#030503] overflow-hidden">
+      <main className="fixed inset-0 crt-overlay bg-[#030503] overflow-hidden flex flex-col">
         <MatrixRain active={rainActive} />
         <TerminalShell onToggleRain={handleToggleRain} />
       </main>
