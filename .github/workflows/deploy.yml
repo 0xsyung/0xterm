@@ -2,7 +2,9 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main] # Change to 'master' if your main branch is master
+    branches:
+      - main
+      - master
 
 permissions:
   contents: read
@@ -11,7 +13,7 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-running: false
+  cancel-in-progress: false
 
 jobs:
   build:
