@@ -24,7 +24,7 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
         <div className={`font-bold ${theme.primary}`}>
           rpc [use|add|remove|alchemy|infura|quicknode]
         </div>
-        <div>Manage & switch between multiple RPC providers</div>
+        <div>Manage & switch RPC providers</div>
         <div className={`font-bold ${theme.primary}`}>theme &lt;name&gt;</div>
         <div>Switch terminal color theme / style</div>
         <div className={`font-bold ${theme.primary}`}>
