@@ -21,6 +21,7 @@ import CreatePoolWidget from "./widgets/CreatePoolWidget";
 import InitializePoolWidget from "./widgets/InitializePoolWidget";
 import AddLiquidityWidget from "./widgets/AddLiquidityWidget";
 import BalanceWidget from "./widgets/BalanceWidget";
+import NetworksList from "./widgets/NetworksList";
 import {
   THEMES,
   SUPPORTED_CHAINS,
@@ -107,30 +108,41 @@ export default function TerminalShell({
     const client = createPublicClient({ chain, transport: http() });
     if (isAddress(queryToken)) {
       const addr = queryToken as Address;
-      const [decimals, tokenSymbol, name] = await Promise.all([
-        client.readContract({
+      try {
+        const [decimals, tokenSymbol, name] = await Promise.all([
+          client.readContract({
+            address: addr,
+            abi: erc20Abi,
+            functionName: "decimals"
+          }),
+          client.readContract({
+            address: addr,
+            abi: erc20Abi,
+            functionName: "symbol"
+          }),
+          client.readContract({
+            address: addr,
+            abi: erc20Abi,
+            functionName: "name"
+          })
+        ]);
+        return {
           address: addr,
-          abi: erc20Abi,
-          functionName: "decimals"
-        }),
-        client.readContract({
+          symbol: String(tokenSymbol),
+          name: String(name),
+          decimals: Number(decimals),
+          isNative: false
+        };
+      } catch {
+        // Fallback for custom, non-standard, or un-deployed token addresses
+        return {
           address: addr,
-          abi: erc20Abi,
-          functionName: "symbol"
-        }),
-        client.readContract({
-          address: addr,
-          abi: erc20Abi,
-          functionName: "name"
-        })
-      ]);
-      return {
-        address: addr,
-        symbol: String(tokenSymbol),
-        name: String(name),
-        decimals: Number(decimals),
-        isNative: false
-      };
+          symbol: `${addr.slice(0, 6)}...`,
+          name: "Custom Token",
+          decimals: 18,
+          isNative: false
+        };
+      }
     }
 
     const res = await fetch(
@@ -145,18 +157,28 @@ export default function TerminalShell({
 
     if (pair?.baseToken?.address && isAddress(pair.baseToken.address)) {
       const addr = pair.baseToken.address as Address;
-      const decimals = await client.readContract({
-        address: addr,
-        abi: erc20Abi,
-        functionName: "decimals"
-      });
-      return {
-        address: addr,
-        symbol: pair.baseToken.symbol,
-        name: pair.baseToken.name,
-        decimals: Number(decimals),
-        isNative: false
-      };
+      try {
+        const decimals = await client.readContract({
+          address: addr,
+          abi: erc20Abi,
+          functionName: "decimals"
+        });
+        return {
+          address: addr,
+          symbol: pair.baseToken.symbol,
+          name: pair.baseToken.name,
+          decimals: Number(decimals),
+          isNative: false
+        };
+      } catch {
+        return {
+          address: addr,
+          symbol: pair.baseToken.symbol,
+          name: pair.baseToken.name,
+          decimals: 18,
+          isNative: false
+        };
+      }
     }
     throw new Error(
       `Unable to resolve token "${queryToken}" on ${chain.name}.`
@@ -519,21 +541,31 @@ export default function TerminalShell({
         setHistory((prev) => [...prev, trimmed]);
         setHistoryIdx(-1);
         return;
-
+      case "networks":
+      case "nets":
+        setLogs((prev) => [
+          ...prev,
+          userLog,
+          { id: (Date.now() + 1).toString(), type: "networks" }
+        ]);
+        setHistory((prev) => [...prev, trimmed]);
+        setHistoryIdx(-1);
+        return;
       case "network":
       case "net":
         let netText = "";
-        if (!args[1]) {
+        const queryArg = args.slice(1).join(" "); // Captures multi-word names like "op mainnet"
+        if (!queryArg) {
           const currentChainObj = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
           );
           netText = `Active Network: ${currentChainObj?.name || "None"}`;
-        } else if (args[1] === "0") {
+        } else if (queryArg === "0") {
           setActiveChainId(null);
           setActiveDexId(null);
           netText = "Network cleared.";
         } else {
-          const targetChain = resolveChain(args[1]);
+          const targetChain = resolveChain(queryArg);
           if (!targetChain) netText = "Network not recognized.";
           else {
             handleChainSwitch(targetChain.id);
@@ -608,58 +640,68 @@ export default function TerminalShell({
             type: "text",
             text: "Select network and DEX first."
           };
-        } else if (!args[1] || !args[2]) {
-          newEntry = {
-            id: (Date.now() + 1).toString(),
-            type: "text",
-            text: "Usage: createpool <tokenA> <tokenB> [fee]"
-          };
         } else {
           const targetChain = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
           )!;
-          const activeDex = DEX_REGISTRY[activeChainId].find(
+          const activeDex = DEX_REGISTRY[activeChainId]?.find(
             (d) => d.id === activeDexId
-          )!;
-          try {
-            const [tokenA, tokenB] = await Promise.all([
-              resolveTokenDetails(args[1], targetChain),
-              resolveTokenDetails(args[2], targetChain)
-            ]);
-            const addrA = tokenA.isNative
-              ? WRAPPED_NATIVE[targetChain.id] || tokenA.address
-              : tokenA.address;
-            const addrB = tokenB.isNative
-              ? WRAPPED_NATIVE[targetChain.id] || tokenB.address
-              : tokenB.address;
-            const fee = args[3] ? parseInt(args[3]) : 3000;
-
-            setLogs((prev) => [
-              ...prev,
-              userLog,
-              {
-                id: (Date.now() + 1).toString(),
-                type: "createpool",
-                payload: {
-                  targetChain,
-                  activeDex,
-                  tokenA,
-                  tokenB,
-                  addrA,
-                  addrB,
-                  fee
-                }
-              }
-            ]);
-            setHistory((prev) => [...prev, trimmed]);
-            setHistoryIdx(-1);
-            return;
-          } catch (err: any) {
+          );
+          if (!activeDex) {
             newEntry = {
               id: (Date.now() + 1).toString(),
               type: "text",
-              text: `ERROR: ${err.message}`
+              text: 'Invalid active DEX for this network. Type "dexes" to see available DEXes and "dex <id>" to select one.'
             };
+            break;
+          }
+          if (!args[1] || !args[2]) {
+            newEntry = {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              text: "Usage: createpool <tokenA> <tokenB> [fee]"
+            };
+          } else {
+            try {
+              const [tokenA, tokenB] = await Promise.all([
+                resolveTokenDetails(args[1], targetChain),
+                resolveTokenDetails(args[2], targetChain)
+              ]);
+              const addrA = tokenA.isNative
+                ? WRAPPED_NATIVE[targetChain.id] || tokenA.address
+                : tokenA.address;
+              const addrB = tokenB.isNative
+                ? WRAPPED_NATIVE[targetChain.id] || tokenB.address
+                : tokenB.address;
+              const fee = args[3] ? parseInt(args[3]) : 3000;
+
+              setLogs((prev) => [
+                ...prev,
+                userLog,
+                {
+                  id: (Date.now() + 1).toString(),
+                  type: "createpool",
+                  payload: {
+                    targetChain,
+                    activeDex,
+                    tokenA,
+                    tokenB,
+                    addrA,
+                    addrB,
+                    fee
+                  }
+                }
+              ]);
+              setHistory((prev) => [...prev, trimmed]);
+              setHistoryIdx(-1);
+              return;
+            } catch (err: any) {
+              newEntry = {
+                id: (Date.now() + 1).toString(),
+                type: "text",
+                text: `ERROR: ${err.message}`
+              };
+            }
           }
         }
         break;
@@ -678,19 +720,21 @@ export default function TerminalShell({
             type: "text",
             text: "Select network and DEX first."
           };
-        } else if (!args[1] || !args[2]) {
-          newEntry = {
-            id: (Date.now() + 1).toString(),
-            type: "text",
-            text: "Usage: initialize <tokenA> <tokenB> [fee]"
-          };
         } else {
           const targetChain = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
           )!;
-          const activeDex = DEX_REGISTRY[activeChainId].find(
+          const activeDex = DEX_REGISTRY[activeChainId]?.find(
             (d) => d.id === activeDexId
-          )!;
+          );
+          if (!activeDex) {
+            newEntry = {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              text: 'Invalid active DEX for this network. Type "dexes" to choose a valid DEX.'
+            };
+            break;
+          }
           if (activeDex.type !== "V3") {
             newEntry = {
               id: (Date.now() + 1).toString(),
@@ -699,58 +743,66 @@ export default function TerminalShell({
             };
             break;
           }
-          try {
-            const [tokenA, tokenB] = await Promise.all([
-              resolveTokenDetails(args[1], targetChain),
-              resolveTokenDetails(args[2], targetChain)
-            ]);
-            const addrA = tokenA.isNative
-              ? WRAPPED_NATIVE[targetChain.id] || tokenA.address
-              : tokenA.address;
-            const addrB = tokenB.isNative
-              ? WRAPPED_NATIVE[targetChain.id] || tokenB.address
-              : tokenB.address;
-            const fee = args[3] ? parseInt(args[3]) : 3000;
-
-            const [token0, token1] =
-              addrA.toLowerCase() < addrB.toLowerCase()
-                ? [addrA, addrB]
-                : [addrB, addrA];
-            const client = createPublicClient({
-              chain: targetChain,
-              transport: http()
-            });
-            const poolAddress = (await client.readContract({
-              address: activeDex.factory,
-              abi: uniV3FactoryAbi,
-              functionName: "getPool",
-              args: [token0, token1, fee]
-            })) as Address;
-
-            if (!poolAddress || poolAddress === NATIVE_TOKEN_ADDRESS) {
-              throw new Error(
-                `Pool does not exist. Run 'createpool ${tokenA.symbol} ${tokenB.symbol} ${fee}' first.`
-              );
-            }
-
-            setLogs((prev) => [
-              ...prev,
-              userLog,
-              {
-                id: (Date.now() + 1).toString(),
-                type: "initialize",
-                payload: { targetChain, poolAddress, tokenA, tokenB }
-              }
-            ]);
-            setHistory((prev) => [...prev, trimmed]);
-            setHistoryIdx(-1);
-            return;
-          } catch (err: any) {
+          if (!args[1] || !args[2]) {
             newEntry = {
               id: (Date.now() + 1).toString(),
               type: "text",
-              text: `ERROR: ${err.message}`
+              text: "Usage: initialize <tokenA> <tokenB> [fee]"
             };
+          } else {
+            try {
+              const [tokenA, tokenB] = await Promise.all([
+                resolveTokenDetails(args[1], targetChain),
+                resolveTokenDetails(args[2], targetChain)
+              ]);
+              const addrA = tokenA.isNative
+                ? WRAPPED_NATIVE[targetChain.id] || tokenA.address
+                : tokenA.address;
+              const addrB = tokenB.isNative
+                ? WRAPPED_NATIVE[targetChain.id] || tokenB.address
+                : tokenB.address;
+              const fee = args[3] ? parseInt(args[3]) : 3000;
+
+              const [token0, token1] =
+                addrA.toLowerCase() < addrB.toLowerCase()
+                  ? [addrA, addrB]
+                  : [addrB, addrA];
+              const client = createPublicClient({
+                chain: targetChain,
+                transport: http()
+              });
+              const poolAddress = (await client.readContract({
+                address: activeDex.factory,
+                abi: uniV3FactoryAbi,
+                functionName: "getPool",
+                args: [token0, token1, fee]
+              })) as Address;
+
+              if (!poolAddress || poolAddress === NATIVE_TOKEN_ADDRESS) {
+                throw new Error(
+                  `Pool does not exist. Run 'createpool ${tokenA.symbol} ${tokenB.symbol} ${fee}' first.`
+                );
+              }
+
+              setLogs((prev) => [
+                ...prev,
+                userLog,
+                {
+                  id: (Date.now() + 1).toString(),
+                  type: "initialize",
+                  payload: { targetChain, poolAddress, tokenA, tokenB }
+                }
+              ]);
+              setHistory((prev) => [...prev, trimmed]);
+              setHistoryIdx(-1);
+              return;
+            } catch (err: any) {
+              newEntry = {
+                id: (Date.now() + 1).toString(),
+                type: "text",
+                text: `ERROR: ${err.message}`
+              };
+            }
           }
         }
         break;
@@ -763,49 +815,58 @@ export default function TerminalShell({
             type: "text",
             text: "Select network and DEX first."
           };
-        } else if (!args[1] || !args[2]) {
-          newEntry = {
-            id: (Date.now() + 1).toString(),
-            type: "text",
-            text: "Usage: getpool <tokenA> <tokenB> [fee]"
-          };
         } else {
           const targetChain = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
           )!;
-          const activeDex = DEX_REGISTRY[activeChainId].find(
+          const activeDex = DEX_REGISTRY[activeChainId]?.find(
             (d) => d.id === activeDexId
-          )!;
-          try {
-            const poolWidget = await fetchPoolAddress(
-              args[1],
-              args[2],
-              targetChain,
-              activeDex,
-              args[3]
-            );
-            setLogs((prev) => [
-              ...prev,
-              userLog,
-              {
-                id: (Date.now() + 1).toString(),
-                type: "component",
-                component: poolWidget
-              }
-            ]);
-            setHistory((prev) => [...prev, trimmed]);
-            setHistoryIdx(-1);
-            return;
-          } catch (err: any) {
+          );
+          if (!activeDex) {
             newEntry = {
               id: (Date.now() + 1).toString(),
               type: "text",
-              text: `ERROR: ${err.message}`
+              text: 'Invalid active DEX for this network. Type "dexes" to check available DEXes.'
             };
+            break;
+          }
+          if (!args[1] || !args[2]) {
+            newEntry = {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              text: "Usage: getpool <tokenA> <tokenB> [fee]"
+            };
+          } else {
+            try {
+              const poolWidget = await fetchPoolAddress(
+                args[1],
+                args[2],
+                targetChain,
+                activeDex,
+                args[3]
+              );
+              setLogs((prev) => [
+                ...prev,
+                userLog,
+                {
+                  id: (Date.now() + 1).toString(),
+                  type: "component",
+                  component: poolWidget
+                }
+              ]);
+              setHistory((prev) => [...prev, trimmed]);
+              setHistoryIdx(-1);
+              return;
+            } catch (err: any) {
+              newEntry = {
+                id: (Date.now() + 1).toString(),
+                type: "text",
+                text: `ERROR: ${err.message}`
+              };
+            }
           }
         }
         break;
-
       case "addliq":
       case "provideliq":
         if (!isConnected || !address) {
@@ -1167,6 +1228,9 @@ export default function TerminalShell({
           className="flex-1 overflow-y-auto space-y-2.5 pt-2 pr-2"
         >
           {logs.map((log) => {
+            if (log.type === "networks") {
+              return <NetworksList key={log.id} theme={theme} />;
+            }
             if (log.type === "balance") {
               return (
                 <BalanceWidget key={log.id} {...log.payload} theme={theme} />

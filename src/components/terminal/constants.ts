@@ -1,5 +1,16 @@
+import {
+  mainnet,
+  arbitrum,
+  base,
+  polygon,
+  optimism,
+  sepolia,
+  arbitrumSepolia,
+  baseSepolia,
+  polygonAmoy,
+  optimismSepolia
+} from 'viem/chains'
 import { parseAbi, type Address, type Chain } from 'viem'
-import { mainnet, arbitrum, base, polygon, optimism, sepolia } from 'viem/chains'
 import type { DexProtocol, ThemeConfig, ThemeMode } from './types'
 
 export const THEMES: Record<ThemeMode, ThemeConfig> = {
@@ -65,14 +76,32 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
   }
 }
 
-export const SUPPORTED_CHAINS: Chain[] = [mainnet, arbitrum, base, polygon, optimism, sepolia]
+export const SUPPORTED_CHAINS: Chain[] = [
+  mainnet,
+  sepolia,
+  arbitrum,
+  arbitrumSepolia,
+  base,
+  baseSepolia,
+  polygon,
+  polygonAmoy,
+  optimism,
+  optimismSepolia
+]
+
 export const NATIVE_TOKEN_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 export const WRAPPED_NATIVE: Record<number, Address> = {
   1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-  42161: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
-  8453: '0x4200000000000000000000000000000000000006',
   11155111: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
+  42161: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
+  421614: '0x980B62Da83eFf3D4576C647993b0c1D7faf17c73',
+  8453: '0x4200000000000000000000000000000000000006',
+  84532: '0x4200000000000000000000000000000000000006',
+  137: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270',
+  80002: '0x0000000000000000000000000000000000000000',
+  10: '0x4200000000000000000000000000000000000006',
+  11155420: '0x4200000000000000000000000000000000000006'
 }
 
 export const DEX_REGISTRY: Record<number, DexProtocol[]> = {
@@ -81,21 +110,32 @@ export const DEX_REGISTRY: Record<number, DexProtocol[]> = {
     { id: 'univ2', name: 'Uniswap V2', router: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', factory: '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f', type: 'V2' },
   ],
   11155111: [
-    {
-      id: 'univ3',
-      name: 'Uniswap V3',
-      router: '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E',
-      factory: '0x0227628f3F023bb0B980b67D528571c95c6DaC1c',
-      positionManager: '0x1238536071E1c677A632429e3655c799b22cDA52',
-      type: 'V3'
-    },
-    {
-      id: 'univ2-test',
-      name: 'Uniswap V2 Clone',
-      router: '0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008',
-      factory: '0xF62c03E08ada871A0bEb309762E260a7a6a880E6',
-      type: 'V2'
-    }
+    { id: 'univ3', name: 'Uniswap V3', router: '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E', factory: '0x0227628f3F023bb0B980b67D528571c95c6DaC1c', positionManager: '0x1238536071E1c677A632429e3655c799b22cDA52', type: 'V3' },
+    { id: 'univ2-test', name: 'Uniswap V2 Clone', router: '0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008', factory: '0xF62c03E08ada871A0bEb309762E260a7a6a880E6', type: 'V2' },
+  ],
+  42161: [
+    { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },
+  ],
+  421614: [
+    { id: 'univ3', name: 'Uniswap V3 (Sepolia)', router: '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E', factory: '0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e', positionManager: '0x6b2937Bde17889EDCf8fbD8dE31C3C2a70Bc4d65', type: 'V3' },
+  ],
+  8453: [
+    { id: 'univ3', name: 'Uniswap V3', router: '0x262664982669b3F4E6441a1F6f4E6c7C0113f993', factory: '0x33128a8f17eb86e9a38f321d5dadf5f14c000109', positionManager: '0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1', type: 'V3' },
+  ],
+  84532: [
+    { id: 'univ3', name: 'Uniswap V3 (Sepolia)', router: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4', factory: '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24', positionManager: '0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2', type: 'V3' },
+  ],
+  137: [
+    { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },
+  ],
+  80002: [
+    { id: 'univ3', name: 'Uniswap V3 (Amoy)', router: '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E', factory: '0x0227628f3F023bb0B980b67D528571c95c6DaC1c', type: 'V3' },
+  ],
+  10: [
+    { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },
+  ],
+  11155420: [
+    { id: 'univ3', name: 'Uniswap V3 (Sepolia)', router: '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E', factory: '0x0227628f3F023bb0B980b67D528571c95c6DaC1c', type: 'V3' },
   ]
 }
 
@@ -148,11 +188,47 @@ export const uniV2PairAbi = parseAbi([
 ])
 
 export const COMMON_TOKENS: Record<number, Record<string, { address: Address; decimals: number; symbol: string; name: string }>> = {
-  11155111: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Sepolia Ethereum' } }
+  11155111: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Sepolia Ethereum' } },
+  421614: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Arbitrum Sepolia Ether' } },
+  84532: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Base Sepolia Ether' } },
+  80002: { POL: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'POL', name: 'Polygon Amoy POL' } },
+  11155420: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Optimism Sepolia Ether' } }
 }
 
 export const resolveChain = (query?: string): Chain | undefined => {
   if (!query) return undefined
   const q = query.toLowerCase().trim()
-  return SUPPORTED_CHAINS.find(c => c.id.toString() === q || c.name.toLowerCase() === q || (q === 'mainnet' && c.id === 1))
+
+  if (['op', 'op mainnet', 'optimism'].includes(q)) {
+    return SUPPORTED_CHAINS.find(c => c.id === 10)
+  }
+  if (['op sep', 'op sepolia', 'optimism sepolia'].includes(q)) {
+    return SUPPORTED_CHAINS.find(c => c.id === 11155420)
+  }
+  if (['arb', 'arbitrum', 'arbitrum one'].includes(q)) {
+    return SUPPORTED_CHAINS.find(c => c.id === 42161)
+  }
+  if (['arb sep', 'arb sepolia', 'arbitrum sepolia'].includes(q)) {
+    return SUPPORTED_CHAINS.find(c => c.id === 421614)
+  }
+  if (['matic', 'polygon', 'polygon mainnet'].includes(q)) {
+    return SUPPORTED_CHAINS.find(c => c.id === 137)
+  }
+  if (['amoy', 'polygon amoy', 'polygon sep', 'polygon sepolia'].includes(q)) {
+    return SUPPORTED_CHAINS.find(c => c.id === 80002)
+  }
+  if (['base', 'base mainnet'].includes(q)) {
+    return SUPPORTED_CHAINS.find(c => c.id === 8453)
+  }
+  if (['base sep', 'base sepolia'].includes(q)) {
+    return SUPPORTED_CHAINS.find(c => c.id === 84532)
+  }
+  if (['eth', 'mainnet', 'ethereum'].includes(q)) {
+    return SUPPORTED_CHAINS.find(c => c.id === 1)
+  }
+  if (['sepolia', 'eth sep', 'ethereum sepolia'].includes(q)) {
+    return SUPPORTED_CHAINS.find(c => c.id === 11155111)
+  }
+
+  return SUPPORTED_CHAINS.find(c => c.id.toString() === q || c.name.toLowerCase().includes(q))
 }

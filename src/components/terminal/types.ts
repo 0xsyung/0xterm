@@ -5,7 +5,7 @@ export type ThemeMode = 'matrix' | 'mac' | 'bloomberg' | 'whatsapp'
 
 export type LogEntry = {
   id: string
-  type: 'input' | 'text' | 'help' | 'dexes' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'component'
+  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'component'
   text?: string
   payload?: any
   component?: React.ReactNode
