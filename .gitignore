@@ -20,6 +20,9 @@
 # production
 /build
 
+# logo generator output
+/logo-generator/output/
+
 # misc
 .DS_Store
 *.pem
