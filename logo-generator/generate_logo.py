@@ -2,7 +2,7 @@
 """
 0xterm Logo Generator — Icon-only
 
-Generates the 0xterm hexagon icon (blue hexagon with a centered "0x_")
+Generates the 0xterm hexagon icon (green hexagon with a centered "0x_")
 as PNG, SVG, and ICO favicon. No wordmark or tagline.
 
 Outputs are written to the `output/` directory (relative to this script).
@@ -17,9 +17,9 @@ import svgwrite
 # --- Configuration ---
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 
-# Colors (Hex)
-COLOR_CYAN = "#00FFFF"
-COLOR_BLUE = "#0044CC"
+# Colors (Hex) — matrix green theme
+COLOR_GREEN = "#00FF66"    # bright matrix green (text)
+COLOR_DARK_GREEN = "#005522"  # dark green hexagon fill
 COLOR_WHITE = "#FFFFFF"
 COLOR_BLACK = "#000000"
 
@@ -128,7 +128,7 @@ def generate_raster():
     # Color icon: blue hex + cyan "0x_", transparent background, subtle glow
     img = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    draw_icon_png(d, center, ICON_SIZE, COLOR_BLUE, COLOR_CYAN, glow=(0, 255, 255, 60))
+    draw_icon_png(d, center, ICON_SIZE, COLOR_DARK_GREEN, COLOR_GREEN, glow=(0, 255, 102, 60))
     img.save(os.path.join(OUTPUT_DIR, "icon.png"))
     print(f"Generated: {os.path.join(OUTPUT_DIR, 'icon.png')}")
 
@@ -153,10 +153,10 @@ def generate_svg():
     glow_points = hexagon_vertices(center, ICON_SIZE + 20)
     dwg.add(
         dwg.polygon(
-            points=glow_points, fill=COLOR_CYAN, opacity=0.15
+            points=glow_points, fill=COLOR_GREEN, opacity=0.15
         )
     )
-    dwg.add(dwg.polygon(points=hex_points, fill=COLOR_BLUE))
+    dwg.add(dwg.polygon(points=hex_points, fill=COLOR_DARK_GREEN))
     dwg.add(
         dwg.text(
             "0x_",
@@ -165,7 +165,7 @@ def generate_svg():
             font_size="150",
             font_family="Arial, sans-serif",
             font_weight="bold",
-            fill=COLOR_CYAN,
+            fill=COLOR_GREEN,
         )
     )
     dwg.save()
@@ -200,7 +200,7 @@ def generate_favicon():
     d = ImageDraw.Draw(img)
     center = (icon_size_px // 2, icon_size_px // 2)
     size = icon_size_px * 0.9
-    draw_icon_png(d, center, size, COLOR_BLUE, COLOR_CYAN, max_font_size=90)
+    draw_icon_png(d, center, size, COLOR_DARK_GREEN, COLOR_GREEN, max_font_size=90)
     img.save(
         os.path.join(OUTPUT_DIR, "favicon.ico"),
         format="ICO",
