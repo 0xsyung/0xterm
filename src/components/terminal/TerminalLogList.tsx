@@ -6,7 +6,7 @@ import InitializePoolWidget from "./widgets/InitializePoolWidget";
 import AddLiquidityWidget from "./widgets/AddLiquidityWidget";
 import BalanceWidget from "./widgets/BalanceWidget";
 import { DEX_REGISTRY } from "./constants";
-import type { LogEntry, ThemeConfig } from "./types";
+import type { LogEntry, DexProtocol } from "./types";
 
 export default function TerminalLogList({
   logs,
@@ -14,7 +14,7 @@ export default function TerminalLogList({
   activeChainId
 }: {
   logs: LogEntry[];
-  theme: ThemeConfig;
+  theme: any;
   activeChainId: number | null;
 }) {
   return (
@@ -40,7 +40,7 @@ export default function TerminalLogList({
               key={log.id}
               className={`text-xs space-y-1 my-2 ${theme.text}`}
             >
-              {dexList.map((d) => (
+              {dexList.map((d: DexProtocol) => (
                 <div key={d.id}>
                   • {d.name} ({d.type}) - ID:{" "}
                   <span className={`font-bold ${theme.primary}`}>{d.id}</span>

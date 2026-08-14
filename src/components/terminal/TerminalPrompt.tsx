@@ -1,13 +1,12 @@
 import React from "react";
-import type { ThemeConfig } from "./types";
 import { SUPPORTED_CHAINS, DEX_REGISTRY } from "./constants";
 
 interface TerminalPromptProps {
-  theme: ThemeConfig;
+  theme: any;
   input: string;
   setInput: (val: string) => void;
   handleKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  inputRef: React.RefObject<HTMLInputElement>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   suggestions: string[];
   suggestionIdx: number;
   activeChainId: number | null;
