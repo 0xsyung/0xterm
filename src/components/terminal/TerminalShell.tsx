@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useAccount, useConnect, useDisconnect, usePublicClient } from "wagmi";
+import { formatEther } from "viem";
 
 type LogItem = {
   id: string;
@@ -36,6 +37,7 @@ export default function TerminalShell({
   const { address, isConnected } = useAccount();
   const { connectors, connect } = useConnect();
   const { disconnect } = useDisconnect();
+  const publicClient = usePublicClient();
 
   // Scroll to bottom without triggering browser flexbox layout shifts
   useEffect(() => {
@@ -129,6 +131,11 @@ export default function TerminalShell({
               wallet session
             </div>
             <div>
+              <span className="font-bold">balance</span> (or{" "}
+              <span className="font-bold">bal</span>) - Query current connected
+              wallet balance
+            </div>
+            <div>
               <span className="font-bold">price &lt;symbol&gt;</span> - Query
               DEX pair prices (e.g., price ETH, price PEPE)
             </div>
@@ -161,6 +168,83 @@ export default function TerminalShell({
       case "disconnect":
         disconnect();
         outputContent = "SESSION TERMINATED. WALLET DISCONNECTED.";
+        break;
+
+      case "balance":
+      case "bal":
+        if (!isConnected || !address) {
+          outputContent = (
+            <div className="text-yellow-400/90 my-1">
+              [!] WALLET NOT CONNECTED. PLEASE TYPE{" "}
+              <span
+                className="font-bold underline cursor-pointer"
+                onClick={() => handleCommand("connect")}
+              >
+                connect
+              </span>{" "}
+              TO AUTHENTICATE.
+            </div>
+          );
+        } else {
+          setLogs((prev) => [
+            ...prev,
+            userLog,
+            {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              content: "QUERYING ON-CHAIN BALANCE..."
+            }
+          ]);
+
+          try {
+            if (!publicClient) throw new Error("Client unavailable");
+
+            const rawBalance = await publicClient.getBalance({ address });
+            const formatted = parseFloat(formatEther(rawBalance)).toFixed(4);
+            const chainName = publicClient.chain?.name || "Ethereum";
+            const symbol = publicClient.chain?.nativeCurrency?.symbol || "ETH";
+
+            const balanceWidget = (
+              <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow">
+                <div className="flex justify-between items-center text-xs text-[#00ff66]/70 mb-1">
+                  <span>ACCOUNT BALANCE</span>
+                  <span>{chainName.toUpperCase()}</span>
+                </div>
+                <div className="text-2xl font-bold my-1 text-[#00ff66]">
+                  {formatted}{" "}
+                  <span className="text-sm font-normal text-[#00ff66]/80">
+                    {symbol}
+                  </span>
+                </div>
+                <div className="text-xs text-[#00ff66]/50 truncate mt-2 border-t border-[#00ff66]/10 pt-2">
+                  ADDRESS: {address}
+                </div>
+              </div>
+            );
+
+            setLogs((prev) => [
+              ...prev.slice(0, -1),
+              {
+                id: Date.now().toString(),
+                type: "component",
+                content: balanceWidget
+              }
+            ]);
+            setHistory((prev) => [...prev, trimmed]);
+            setHistoryIdx(-1);
+            return;
+          } catch {
+            setLogs((prev) => [
+              ...prev.slice(0, -1),
+              {
+                id: Date.now().toString(),
+                type: "text",
+                content: "ERROR: FAILED TO FETCH BALANCE FROM RPC."
+              }
+            ]);
+            return;
+          }
+        }
         break;
 
       case "price":
