@@ -53,6 +53,8 @@ const formatViemError = (err: any): string => {
     return "Slippage tolerance exceeded.";
   if (msg.includes("allowance"))
     return "Insufficient ERC20 allowance. Approve tokens first.";
+  if (msg.includes("Failed to fetch"))
+    return "Network Error: Failed to fetch. If using on-chain data, your RPC node may be down. If using API, check your ad-blocker.";
   return `ERROR: ${msg.split("\n")[0]}`;
 };
 
@@ -244,41 +246,46 @@ export default function TerminalShell({
       }
     }
 
-    const res = await fetch(
-      `https://api.dexscreener.com/latest/dex/search?q=${queryToken}`
-    );
-    const data = await res.json();
-    const pair = data.pairs?.find(
-      (p: { chainId: string }) =>
-        p.chainId.toLowerCase() === chain.name.toLowerCase() ||
-        p.chainId === "ethereum"
-    );
+    try {
+      const res = await fetch(
+        `https://api.dexscreener.com/latest/dex/search?q=${queryToken}`
+      );
+      const data = await res.json();
+      const pair = data.pairs?.find(
+        (p: { chainId: string }) =>
+          p.chainId.toLowerCase() === chain.name.toLowerCase() ||
+          p.chainId === "ethereum"
+      );
 
-    if (pair?.baseToken?.address && isAddress(pair.baseToken.address)) {
-      const addr = pair.baseToken.address as Address;
-      try {
-        const decimals = await client.readContract({
-          address: addr,
-          abi: erc20Abi,
-          functionName: "decimals"
-        });
-        return {
-          address: addr,
-          symbol: pair.baseToken.symbol,
-          name: pair.baseToken.name,
-          decimals: Number(decimals),
-          isNative: false
-        };
-      } catch {
-        return {
-          address: addr,
-          symbol: pair.baseToken.symbol,
-          name: pair.baseToken.name,
-          decimals: 18,
-          isNative: false
-        };
+      if (pair?.baseToken?.address && isAddress(pair.baseToken.address)) {
+        const addr = pair.baseToken.address as Address;
+        try {
+          const decimals = await client.readContract({
+            address: addr,
+            abi: erc20Abi,
+            functionName: "decimals"
+          });
+          return {
+            address: addr,
+            symbol: pair.baseToken.symbol,
+            name: pair.baseToken.name,
+            decimals: Number(decimals),
+            isNative: false
+          };
+        } catch {
+          return {
+            address: addr,
+            symbol: pair.baseToken.symbol,
+            name: pair.baseToken.name,
+            decimals: 18,
+            isNative: false
+          };
+        }
       }
+    } catch {
+      // Ignore fetch errors during token resolution and let it throw below
     }
+
     throw new Error(
       `Unable to resolve token "${queryToken}" on ${chain.name}.`
     );
@@ -699,6 +706,24 @@ export default function TerminalShell({
 
       const queryA = filteredArgs[0];
       let queryB = filteredArgs[1];
+      const targetChain = activeChainId
+        ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
+        : null;
+
+      // 🛑 FAILSafe: Dexscreener API does not support testnets
+      if (
+        source === "api" &&
+        targetChain &&
+        (targetChain.testnet ||
+          targetChain.id === 11155111 ||
+          targetChain.name.toLowerCase().includes("sepolia"))
+      ) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] API Blocked: DexScreener does not track testnets like ${targetChain.name}. Omit 'api' to fetch the price directly from the on-chain pool contract.`
+        };
+      }
 
       if (source === "pool") {
         if (!activeChainId || !activeDexId) {
@@ -709,13 +734,9 @@ export default function TerminalShell({
           };
         }
 
-        const targetChain = SUPPORTED_CHAINS.find(
-          (c) => c.id === activeChainId
-        )!;
         const activeDex = DEX_REGISTRY[activeChainId]?.find(
           (d) => d.id === activeDexId
         );
-
         if (!activeDex)
           return {
             id: generateId(),
@@ -724,23 +745,23 @@ export default function TerminalShell({
           };
 
         if (!queryB) {
-          const common = COMMON_TOKENS[targetChain.id];
+          const common = COMMON_TOKENS[targetChain!.id];
           if (common?.USDC) queryB = "USDC";
           else if (common?.USDT) queryB = "USDT";
-          else queryB = targetChain.nativeCurrency.symbol;
+          else queryB = targetChain!.nativeCurrency.symbol;
         }
 
         try {
           const [tokenA, tokenB] = await Promise.all([
-            resolveTokenDetails(queryA, targetChain),
-            resolveTokenDetails(queryB, targetChain)
+            resolveTokenDetails(queryA, targetChain!),
+            resolveTokenDetails(queryB, targetChain!)
           ]);
 
           const addrA = tokenA.isNative
-            ? WRAPPED_NATIVE[targetChain.id] || tokenA.address
+            ? WRAPPED_NATIVE[targetChain!.id] || tokenA.address
             : tokenA.address;
           const addrB = tokenB.isNative
-            ? WRAPPED_NATIVE[targetChain.id] || tokenB.address
+            ? WRAPPED_NATIVE[targetChain!.id] || tokenB.address
             : tokenB.address;
 
           if (addrA.toLowerCase() === addrB.toLowerCase()) {
@@ -748,7 +769,7 @@ export default function TerminalShell({
           }
 
           const client = createPublicClient({
-            chain: targetChain,
+            chain: targetChain!,
             transport: http()
           });
           let pairAddress: Address | undefined;
@@ -773,7 +794,7 @@ export default function TerminalShell({
             return {
               id: generateId(),
               type: "text",
-              text: `No ${activeDex.type} pool found for ${tokenA.symbol}/${tokenB.symbol} on ${activeDex.name}. Try 'price ${queryA} ${queryB} api' for DEX API data.`
+              text: `No ${activeDex.type} pool found for ${tokenA.symbol}/${tokenB.symbol} on ${activeDex.name}.`
             };
           }
 
@@ -793,7 +814,7 @@ export default function TerminalShell({
               })
             ]);
 
-            const [r0, r1] = reserves;
+            const [r0, r1] = reserves as [bigint, bigint];
             const isTokenA0 =
               (token0 as string).toLowerCase() === addrA.toLowerCase();
             const reserveA = isTokenA0 ? r0 : r1;
@@ -810,7 +831,6 @@ export default function TerminalShell({
               throw new Error("Pool reserve for token A is zero.");
             priceRatio = formattedB / formattedA;
           } else {
-            // V3
             const [token0, slot0] = await Promise.all([
               client.readContract({
                 address: pairAddress,
@@ -824,17 +844,17 @@ export default function TerminalShell({
               })
             ]);
 
-            const sqrtPriceX96 = slot0[0];
+            const sqrtPriceX96 = (slot0 as [bigint])[0];
             const isTokenA0 =
               (token0 as string).toLowerCase() === addrA.toLowerCase();
 
             const sqrtPriceFloat = Number(sqrtPriceX96) / 2 ** 96;
-            const pRaw = sqrtPriceFloat ** 2;
+            const pRaw = Math.pow(sqrtPriceFloat, 2);
 
             const dec0 = isTokenA0 ? tokenA.decimals : tokenB.decimals;
             const dec1 = isTokenA0 ? tokenB.decimals : tokenA.decimals;
 
-            const pToken0InToken1 = pRaw * 10 ** (dec0 - dec1);
+            const pToken0InToken1 = pRaw * Math.pow(10, dec0 - dec1);
 
             if (isTokenA0) {
               priceRatio = pToken0InToken1;
@@ -853,7 +873,7 @@ export default function TerminalShell({
                 <span className="font-bold">
                   ON-CHAIN POOL PRICE ({activeDex.name})
                 </span>
-                <span className="uppercase">{targetChain.name}</span>
+                <span className="uppercase">{targetChain!.name}</span>
               </div>
               <div className={`grid grid-cols-2 gap-4 ${theme.text}`}>
                 <div>
@@ -898,28 +918,55 @@ export default function TerminalShell({
         }
       } else {
         // API Source (DexScreener)
-        const query = queryA + (queryB ? ` ${queryB}` : "");
-        const res = await fetch(
-          `https://api.dexscreener.com/latest/dex/search?q=${query}`
-        );
+        const encodedQuery = encodeURIComponent(queryA);
+        let res;
+
+        try {
+          res = await fetch(
+            `https://api.dexscreener.com/latest/dex/search?q=${encodedQuery}`
+          );
+        } catch (e) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: "[!] API Fetch Failed: Request timed out or was blocked. Ensure your ad-blocker (uBlock, Brave Shields) isn't blocking 'api.dexscreener.com'."
+          };
+        }
+
+        if (!res.ok) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `DexScreener API returned status error: ${res.status}`
+          };
+        }
+
         const data = await res.json();
 
         if (!data.pairs || data.pairs.length === 0) {
           return {
             id: generateId(),
             type: "text",
-            text: `No API price data found for "${query}".`
+            text: `No API price data found for "${queryA}".`
           };
         }
 
-        const targetChain = activeChainId
-          ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
-          : null;
         const chainName = targetChain ? targetChain.name.toLowerCase() : "";
 
-        let pair = data.pairs.find(
-          (p: any) => p.chainId.toLowerCase() === chainName
-        );
+        // Try to find exact chain, and optionally filter by queryB if provided
+        let pair = data.pairs.find((p: any) => {
+          const matchesChain = p.chainId.toLowerCase() === chainName;
+          const matchesQuote = queryB
+            ? p.quoteToken.symbol.toLowerCase() === queryB.toLowerCase()
+            : true;
+          return matchesChain && matchesQuote;
+        });
+
+        // Fallback to closest match
+        if (!pair)
+          pair = data.pairs.find(
+            (p: any) => p.chainId.toLowerCase() === chainName
+          );
         if (!pair) pair = data.pairs[0];
 
         const priceUsd = pair.priceUsd;
@@ -1382,19 +1429,19 @@ export default function TerminalShell({
       text: `$ ${trimmed}`
     };
 
-    const args = trimmed.split(" ");
-    const command = args[0].toLowerCase();
-
+    // IMMEDIATE UPDATE: Echo user command so UI doesn't hang
+    setLogs((prev) => [...prev, userLog].slice(-MAX_LOGS));
     setHistory((prev) => [...prev, trimmed]);
     setHistoryIdx(-1);
 
+    const args = trimmed.split(" ");
+    const command = args[0].toLowerCase();
     const handler = commands[command];
 
     if (!handler) {
       setLogs((prev) =>
         [
           ...prev,
-          userLog,
           {
             id: generateId(),
             type: "text",
@@ -1409,13 +1456,12 @@ export default function TerminalShell({
       const result = await handler(args);
       if (result !== null) {
         const newEntries = Array.isArray(result) ? result : [result];
-        setLogs((prev) => [...prev, userLog, ...newEntries].slice(-MAX_LOGS));
+        setLogs((prev) => [...prev, ...newEntries].slice(-MAX_LOGS));
       }
     } catch (err: any) {
       setLogs((prev) =>
         [
           ...prev,
-          userLog,
           {
             id: generateId(),
             type: "text",
