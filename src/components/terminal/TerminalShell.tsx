@@ -276,209 +276,108 @@ export default function TerminalShell({
     }
   };
 
-  const fetchOnChainLiquidity = async (
-    poolAddress: string,
-    targetChain: Chain
-  ) => {
+  const fetchOnChainLiquidity = async (poolAddress: string, targetChain: Chain) => {
     if (!isAddress(poolAddress)) {
-      return (
-        <div className="text-red-400">
-          Error: Provide a valid pool contract address (0x...).
-        </div>
-      );
+      return <div className="text-red-400">Error: Provide a valid pool contract address (0x...).</div>
     }
 
-    const client = createPublicClient({
-      chain: targetChain,
-      transport: http()
-    });
+    const client = createPublicClient({ chain: targetChain, transport: http() })
 
     try {
       const [token0, token1, fee, liquidity, slot0] = await Promise.all([
-        client.readContract({
-          address: poolAddress as Address,
-          abi: ["function token0() view returns (address)"],
-          functionName: "token0"
-        }),
-        client.readContract({
-          address: poolAddress as Address,
-          abi: ["function token1() view returns (address)"],
-          functionName: "token1"
-        }),
-        client.readContract({
-          address: poolAddress as Address,
-          abi: ["function fee() view returns (uint24)"],
-          functionName: "fee"
-        }),
-        client.readContract({
-          address: poolAddress as Address,
-          abi: ["function liquidity() view returns (uint128)"],
-          functionName: "liquidity"
-        }),
-        client.readContract({
-          address: poolAddress as Address,
-          abi: uniV3PoolAbi,
-          functionName: "slot0"
-        })
-      ]);
+        client.readContract({ address: poolAddress as Address, abi: parseAbi(['function token0() view returns (address)']), functionName: 'token0' }) as Promise<Address>,
+        client.readContract({ address: poolAddress as Address, abi: parseAbi(['function token1() view returns (address)']), functionName: 'token1' }) as Promise<Address>,
+        client.readContract({ address: poolAddress as Address, abi: parseAbi(['function fee() view returns (uint24)']), functionName: 'fee' }) as Promise<number>,
+        client.readContract({ address: poolAddress as Address, abi: parseAbi(['function liquidity() view returns (uint128)']), functionName: 'liquidity' }) as Promise<bigint>,
+        client.readContract({ address: poolAddress as Address, abi: uniV3PoolAbi, functionName: 'slot0' }) as Promise<[bigint, number, number, number, number, number, boolean]>,
+      ])
 
       const [dec0, sym0] = await Promise.all([
-        client.readContract({
-          address: token0,
-          abi: erc20Abi,
-          functionName: "decimals"
-        }),
-        client.readContract({
-          address: token0,
-          abi: erc20Abi,
-          functionName: "symbol"
-        })
-      ]);
+        client.readContract({ address: token0, abi: erc20Abi, functionName: 'decimals' }) as Promise<number>,
+        client.readContract({ address: token0, abi: erc20Abi, functionName: 'symbol' }) as Promise<string>,
+      ])
 
       const [dec1, sym1] = await Promise.all([
-        client.readContract({
-          address: token1,
-          abi: erc20Abi,
-          functionName: "decimals"
-        }),
-        client.readContract({
-          address: token1,
-          abi: erc20Abi,
-          functionName: "symbol"
-        })
-      ]);
+        client.readContract({ address: token1, abi: erc20Abi, functionName: 'decimals' }) as Promise<number>,
+        client.readContract({ address: token1, abi: erc20Abi, functionName: 'symbol' }) as Promise<string>,
+      ])
 
       return (
-        <div
-          className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
-        >
-          <div
-            className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
-          >
+        <div className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}>
+          <div className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}>
             <span className="font-bold">UNISWAP V3 POOL METRICS</span>
             <span>{targetChain.name.toUpperCase()}</span>
           </div>
           <div className={`grid grid-cols-2 gap-2 ${theme.text}`}>
             <div>
               <div className={`text-[10px] ${theme.text}/50`}>PAIR</div>
-              <div className={`font-bold ${theme.primary}`}>
-                {sym0} / {sym1}
-              </div>
+              <div className={`font-bold ${theme.primary}`}>{sym0} / {sym1}</div>
             </div>
             <div>
               <div className={`text-[10px] ${theme.text}/50`}>FEE TIER</div>
-              <div className={`font-bold ${theme.primary}`}>
-                {Number(fee) / 10000}%
-              </div>
+              <div className={`font-bold ${theme.primary}`}>{Number(fee) / 10000}%</div>
             </div>
             <div>
-              <div className={`text-[10px] ${theme.text}/50`}>
-                ACTIVE LIQUIDITY
-              </div>
-              <div className={`font-bold ${theme.primary}`}>
-                {liquidity.toString()}
-              </div>
+              <div className={`text-[10px] ${theme.text}/50`}>ACTIVE LIQUIDITY</div>
+              <div className={`font-bold ${theme.primary}`}>{liquidity.toString()}</div>
             </div>
             <div>
               <div className={`text-[10px] ${theme.text}/50`}>CURRENT TICK</div>
               <div className={`font-bold ${theme.primary}`}>{slot0[1]}</div>
             </div>
           </div>
-          <div
-            className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border}`}
-          >
+          <div className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border}`}>
             SQRT PRICE X96: {slot0[0].toString()}
           </div>
         </div>
-      );
+      )
     } catch {
       try {
         const [token0, token1, reserves] = await Promise.all([
-          client.readContract({
-            address: poolAddress as Address,
-            abi: uniV2PairAbi,
-            functionName: "token0"
-          }),
-          client.readContract({
-            address: poolAddress as Address,
-            abi: uniV2PairAbi,
-            functionName: "token1"
-          }),
-          client.readContract({
-            address: poolAddress as Address,
-            abi: uniV2PairAbi,
-            functionName: "getReserves"
-          })
-        ]);
+          client.readContract({ address: poolAddress as Address, abi: uniV2PairAbi, functionName: 'token0' }) as Promise<Address>,
+          client.readContract({ address: poolAddress as Address, abi: uniV2PairAbi, functionName: 'token1' }) as Promise<Address>,
+          client.readContract({ address: poolAddress as Address, abi: uniV2PairAbi, functionName: 'getReserves' }) as Promise<[bigint, bigint, number]>,
+        ])
 
         const [dec0, sym0] = await Promise.all([
-          client.readContract({
-            address: token0,
-            abi: erc20Abi,
-            functionName: "decimals"
-          }),
-          client.readContract({
-            address: token0,
-            abi: erc20Abi,
-            functionName: "symbol"
-          })
-        ]);
+          client.readContract({ address: token0, abi: erc20Abi, functionName: 'decimals' }) as Promise<number>,
+          client.readContract({ address: token0, abi: erc20Abi, functionName: 'symbol' }) as Promise<string>,
+        ])
 
         const [dec1, sym1] = await Promise.all([
-          client.readContract({
-            address: token1,
-            abi: erc20Abi,
-            functionName: "decimals"
-          }),
-          client.readContract({
-            address: token1,
-            abi: erc20Abi,
-            functionName: "symbol"
-          })
-        ]);
+          client.readContract({ address: token1, abi: erc20Abi, functionName: 'decimals' }) as Promise<number>,
+          client.readContract({ address: token1, abi: erc20Abi, functionName: 'symbol' }) as Promise<string>,
+        ])
 
         return (
-          <div
-            className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
-          >
-            <div
-              className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
-            >
+          <div className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}>
+            <div className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}>
               <span className="font-bold">UNISWAP V2 POOL RESERVES</span>
               <span>{targetChain.name.toUpperCase()}</span>
             </div>
             <div className={`grid grid-cols-2 gap-4 ${theme.text}`}>
               <div>
-                <div className={`text-[10px] ${theme.text}/50`}>
-                  {sym0} RESERVE
-                </div>
-                <div className={`text-base font-bold ${theme.primary}`}>
-                  {parseFloat(formatUnits(reserves[0], dec0)).toLocaleString()}
-                </div>
+                <div className={`text-[10px] ${theme.text}/50`}>{sym0} RESERVE</div>
+                <div className={`text-base font-bold ${theme.primary}`}>{parseFloat(formatUnits(reserves[0], dec0)).toLocaleString()}</div>
               </div>
               <div>
-                <div className={`text-[10px] ${theme.text}/50`}>
-                  {sym1} RESERVE
-                </div>
-                <div className={`text-base font-bold ${theme.primary}`}>
-                  {parseFloat(formatUnits(reserves[1], dec1)).toLocaleString()}
-                </div>
+                <div className={`text-[10px] ${theme.text}/50`}>{sym1} RESERVE</div>
+                <div className={`text-base font-bold ${theme.primary}`}>{parseFloat(formatUnits(reserves[1], dec1)).toLocaleString()}</div>
               </div>
             </div>
           </div>
-        );
+        )
       } catch {
         return (
           <div className="text-red-400 my-1 p-2 border border-red-900/50 bg-red-950/30 rounded max-w-md text-xs">
             <div className="font-bold">Failed to read pool contract.</div>
-            <div>
-              Ensure {poolAddress} is a valid V2 pair or V3 pool address.
-            </div>
+            <div>Ensure {poolAddress} is a valid V2 pair or V3 pool address.</div>
           </div>
-        );
+        )
       }
     }
-  };
+  }
+
 
   const fetchTokenBalanceData = async (
     userAddress: Address,
