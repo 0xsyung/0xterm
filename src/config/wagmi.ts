@@ -1,21 +1,22 @@
 import { createAppKit } from '@reown/appkit'
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
 import { mainnet, arbitrum, base, polygon, optimism, sepolia, arbitrumSepolia, baseSepolia, polygonAmoy, optimismSepolia } from '@reown/appkit/networks'
+import type { AppKitNetwork } from '@reown/appkit/networks'
 
 const projectId = '5b2bbdbe0deaa155601b8aaa96f96aaf'
 
-// 1. Define supported networks
-const networks = [
-  mainnet,
-  sepolia,
-  arbitrum,
-  arbitrumSepolia,
-  base,
-  baseSepolia,
-  polygon,
-  polygonAmoy,
-  optimism,
-  optimismSepolia
+// 1. Define supported networks with explicit AppKitNetwork tuple typing
+const networks: [AppKitNetwork, ...AppKitNetwork[]] = [
+  mainnet as AppKitNetwork,
+  sepolia as AppKitNetwork,
+  arbitrum as AppKitNetwork,
+  arbitrumSepolia as AppKitNetwork,
+  base as AppKitNetwork,
+  baseSepolia as AppKitNetwork,
+  polygon as AppKitNetwork,
+  polygonAmoy as AppKitNetwork,
+  optimism as AppKitNetwork,
+  optimismSepolia as AppKitNetwork
 ]
 
 // 2. Set up Wagmi Adapter
