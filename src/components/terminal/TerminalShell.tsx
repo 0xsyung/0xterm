@@ -15,15 +15,14 @@ import {
   type Address,
   type Chain
 } from "viem";
+import { useAppKit } from "@reown/appkit/react";
 
-import SwapWidget from "./SwapWidget";
+// --- Extracted Components ---
 import TerminalHeader from "./TerminalHeader";
-import HelpManual from "./widgets/HelpManual";
-import CreatePoolWidget from "./widgets/CreatePoolWidget";
-import InitializePoolWidget from "./widgets/InitializePoolWidget";
-import AddLiquidityWidget from "./widgets/AddLiquidityWidget";
-import BalanceWidget from "./widgets/BalanceWidget";
-import NetworksList from "./widgets/NetworksList";
+import SwapWidget from "./SwapWidget";
+import TerminalLogList from "./TerminalLogList";
+import TerminalPrompt from "./TerminalPrompt";
+
 import {
   THEMES,
   SUPPORTED_CHAINS,
@@ -41,7 +40,6 @@ import {
   resolveChain
 } from "./constants";
 import type { LogEntry, ThemeMode, DexProtocol } from "./types";
-import { useAppKit } from "@reown/appkit/react";
 
 const MAX_LOGS = 100;
 
@@ -1003,7 +1001,7 @@ export default function TerminalShell({
         SUPPORTED_CHAINS.find((c) => c.id === activeChainId) ||
         SUPPORTED_CHAINS[5];
       const balData = await fetchTokenBalanceData(
-        address,
+        address as Address,
         targetChain,
         args[1]
       );
@@ -1270,23 +1268,26 @@ export default function TerminalShell({
     }
   };
 
-  const activeChainObj = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
-  const activeDexObj = activeChainId
-    ? DEX_REGISTRY[activeChainId]?.find((d) => d.id === activeDexId)
-    : null;
-
   return (
     <div
       className={`relative z-10 w-full h-full flex flex-col cursor-text overflow-hidden transition-all duration-300 ${theme.bg} ${theme.text} ${theme.font}`}
     >
-      {/* OVERLAYS... */}
+      {/* EXCLUSIVE SCANLINE OVERLAY */}
+      {currentThemeKey === "matrix" && (
+        <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.35)_50%)] bg-[length:100%_4px] opacity-70 z-20"></div>
+      )}
+      {currentThemeKey === "bloomberg" && (
+        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(#ffb000_1px,transparent_1px)] [background-size:16px_16px] opacity-10 z-20"></div>
+      )}
 
+      {/* TOP HEADER BAR */}
       <TerminalHeader
         theme={theme}
         currentThemeKey={currentThemeKey}
         onThemeChange={handleThemeSwitch}
       />
 
+      {/* TERMINAL CONTENT CONTAINER */}
       <div
         className="flex-1 flex flex-col p-6 pt-20 overflow-hidden relative z-10"
         onClick={() => inputRef.current?.focus()}
@@ -1302,10 +1303,11 @@ export default function TerminalShell({
           />
         </div>
 
+        {/* TWO-LINE PROMPT LAYOUT */}
         <TerminalPrompt
           theme={theme}
           input={input}
-          setInput={(val) => {
+          setInput={(val: string) => {
             setInput(val);
             if (suggestions.length > 0) {
               setSuggestions([]);
