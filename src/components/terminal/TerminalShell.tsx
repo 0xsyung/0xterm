@@ -679,6 +679,317 @@ export default function TerminalShell({
       }
       return { id: generateId(), type: "text", text: dexText };
     },
+    price: async (args) => {
+      if (!args[1])
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: price <tokenA> [tokenB] [pool|api]"
+        };
+
+      let source = "pool";
+      const filteredArgs = [...args.slice(1)];
+      const lastArg = filteredArgs[filteredArgs.length - 1].toLowerCase();
+
+      if (["api", "pool", "dexscreener", "onchain"].includes(lastArg)) {
+        source =
+          lastArg === "api" || lastArg === "dexscreener" ? "api" : "pool";
+        filteredArgs.pop();
+      }
+
+      const queryA = filteredArgs[0];
+      let queryB = filteredArgs[1];
+
+      if (source === "pool") {
+        if (!activeChainId || !activeDexId) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Select network and DEX first to query on-chain pool price, or pass 'api' (e.g. 'price ETH USDC api')."
+          };
+        }
+
+        const targetChain = SUPPORTED_CHAINS.find(
+          (c) => c.id === activeChainId
+        )!;
+        const activeDex = DEX_REGISTRY[activeChainId]?.find(
+          (d) => d.id === activeDexId
+        );
+
+        if (!activeDex)
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Invalid active DEX."
+          };
+
+        if (!queryB) {
+          const common = COMMON_TOKENS[targetChain.id];
+          if (common?.USDC) queryB = "USDC";
+          else if (common?.USDT) queryB = "USDT";
+          else queryB = targetChain.nativeCurrency.symbol;
+        }
+
+        try {
+          const [tokenA, tokenB] = await Promise.all([
+            resolveTokenDetails(queryA, targetChain),
+            resolveTokenDetails(queryB, targetChain)
+          ]);
+
+          const addrA = tokenA.isNative
+            ? WRAPPED_NATIVE[targetChain.id] || tokenA.address
+            : tokenA.address;
+          const addrB = tokenB.isNative
+            ? WRAPPED_NATIVE[targetChain.id] || tokenB.address
+            : tokenB.address;
+
+          if (addrA.toLowerCase() === addrB.toLowerCase()) {
+            throw new Error("Tokens must be different.");
+          }
+
+          const client = createPublicClient({
+            chain: targetChain,
+            transport: http()
+          });
+          let pairAddress: Address | undefined;
+
+          if (activeDex.type === "V2") {
+            pairAddress = await client.readContract({
+              address: activeDex.factory,
+              abi: uniV2FactoryAbi,
+              functionName: "getPair",
+              args: [addrA, addrB]
+            });
+          } else if (activeDex.type === "V3") {
+            pairAddress = await client.readContract({
+              address: activeDex.factory,
+              abi: uniV3FactoryAbi,
+              functionName: "getPool",
+              args: [addrA, addrB, 3000]
+            });
+          }
+
+          if (!pairAddress || pairAddress === NATIVE_TOKEN_ADDRESS) {
+            return {
+              id: generateId(),
+              type: "text",
+              text: `No ${activeDex.type} pool found for ${tokenA.symbol}/${tokenB.symbol} on ${activeDex.name}. Try 'price ${queryA} ${queryB} api' for DEX API data.`
+            };
+          }
+
+          let priceRatio = 0;
+
+          if (activeDex.type === "V2") {
+            const [token0, reserves] = await Promise.all([
+              client.readContract({
+                address: pairAddress,
+                abi: uniV2PairAbi,
+                functionName: "token0"
+              }),
+              client.readContract({
+                address: pairAddress,
+                abi: uniV2PairAbi,
+                functionName: "getReserves"
+              })
+            ]);
+
+            const [r0, r1] = reserves;
+            const isTokenA0 =
+              (token0 as string).toLowerCase() === addrA.toLowerCase();
+            const reserveA = isTokenA0 ? r0 : r1;
+            const reserveB = isTokenA0 ? r1 : r0;
+
+            const formattedA = parseFloat(
+              formatUnits(reserveA, tokenA.decimals)
+            );
+            const formattedB = parseFloat(
+              formatUnits(reserveB, tokenB.decimals)
+            );
+
+            if (formattedA === 0)
+              throw new Error("Pool reserve for token A is zero.");
+            priceRatio = formattedB / formattedA;
+          } else {
+            // V3
+            const [token0, slot0] = await Promise.all([
+              client.readContract({
+                address: pairAddress,
+                abi: parseAbi(["function token0() view returns (address)"]),
+                functionName: "token0"
+              }),
+              client.readContract({
+                address: pairAddress,
+                abi: uniV3PoolAbi,
+                functionName: "slot0"
+              })
+            ]);
+
+            const sqrtPriceX96 = slot0[0];
+            const isTokenA0 =
+              (token0 as string).toLowerCase() === addrA.toLowerCase();
+
+            const sqrtPriceFloat = Number(sqrtPriceX96) / 2 ** 96;
+            const pRaw = sqrtPriceFloat ** 2;
+
+            const dec0 = isTokenA0 ? tokenA.decimals : tokenB.decimals;
+            const dec1 = isTokenA0 ? tokenB.decimals : tokenA.decimals;
+
+            const pToken0InToken1 = pRaw * 10 ** (dec0 - dec1);
+
+            if (isTokenA0) {
+              priceRatio = pToken0InToken1;
+            } else {
+              priceRatio = 1 / pToken0InToken1;
+            }
+          }
+
+          const priceWidget = (
+            <div
+              className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
+            >
+              <div
+                className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+              >
+                <span className="font-bold">
+                  ON-CHAIN POOL PRICE ({activeDex.name})
+                </span>
+                <span className="uppercase">{targetChain.name}</span>
+              </div>
+              <div className={`grid grid-cols-2 gap-4 ${theme.text}`}>
+                <div>
+                  <div className={`text-[10px] ${theme.text}/50`}>PAIR</div>
+                  <div className={`text-base font-bold ${theme.primary}`}>
+                    {tokenA.symbol} / {tokenB.symbol}
+                  </div>
+                </div>
+                <div>
+                  <div className={`text-[10px] ${theme.text}/50`}>
+                    RATE (ON-CHAIN)
+                  </div>
+                  <div className={`text-base font-bold ${theme.primary}`}>
+                    1 {tokenA.symbol} ={" "}
+                    {priceRatio.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 8
+                    })}{" "}
+                    {tokenB.symbol}
+                  </div>
+                </div>
+              </div>
+              <div
+                className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border}`}
+              >
+                POOL ADDRESS: {pairAddress}
+              </div>
+            </div>
+          );
+
+          return {
+            id: generateId(),
+            type: "component",
+            component: priceWidget
+          };
+        } catch (err: any) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `On-chain pool error: ${err.message || err}`
+          };
+        }
+      } else {
+        // API Source (DexScreener)
+        const query = queryA + (queryB ? ` ${queryB}` : "");
+        const res = await fetch(
+          `https://api.dexscreener.com/latest/dex/search?q=${query}`
+        );
+        const data = await res.json();
+
+        if (!data.pairs || data.pairs.length === 0) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `No API price data found for "${query}".`
+          };
+        }
+
+        const targetChain = activeChainId
+          ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
+          : null;
+        const chainName = targetChain ? targetChain.name.toLowerCase() : "";
+
+        let pair = data.pairs.find(
+          (p: any) => p.chainId.toLowerCase() === chainName
+        );
+        if (!pair) pair = data.pairs[0];
+
+        const priceUsd = pair.priceUsd;
+        const priceNative = pair.priceNative;
+        const tokenSymbol = pair.baseToken.symbol;
+        const quoteSymbol = pair.quoteToken.symbol;
+        const dex = pair.dexId;
+        const chain = pair.chainId;
+        const h24 = pair.priceChange?.h24;
+
+        const priceWidget = (
+          <div
+            className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
+          >
+            <div
+              className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+            >
+              <span className="font-bold">
+                DEXSCREENER API PRICE ({dex.toUpperCase()})
+              </span>
+              <span className="uppercase">{chain}</span>
+            </div>
+            <div className={`grid grid-cols-2 gap-4 ${theme.text}`}>
+              <div>
+                <div className={`text-[10px] ${theme.text}/50`}>PAIR</div>
+                <div className={`text-base font-bold ${theme.primary}`}>
+                  {tokenSymbol} / {quoteSymbol}
+                </div>
+              </div>
+              <div>
+                <div className={`text-[10px] ${theme.text}/50`}>
+                  PRICE (USD)
+                </div>
+                <div className={`text-base font-bold ${theme.primary}`}>
+                  $
+                  {priceUsd
+                    ? parseFloat(priceUsd).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 6
+                      })
+                    : "N/A"}
+                </div>
+              </div>
+              <div>
+                <div className={`text-[10px] ${theme.text}/50`}>
+                  PRICE ({quoteSymbol})
+                </div>
+                <div className={`text-base font-bold ${theme.primary}`}>
+                  {priceNative
+                    ? parseFloat(priceNative).toLocaleString(undefined, {
+                        maximumFractionDigits: 6
+                      })
+                    : "N/A"}
+                </div>
+              </div>
+              <div>
+                <div className={`text-[10px] ${theme.text}/50`}>24H CHANGE</div>
+                <div
+                  className={`text-base font-bold ${h24 >= 0 ? "text-green-400" : "text-red-400"}`}
+                >
+                  {h24 !== undefined ? `${h24 > 0 ? "+" : ""}${h24}%` : "N/A"}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+        return { id: generateId(), type: "component", component: priceWidget };
+      }
+    },
     createpool: async (args) => {
       if (!isConnected || !address)
         return {
@@ -1197,7 +1508,8 @@ export default function TerminalShell({
               "initialize",
               "initpool",
               "getpool",
-              "findpool"
+              "findpool",
+              "price"
             ].includes(command) &&
             (currentArgIdx === 1 || currentArgIdx === 2)
           )
@@ -1211,7 +1523,10 @@ export default function TerminalShell({
               (c) => c.id === activeChainId
             );
             if (chainObj) candidates.push(chainObj.nativeCurrency.symbol);
+            if (command === "price") candidates.push("pool", "api");
             candidates = Array.from(new Set(candidates)); // Deduplicate
+          } else if (command === "price" && currentArgIdx === 3) {
+            candidates = ["pool", "api"];
           }
         }
 
