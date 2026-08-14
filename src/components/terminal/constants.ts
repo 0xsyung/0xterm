@@ -39,7 +39,7 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
     glow: 'shadow-2xl shadow-black/80 backdrop-blur-xl',
     font: 'font-mono',
     rounded: 'rounded-xl',
-    promptSymbol: '❯',
+    promptSymbol: '>',
     headerStyle: 'mac',
     hasScanlines: false,
     hasGrid: false
@@ -54,7 +54,7 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
     glow: 'shadow-md shadow-[#ffb000]/20',
     font: 'font-mono tracking-wider uppercase',
     rounded: 'rounded-none',
-    promptSymbol: 'BBG>',
+    promptSymbol: '>',
     headerStyle: 'bloomberg',
     hasScanlines: false,
     hasGrid: true
@@ -69,7 +69,7 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
     glow: 'shadow-lg shadow-black/60',
     font: 'font-sans',
     rounded: 'rounded-2xl',
-    promptSymbol: 'WA >',
+    promptSymbol: '>',
     headerStyle: 'whatsapp',
     hasScanlines: false,
     hasGrid: false

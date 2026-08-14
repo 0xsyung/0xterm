@@ -1117,14 +1117,6 @@ export default function TerminalShell({
           className="flex-1 overflow-y-auto space-y-2.5 pt-2 pr-2"
         >
           {logs.map((log) => {
-            if (log.type === "networks") {
-              return <NetworksList key={log.id} theme={theme} />;
-            }
-            if (log.type === "balance") {
-              return (
-                <BalanceWidget key={log.id} {...log.payload} theme={theme} />
-              );
-            }
             if (log.type === "input") {
               return (
                 <div
@@ -1156,6 +1148,9 @@ export default function TerminalShell({
                 </div>
               );
             }
+            if (log.type === "networks") {
+              return <NetworksList key={log.id} theme={theme} />;
+            }
             if (log.type === "createpool") {
               return (
                 <CreatePoolWidget key={log.id} {...log.payload} theme={theme} />
@@ -1179,6 +1174,11 @@ export default function TerminalShell({
                 />
               );
             }
+            if (log.type === "balance") {
+              return (
+                <BalanceWidget key={log.id} {...log.payload} theme={theme} />
+              );
+            }
             return (
               <div key={log.id} className={`${theme.text}/90`}>
                 {log.text}
@@ -1188,26 +1188,44 @@ export default function TerminalShell({
           })}
         </div>
 
+        {/* TWO-LINE PROMPT LAYOUT */}
         <div
-          className={`flex items-center mt-4 border-t ${theme.border} pt-3 shrink-0`}
+          className={`mt-4 border-t ${theme.border} pt-3 shrink-0 flex flex-col space-y-1.5`}
         >
-          <span
-            className={`mr-2 font-bold ${theme.glow} shrink-0 whitespace-nowrap ${theme.primary}`}
-          >
-            {mounted && isConnected
-              ? `[${activeChainObj ? activeChainObj.name.toUpperCase() : "NO NET"} | ${activeDexObj ? activeDexObj.id.toUpperCase() : "NO DEX"} | ${address?.slice(0, 6)}...] ${theme.promptSymbol}`
-              : `${theme.promptSymbol}`}
-          </span>
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className={`w-full bg-transparent outline-none ${theme.text} caret-current ${theme.glow}`}
-            autoFocus
-            spellCheck={false}
-          />
+          {/* Line 1: Status Bar (Network, DEX, Address) */}
+          {mounted && (
+            <div
+              className={`text-[11px] ${theme.text}/70 flex items-center space-x-2 px-1`}
+            >
+              <span className={`font-bold ${theme.primary}`}>
+                [{activeChainObj ? activeChainObj.name.toUpperCase() : "NO NET"}{" "}
+                | {activeDexObj ? activeDexObj.id.toUpperCase() : "NO DEX"} |{" "}
+                {isConnected && address
+                  ? `${address.slice(0, 6)}...${address.slice(-4)}`
+                  : "DISCONNECTED"}
+                ]
+              </span>
+            </div>
+          )}
+
+          {/* Line 2: Prompt Indicator and Input */}
+          <div className="flex items-center">
+            <span
+              className={`mr-2 font-bold ${theme.glow} shrink-0 whitespace-nowrap ${theme.primary}`}
+            >
+              &gt;
+            </span>
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className={`w-full bg-transparent outline-none ${theme.text} caret-current ${theme.glow}`}
+              autoFocus
+              spellCheck={false}
+            />
+          </div>
         </div>
       </div>
     </div>
