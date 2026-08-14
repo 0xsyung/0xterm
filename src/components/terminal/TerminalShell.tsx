@@ -10,6 +10,8 @@ import {
   parseAbi,
   createPublicClient,
   http,
+  encodeFunctionData,
+  toHex,
   type Address,
   type Chain
 } from "viem";
@@ -29,7 +31,9 @@ type LogItem = {
   content: React.ReactNode;
 };
 
-// Supported chains registry
+// ---------------------------------------------------------
+// CONFIGURATION
+// ---------------------------------------------------------
 const SUPPORTED_CHAINS: Chain[] = [
   mainnet,
   arbitrum,
@@ -38,10 +42,24 @@ const SUPPORTED_CHAINS: Chain[] = [
   optimism,
   sepolia
 ];
-
 const NATIVE_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-// Standard ERC-20 ABI
+// MockUSDC
+// 0x80E382C4457b46bC8C924C330e3a697713A9AE46
+
+// MockDAI
+// 0x3e702A0Aa3c379C473A65Fc39113581A1C794DBF
+
+// MockDEX
+// 0x17cBab9967cA141a44346233951c1d574f23B0c0
+
+const MOCK_DEX_ADDRESS: Address = "0x17cBab9967cA141a44346233951c1d574f23B0c0";
+
+const mockDexAbi = parseAbi([
+  "function swap(address tokenIn, address tokenOut, uint256 amountIn) returns (uint256)",
+  "function swapETHForToken(address tokenOut) payable returns (uint256)"
+]);
+
 const erc20Abi = parseAbi([
   "function balanceOf(address owner) view returns (uint256)",
   "function decimals() view returns (uint8)",
@@ -49,7 +67,6 @@ const erc20Abi = parseAbi([
   "function name() view returns (string)"
 ]);
 
-// Preset tokens across supported chains
 const COMMON_TOKENS: Record<
   number,
   Record<
@@ -58,7 +75,6 @@ const COMMON_TOKENS: Record<
   >
 > = {
   1: {
-    // Ethereum Mainnet
     ETH: {
       address: NATIVE_TOKEN_ADDRESS,
       decimals: 18,
@@ -82,16 +98,9 @@ const COMMON_TOKENS: Record<
       decimals: 8,
       symbol: "WBTC",
       name: "Wrapped BTC"
-    },
-    DAI: {
-      address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
-      decimals: 18,
-      symbol: "DAI",
-      name: "Dai Stablecoin"
     }
   },
   42161: {
-    // Arbitrum One
     ETH: {
       address: NATIVE_TOKEN_ADDRESS,
       decimals: 18,
@@ -104,12 +113,6 @@ const COMMON_TOKENS: Record<
       symbol: "USDC",
       name: "USD Coin"
     },
-    USDT: {
-      address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
-      decimals: 6,
-      symbol: "USDT",
-      name: "Tether USD"
-    },
     ARB: {
       address: "0x912CE59144191C1204E64559FE8253a0e49E6548",
       decimals: 18,
@@ -118,7 +121,6 @@ const COMMON_TOKENS: Record<
     }
   },
   8453: {
-    // Base
     ETH: {
       address: NATIVE_TOKEN_ADDRESS,
       decimals: 18,
@@ -138,46 +140,12 @@ const COMMON_TOKENS: Record<
       name: "Aerodrome"
     }
   },
-  137: {
-    // Polygon
-    MATIC: {
-      address: NATIVE_TOKEN_ADDRESS,
-      decimals: 18,
-      symbol: "MATIC",
-      name: "Polygon"
-    },
-    USDC: {
-      address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
-      decimals: 6,
-      symbol: "USDC",
-      name: "USD Coin"
-    },
-    USDT: {
-      address: "0xc2132D05D31c914a87C6611C10748AEb04B58d90",
-      decimals: 6,
-      symbol: "USDT",
-      name: "Tether USD"
-    }
-  },
-  10: {
-    // Optimism
+  11155111: {
     ETH: {
       address: NATIVE_TOKEN_ADDRESS,
       decimals: 18,
       symbol: "ETH",
-      name: "Ethereum"
-    },
-    USDC: {
-      address: "0x0b2C639c533813f4Aa9D7837CAf62653d097F853",
-      decimals: 6,
-      symbol: "USDC",
-      name: "USD Coin"
-    },
-    OP: {
-      address: "0x4200000000000000000000000000000000000042",
-      decimals: 18,
-      symbol: "OP",
-      name: "Optimism"
+      name: "Sepolia Ethereum"
     }
   }
 };
@@ -191,13 +159,13 @@ const resolveChain = (query?: string): Chain | undefined => {
       c.name.toLowerCase() === q ||
       c.nativeCurrency.symbol.toLowerCase() === q ||
       (q === "mainnet" && c.id === 1) ||
-      (q === "ethereum" && c.id === 1) ||
-      (q === "arb" && c.id === 42161) ||
-      (q === "matic" && c.id === 137) ||
-      (q === "op" && c.id === 10)
+      (q === "arb" && c.id === 42161)
   );
 };
 
+// ---------------------------------------------------------
+// COMPONENT
+// ---------------------------------------------------------
 export default function TerminalShell({
   onToggleRain
 }: {
@@ -357,23 +325,10 @@ export default function TerminalShell({
               ({pair.priceChange?.h24}% 24h)
             </span>
           </div>
-          <div className="text-xs text-[#00ff66]/60 flex flex-col gap-1 mt-2 border-t border-[#00ff66]/10 pt-2">
-            <div>
-              24h Vol: ${parseFloat(pair.volume?.h24 || 0).toLocaleString()}
-            </div>
-            <div>
-              Liquidity: $
-              {parseFloat(pair.liquidity?.usd || 0).toLocaleString()}
-            </div>
-          </div>
         </div>
       );
     } catch {
-      return (
-        <div className="text-red-400">
-          Failed to fetch ticker data. Check network connection.
-        </div>
-      );
+      return <div className="text-red-400">Failed to fetch ticker data.</div>;
     }
   };
 
@@ -386,8 +341,6 @@ export default function TerminalShell({
       chain: targetChain,
       transport: http()
     });
-    const chainId = targetChain.id;
-    const chainName = targetChain.name;
 
     if (!queryToken) {
       const rawBalance = await client.getBalance({ address: userAddress });
@@ -395,24 +348,19 @@ export default function TerminalShell({
         undefined,
         { maximumFractionDigits: 4 }
       );
-      const symbol = targetChain.nativeCurrency.symbol;
-
       return (
-        <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow">
-          <div className="flex justify-between items-center text-xs text-[#00ff66]/70 mb-1">
+        <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow text-xs">
+          <div className="flex justify-between items-center text-[#00ff66]/70 mb-1">
             <span>NATIVE BALANCE</span>
             <span>
-              {chainName.toUpperCase()} (ID: {chainId})
+              {targetChain.name.toUpperCase()} (ID: {targetChain.id})
             </span>
           </div>
           <div className="text-2xl font-bold my-1 text-[#00ff66]">
             {formatted}{" "}
             <span className="text-sm font-normal text-[#00ff66]/80">
-              {symbol}
+              {targetChain.nativeCurrency.symbol}
             </span>
-          </div>
-          <div className="text-xs text-[#00ff66]/50 truncate mt-2 border-t border-[#00ff66]/10 pt-2">
-            HOLDER: {userAddress}
           </div>
         </div>
       );
@@ -427,10 +375,10 @@ export default function TerminalShell({
         { maximumFractionDigits: 4 }
       );
       return (
-        <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow">
-          <div className="flex justify-between items-center text-xs text-[#00ff66]/70 mb-1">
+        <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow text-xs">
+          <div className="flex justify-between items-center text-[#00ff66]/70 mb-1">
             <span>NATIVE BALANCE</span>
-            <span>{chainName.toUpperCase()}</span>
+            <span>{targetChain.name.toUpperCase()}</span>
           </div>
           <div className="text-2xl font-bold my-1 text-[#00ff66]">
             {formatted}{" "}
@@ -454,11 +402,11 @@ export default function TerminalShell({
     ).toLocaleString(undefined, { maximumFractionDigits: 4 });
 
     return (
-      <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow">
-        <div className="flex justify-between items-center text-xs text-[#00ff66]/70 mb-1">
+      <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow text-xs">
+        <div className="flex justify-between items-center text-[#00ff66]/70 mb-1">
           <span>{token.name.toUpperCase()}</span>
           <span>
-            {chainName.toUpperCase()} (ID: {chainId})
+            {targetChain.name.toUpperCase()} (ID: {targetChain.id})
           </span>
         </div>
         <div className="text-2xl font-bold my-1 text-[#00ff66]">
@@ -467,9 +415,8 @@ export default function TerminalShell({
             {token.symbol}
           </span>
         </div>
-        <div className="text-xs text-[#00ff66]/50 truncate mt-2 border-t border-[#00ff66]/10 pt-2 flex flex-col gap-0.5">
+        <div className="text-[#00ff66]/50 truncate mt-2 border-t border-[#00ff66]/10 pt-2 flex flex-col gap-0.5">
           <div>CONTRACT: {token.address}</div>
-          <div>HOLDER: {userAddress}</div>
         </div>
       </div>
     );
@@ -507,37 +454,28 @@ export default function TerminalShell({
               <div>Switch active network session (or "net 0" to clear)</div>
 
               <div className="font-bold text-[#00ff66]">connect</div>
-              <div>Authenticate Web3 wallet session</div>
+              <div>Authenticate Web3 wallet</div>
 
               <div className="font-bold text-[#00ff66]">disconnect</div>
-              <div>Disconnect active wallet session</div>
+              <div>Disconnect wallet</div>
 
               <div className="font-bold text-[#00ff66]">
                 balance [token] [net]
               </div>
-              <div>Query native or ERC-20 token balance</div>
+              <div>Query token balances</div>
 
               <div className="font-bold text-[#00ff66]">
-                swap &lt;amt&gt; &lt;from&gt; &lt;to&gt; [slip]
+                swap &lt;amt&gt; &lt;from&gt; &lt;to&gt;
               </div>
-              <div>
-                Route and execute DEX token swaps
-                <div className="text-[#00ff66]/50 text-[11px]">
-                  E.g.:{" "}
-                  <span className="text-[#00ff66]/80">swap 0.1 ETH USDC</span>,{" "}
-                  <span className="text-[#00ff66]/80">
-                    swap 100 USDC ETH 0.5%
-                  </span>
-                </div>
-              </div>
+              <div>Route and execute DEX token swaps</div>
 
               <div className="font-bold text-[#00ff66]">
                 price &lt;symbol&gt;
               </div>
-              <div>Query DEX pair prices &amp; market metrics</div>
+              <div>Query DEX pair prices</div>
 
               <div className="font-bold text-[#00ff66]">rain</div>
-              <div>Toggle background Matrix digital rain animation</div>
+              <div>Toggle background digital rain</div>
 
               <div className="font-bold text-[#00ff66]">clear</div>
               <div>Flush terminal buffer log</div>
@@ -576,7 +514,6 @@ export default function TerminalShell({
               </div>
               <div className="text-[#00ff66]/40 mt-2 text-[11px]">
                 Usage: network &lt;name|id&gt; • Type "net 0" to clear network
-                selection
               </div>
             </div>
           );
@@ -584,7 +521,7 @@ export default function TerminalShell({
           setActiveChainId(null);
           outputContent = (
             <div className="text-yellow-400 my-1 font-bold">
-              [✓] ACTIVE NETWORK DESELECTED. NO NETWORK ACTIVE.
+              [✓] NETWORK CLEARED.
             </div>
           );
         } else {
@@ -592,27 +529,23 @@ export default function TerminalShell({
           if (!targetChain) {
             outputContent = (
               <div className="text-red-400">
-                Error: Network "{args[1]}" not recognized. Type "network" to
-                list supported chains.
+                Error: Network "{args[1]}" not recognized.
               </div>
             );
           } else {
             setActiveChainId(targetChain.id);
-            let walletSwitchNotice = "";
-
+            let notice = "";
             if (isConnected) {
               try {
                 await switchChainAsync({ chainId: targetChain.id });
-                walletSwitchNotice = " WALLET CHAIN SYNCED.";
+                notice = " WALLET SYNCED.";
               } catch {
-                walletSwitchNotice = " (WALLET SWITCH PENDING/REJECTED).";
+                notice = " (WALLET SWITCH PENDING/REJECTED).";
               }
             }
-
             outputContent = (
               <div className="text-emerald-400 my-1 font-bold">
-                [✓] ACTIVE NETWORK SET TO: {targetChain.name.toUpperCase()}{" "}
-                (CHAIN ID: {targetChain.id}).{walletSwitchNotice}
+                [✓] NETWORK SET TO: {targetChain.name.toUpperCase()}.{notice}
               </div>
             );
           }
@@ -628,42 +561,27 @@ export default function TerminalShell({
             connect({ connector: injectedConn });
             outputContent = "INITIATING WALLET HANDSHAKE...";
           } else {
-            outputContent =
-              "NO INJECTED WALLET DETECTED (INSTALL METAMASK / RABBY).";
+            outputContent = "NO WALLET DETECTED.";
           }
         }
         break;
 
       case "disconnect":
         disconnect();
-        outputContent = "SESSION TERMINATED. WALLET DISCONNECTED.";
+        outputContent = "SESSION TERMINATED.";
         break;
 
       case "swap":
         if (!isConnected || !address) {
           outputContent = (
             <div className="text-yellow-400/90 my-1">
-              [!] WALLET NOT CONNECTED. TYPE{" "}
-              <span
-                className="font-bold underline cursor-pointer"
-                onClick={() => handleCommand("connect")}
-              >
-                connect
-              </span>{" "}
-              TO AUTHENTICATE.
+              [!] WALLET NOT CONNECTED.
             </div>
           );
         } else if (!activeChainId) {
           outputContent = (
             <div className="text-yellow-400/90 my-1">
-              [!] NO NETWORK SELECTED. SELECT ONE USING{" "}
-              <span
-                className="font-bold underline cursor-pointer"
-                onClick={() => handleCommand("network")}
-              >
-                network &lt;name|id&gt;
-              </span>{" "}
-              BEFORE SWAPPING.
+              [!] NO NETWORK SELECTED.
             </div>
           );
         } else {
@@ -679,7 +597,7 @@ export default function TerminalShell({
             isNaN(parseFloat(amountInput))
           ) {
             outputContent =
-              "Usage: swap <amount> <fromToken> <toToken> [slippage] (e.g., swap 0.1 ETH USDC 0.5%)";
+              "Usage: swap <amount> <fromToken> <toToken> [slippage]";
           } else {
             const targetChain = SUPPORTED_CHAINS.find(
               (c) => c.id === activeChainId
@@ -690,7 +608,7 @@ export default function TerminalShell({
               {
                 id: (Date.now() + 1).toString(),
                 type: "text",
-                content: `FETCHING DEX SWAP ROUTE ON ${targetChain.name.toUpperCase()}...`
+                content: `FETCHING SWAP ROUTE ON ${targetChain.name.toUpperCase()}...`
               }
             ]);
 
@@ -700,27 +618,69 @@ export default function TerminalShell({
                 resolveTokenDetails(toQuery, targetChain)
               ]);
 
-              const amountInWei = parseUnits(amountInput, fromToken.decimals);
-              const slippageDecimal =
-                parseFloat(slippageStr.replace("%", "")) / 100 || 0.005;
-
-              // Fetch route quote via Li.Fi Aggregator API
-              const url = `https://li.quest/v1/quote?fromChain=${targetChain.id}&toChain=${targetChain.id}&fromToken=${fromToken.address}&toToken=${toToken.address}&fromAmount=${amountInWei.toString()}&fromAddress=${address}&slippage=${slippageDecimal}`;
-              const res = await fetch(url);
-              const quote = await res.json();
-
-              if (!res.ok || !quote.transactionRequest) {
+              // PREVENT SENDING TO DEX ITSELF
+              if (
+                toToken.address.toLowerCase() === MOCK_DEX_ADDRESS.toLowerCase()
+              ) {
                 throw new Error(
-                  quote.message ||
-                    "No swap route found for selected pair/liquidity."
+                  "Target token cannot be the MockDEX address itself. Ensure you deploy two ERC-20 tokens."
                 );
               }
 
-              const toAmountFormatted = parseFloat(
-                formatUnits(BigInt(quote.estimate.toAmount), toToken.decimals)
-              ).toLocaleString(undefined, { maximumFractionDigits: 6 });
-              const estimatedGasUsd =
-                quote.estimate.feeCosts?.[0]?.amountUSD || "0.05";
+              const amountInWei = parseUnits(amountInput, fromToken.decimals);
+
+              let txTo: Address;
+              let txData: `0x${string}`;
+              let txValue: `0x${string}` = "0x0";
+              let approvalAddress: Address | undefined = undefined;
+              let toAmountFormatted = amountInput;
+              let estimatedGasUsd = "0.01";
+
+              if (
+                targetChain.id === sepolia.id ||
+                targetChain.id === 11155111
+              ) {
+                // SEPOLIA TESTNET ROUTING
+                txTo = MOCK_DEX_ADDRESS;
+                if (fromToken.isNative) {
+                  txData = encodeFunctionData({
+                    abi: mockDexAbi,
+                    functionName: "swapETHForToken",
+                    args: [toToken.address]
+                  });
+                  txValue = toHex(amountInWei);
+                } else {
+                  txData = encodeFunctionData({
+                    abi: mockDexAbi,
+                    functionName: "swap",
+                    args: [fromToken.address, toToken.address, amountInWei]
+                  });
+                  approvalAddress = MOCK_DEX_ADDRESS;
+                }
+              } else {
+                // MAINNET LI.FI ROUTING
+                const slippageDecimal =
+                  parseFloat(slippageStr.replace("%", "")) / 100 || 0.005;
+                const url = `https://li.quest/v1/quote?fromChain=${targetChain.id}&toChain=${targetChain.id}&fromToken=${fromToken.address}&toToken=${toToken.address}&fromAmount=${amountInWei.toString()}&fromAddress=${address}&slippage=${slippageDecimal}`;
+                const res = await fetch(url);
+                const quote = await res.json();
+
+                if (!res.ok || !quote.transactionRequest) {
+                  throw new Error(quote.message || "No swap route found.");
+                }
+
+                txTo = quote.transactionRequest.to as Address;
+                txData = quote.transactionRequest.data;
+                txValue = quote.transactionRequest.value || "0x0";
+                approvalAddress = quote.estimate.approvalAddress as
+                  | Address
+                  | undefined;
+                toAmountFormatted = parseFloat(
+                  formatUnits(BigInt(quote.estimate.toAmount), toToken.decimals)
+                ).toLocaleString(undefined, { maximumFractionDigits: 6 });
+                estimatedGasUsd =
+                  quote.estimate.feeCosts?.[0]?.amountUSD || "0.05";
+              }
 
               const swapWidget = (
                 <SwapWidget
@@ -732,13 +692,11 @@ export default function TerminalShell({
                   toAmountFormatted={toAmountFormatted}
                   amountInWei={amountInWei}
                   transactionRequest={{
-                    to: quote.transactionRequest.to as Address,
-                    data: quote.transactionRequest.data,
-                    value: quote.transactionRequest.value || "0x0"
+                    to: txTo,
+                    data: txData,
+                    value: txValue
                   }}
-                  approvalAddress={
-                    quote.estimate.approvalAddress as Address | undefined
-                  }
+                  approvalAddress={approvalAddress}
                   estimatedGasUsd={estimatedGasUsd}
                 />
               );
@@ -760,7 +718,7 @@ export default function TerminalShell({
                 {
                   id: Date.now().toString(),
                   type: "text",
-                  content: `ERROR: ${err.message || "Failed to fetch swap route."}`
+                  content: `ERROR: ${err.message}`
                 }
               ]);
               return;
@@ -774,14 +732,7 @@ export default function TerminalShell({
         if (!isConnected || !address) {
           outputContent = (
             <div className="text-yellow-400/90 my-1">
-              [!] WALLET NOT CONNECTED. TYPE{" "}
-              <span
-                className="font-bold underline cursor-pointer"
-                onClick={() => handleCommand("connect")}
-              >
-                connect
-              </span>{" "}
-              TO AUTHENTICATE.
+              [!] WALLET NOT CONNECTED.
             </div>
           );
         } else {
@@ -806,14 +757,7 @@ export default function TerminalShell({
           if (!targetChain) {
             outputContent = (
               <div className="text-yellow-400/90 my-1">
-                [!] NO NETWORK SELECTED. SELECT ONE USING{" "}
-                <span
-                  className="font-bold underline cursor-pointer"
-                  onClick={() => handleCommand("network")}
-                >
-                  network &lt;name|id&gt;
-                </span>{" "}
-                OR SPECIFY ONE IN QUERY.
+                [!] NO NETWORK SELECTED.
               </div>
             );
             break;
@@ -852,7 +796,7 @@ export default function TerminalShell({
               {
                 id: Date.now().toString(),
                 type: "text",
-                content: `ERROR: ${err.message || "FAILED TO FETCH BALANCE."}`
+                content: `ERROR: ${err.message}`
               }
             ]);
             return;
@@ -862,7 +806,7 @@ export default function TerminalShell({
 
       case "price":
         if (!args[1]) {
-          outputContent = "Usage: price <symbol> (e.g. price ETH)";
+          outputContent = "Usage: price <symbol>";
         } else {
           setLogs((prev) => [
             ...prev,
@@ -870,7 +814,7 @@ export default function TerminalShell({
             {
               id: (Date.now() + 1).toString(),
               type: "text",
-              content: "FETCHING ON-CHAIN METRICS..."
+              content: "FETCHING METRICS..."
             }
           ]);
           const priceWidget = await fetchPrice(args[1]);
@@ -890,11 +834,11 @@ export default function TerminalShell({
 
       case "rain":
         onToggleRain();
-        outputContent = "BACKGROUND DIGITAL RAIN TOGGLED.";
+        outputContent = "BACKGROUND RAIN TOGGLED.";
         break;
 
       default:
-        outputContent = `Command not recognized: "${command}". Type "help" for instructions.`;
+        outputContent = `Command not recognized: "${command}". Type "help".`;
     }
 
     setLogs((prev) => [
@@ -956,8 +900,8 @@ export default function TerminalShell({
         ))}
       </div>
 
-      <div className="mt-4 flex items-center whitespace-nowrap border-t border-[#00ff66]/20 pt-3 text-[#00ff66] shrink-0">
-        <span className="mr-2 shrink-0 font-bold matrix-glow">
+      <div className="flex items-center mt-4 text-[#00ff66] border-t border-[#00ff66]/20 pt-3 shrink-0">
+        <span className="mr-2 font-bold matrix-glow shrink-0 whitespace-nowrap">
           {mounted && isConnected
             ? `[${activeChainObj ? activeChainObj.name.toUpperCase() : "NO NET"} | ${address?.slice(0, 6)}...] >`
             : `${activeChainObj ? `[${activeChainObj.name.toUpperCase()}] ` : ""}>`}
@@ -968,7 +912,7 @@ export default function TerminalShell({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="min-w-0 flex-1 bg-transparent outline-none text-[#00ff66] caret-[#00ff66] matrix-glow"
+          className="w-full bg-transparent outline-none text-[#00ff66] caret-[#00ff66] matrix-glow"
           autoFocus
           spellCheck={false}
         />
