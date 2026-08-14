@@ -2,7 +2,19 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
-import { formatEther, formatUnits, parseUnits, isAddress, createPublicClient, http, encodeFunctionData, toHex, parseAbi, type Address, type Chain } from 'viem'
+import {
+  formatEther,
+  formatUnits,
+  parseUnits,
+  isAddress,
+  createPublicClient,
+  http,
+  encodeFunctionData,
+  toHex,
+  parseAbi,
+  type Address,
+  type Chain
+} from "viem";
 
 import SwapWidget from "./SwapWidget";
 import TerminalHeader from "./TerminalHeader";
@@ -70,11 +82,84 @@ export default function TerminalShell({
     }
   }, [logs]);
 
+  // Helper to save preferences for the active wallet ID
+  const savePreference = (key: string, value: any) => {
+    if (!isConnected || !address) return;
+    const storageKey = `0xterm_user_${address.toLowerCase()}`;
+    try {
+      const existing = localStorage.getItem(storageKey);
+      const prefs = existing ? JSON.parse(existing) : {};
+      prefs[key] = value;
+      localStorage.setItem(storageKey, JSON.stringify(prefs));
+    } catch (e) {
+      console.error("Failed to save preference", e);
+    }
+  };
+
+  // Load user settings upon wallet connection
+  useEffect(() => {
+    if (isConnected && address) {
+      const storageKey = `0xterm_user_${address.toLowerCase()}`;
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const prefs = JSON.parse(saved);
+          const loadedDetails: string[] = [];
+
+          if (prefs.theme && THEMES[prefs.theme]) {
+            onThemeChange(prefs.theme);
+            loadedDetails.push(`Theme: ${THEMES[prefs.theme].name}`);
+          }
+
+          if (prefs.chainId) {
+            const chainObj = SUPPORTED_CHAINS.find(
+              (c) => c.id === prefs.chainId
+            );
+            if (chainObj) {
+              setActiveChainId(chainObj.id);
+              const dexes = DEX_REGISTRY[chainObj.id] || [];
+              if (prefs.dexId && dexes.some((d) => d.id === prefs.dexId)) {
+                setActiveDexId(prefs.dexId);
+              } else if (dexes.length > 0) {
+                setActiveDexId(dexes[0].id);
+              }
+              loadedDetails.push(`Network: ${chainObj.name}`);
+            }
+          }
+
+          if (loadedDetails.length > 0) {
+            setLogs((prev) => [
+              ...prev,
+              {
+                id: Date.now().toString(),
+                type: "text",
+                text: `[✓] Profile loaded for wallet ${address.slice(0, 6)}...${address.slice(-4)} (${loadedDetails.join(" | ")})`
+              }
+            ]);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load user preferences", e);
+      }
+    }
+  }, [isConnected, address]);
+
+  const handleThemeSwitch = (newTheme: ThemeMode) => {
+    onThemeChange(newTheme);
+    savePreference("theme", newTheme);
+  };
+
   const handleChainSwitch = (chainId: number) => {
     setActiveChainId(chainId);
+    savePreference("chainId", chainId);
     const dexes = DEX_REGISTRY[chainId] || [];
-    if (dexes.length > 0) setActiveDexId(dexes[0].id);
-    else setActiveDexId(null);
+    if (dexes.length > 0) {
+      setActiveDexId(dexes[0].id);
+      savePreference("dexId", dexes[0].id);
+    } else {
+      setActiveDexId(null);
+      savePreference("dexId", null);
+    }
   };
 
   const resolveTokenDetails = async (queryToken: string, chain: Chain) => {
@@ -124,7 +209,6 @@ export default function TerminalShell({
           isNative: false
         };
       } catch {
-        // Fallback for custom, non-standard, or un-deployed token addresses
         return {
           address: addr,
           symbol: `${addr.slice(0, 6)}...`,
@@ -266,108 +350,209 @@ export default function TerminalShell({
     }
   };
 
-  const fetchOnChainLiquidity = async (poolAddress: string, targetChain: Chain) => {
+  const fetchOnChainLiquidity = async (
+    poolAddress: string,
+    targetChain: Chain
+  ) => {
     if (!isAddress(poolAddress)) {
-      return <div className="text-red-400">Error: Provide a valid pool contract address (0x...).</div>
+      return (
+        <div className="text-red-400">
+          Error: Provide a valid pool contract address (0x...).
+        </div>
+      );
     }
 
-    const client = createPublicClient({ chain: targetChain, transport: http() })
+    const client = createPublicClient({
+      chain: targetChain,
+      transport: http()
+    });
 
     try {
       const [token0, token1, fee, liquidity, slot0] = await Promise.all([
-        client.readContract({ address: poolAddress as Address, abi: parseAbi(['function token0() view returns (address)']), functionName: 'token0' }) as Promise<Address>,
-        client.readContract({ address: poolAddress as Address, abi: parseAbi(['function token1() view returns (address)']), functionName: 'token1' }) as Promise<Address>,
-        client.readContract({ address: poolAddress as Address, abi: parseAbi(['function fee() view returns (uint24)']), functionName: 'fee' }) as Promise<number>,
-        client.readContract({ address: poolAddress as Address, abi: parseAbi(['function liquidity() view returns (uint128)']), functionName: 'liquidity' }) as Promise<bigint>,
-        client.readContract({ address: poolAddress as Address, abi: uniV3PoolAbi, functionName: 'slot0' }) as Promise<[bigint, number, number, number, number, number, boolean]>,
-      ])
+        client.readContract({
+          address: poolAddress as Address,
+          abi: parseAbi(["function token0() view returns (address)"]),
+          functionName: "token0"
+        }) as Promise<Address>,
+        client.readContract({
+          address: poolAddress as Address,
+          abi: parseAbi(["function token1() view returns (address)"]),
+          functionName: "token1"
+        }) as Promise<Address>,
+        client.readContract({
+          address: poolAddress as Address,
+          abi: parseAbi(["function fee() view returns (uint24)"]),
+          functionName: "fee"
+        }) as Promise<number>,
+        client.readContract({
+          address: poolAddress as Address,
+          abi: parseAbi(["function liquidity() view returns (uint128)"]),
+          functionName: "liquidity"
+        }) as Promise<bigint>,
+        client.readContract({
+          address: poolAddress as Address,
+          abi: uniV3PoolAbi,
+          functionName: "slot0"
+        }) as Promise<[bigint, number, number, number, number, number, boolean]>
+      ]);
 
       const [dec0, sym0] = await Promise.all([
-        client.readContract({ address: token0, abi: erc20Abi, functionName: 'decimals' }) as Promise<number>,
-        client.readContract({ address: token0, abi: erc20Abi, functionName: 'symbol' }) as Promise<string>,
-      ])
+        client.readContract({
+          address: token0,
+          abi: erc20Abi,
+          functionName: "decimals"
+        }) as Promise<number>,
+        client.readContract({
+          address: token0,
+          abi: erc20Abi,
+          functionName: "symbol"
+        }) as Promise<string>
+      ]);
 
       const [dec1, sym1] = await Promise.all([
-        client.readContract({ address: token1, abi: erc20Abi, functionName: 'decimals' }) as Promise<number>,
-        client.readContract({ address: token1, abi: erc20Abi, functionName: 'symbol' }) as Promise<string>,
-      ])
+        client.readContract({
+          address: token1,
+          abi: erc20Abi,
+          functionName: "decimals"
+        }) as Promise<number>,
+        client.readContract({
+          address: token1,
+          abi: erc20Abi,
+          functionName: "symbol"
+        }) as Promise<string>
+      ]);
 
       return (
-        <div className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}>
-          <div className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}>
+        <div
+          className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
+        >
+          <div
+            className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+          >
             <span className="font-bold">UNISWAP V3 POOL METRICS</span>
             <span>{targetChain.name.toUpperCase()}</span>
           </div>
           <div className={`grid grid-cols-2 gap-2 ${theme.text}`}>
             <div>
               <div className={`text-[10px] ${theme.text}/50`}>PAIR</div>
-              <div className={`font-bold ${theme.primary}`}>{sym0} / {sym1}</div>
+              <div className={`font-bold ${theme.primary}`}>
+                {sym0} / {sym1}
+              </div>
             </div>
             <div>
               <div className={`text-[10px] ${theme.text}/50`}>FEE TIER</div>
-              <div className={`font-bold ${theme.primary}`}>{Number(fee) / 10000}%</div>
+              <div className={`font-bold ${theme.primary}`}>
+                {Number(fee) / 10000}%
+              </div>
             </div>
             <div>
-              <div className={`text-[10px] ${theme.text}/50`}>ACTIVE LIQUIDITY</div>
-              <div className={`font-bold ${theme.primary}`}>{liquidity.toString()}</div>
+              <div className={`text-[10px] ${theme.text}/50`}>
+                ACTIVE LIQUIDITY
+              </div>
+              <div className={`font-bold ${theme.primary}`}>
+                {liquidity.toString()}
+              </div>
             </div>
             <div>
               <div className={`text-[10px] ${theme.text}/50`}>CURRENT TICK</div>
               <div className={`font-bold ${theme.primary}`}>{slot0[1]}</div>
             </div>
           </div>
-          <div className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border}`}>
+          <div
+            className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border}`}
+          >
             SQRT PRICE X96: {slot0[0].toString()}
           </div>
         </div>
-      )
+      );
     } catch {
       try {
         const [token0, token1, reserves] = await Promise.all([
-          client.readContract({ address: poolAddress as Address, abi: uniV2PairAbi, functionName: 'token0' }) as Promise<Address>,
-          client.readContract({ address: poolAddress as Address, abi: uniV2PairAbi, functionName: 'token1' }) as Promise<Address>,
-          client.readContract({ address: poolAddress as Address, abi: uniV2PairAbi, functionName: 'getReserves' }) as Promise<[bigint, bigint, number]>,
-        ])
+          client.readContract({
+            address: poolAddress as Address,
+            abi: uniV2PairAbi,
+            functionName: "token0"
+          }) as Promise<Address>,
+          client.readContract({
+            address: poolAddress as Address,
+            abi: uniV2PairAbi,
+            functionName: "token1"
+          }) as Promise<Address>,
+          client.readContract({
+            address: poolAddress as Address,
+            abi: uniV2PairAbi,
+            functionName: "getReserves"
+          }) as Promise<[bigint, bigint, number]>
+        ]);
 
         const [dec0, sym0] = await Promise.all([
-          client.readContract({ address: token0, abi: erc20Abi, functionName: 'decimals' }) as Promise<number>,
-          client.readContract({ address: token0, abi: erc20Abi, functionName: 'symbol' }) as Promise<string>,
-        ])
+          client.readContract({
+            address: token0,
+            abi: erc20Abi,
+            functionName: "decimals"
+          }) as Promise<number>,
+          client.readContract({
+            address: token0,
+            abi: erc20Abi,
+            functionName: "symbol"
+          }) as Promise<string>
+        ]);
 
         const [dec1, sym1] = await Promise.all([
-          client.readContract({ address: token1, abi: erc20Abi, functionName: 'decimals' }) as Promise<number>,
-          client.readContract({ address: token1, abi: erc20Abi, functionName: 'symbol' }) as Promise<string>,
-        ])
+          client.readContract({
+            address: token1,
+            abi: erc20Abi,
+            functionName: "decimals"
+          }) as Promise<number>,
+          client.readContract({
+            address: token1,
+            abi: erc20Abi,
+            functionName: "symbol"
+          }) as Promise<string>
+        ]);
 
         return (
-          <div className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}>
-            <div className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}>
+          <div
+            className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
+          >
+            <div
+              className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
+            >
               <span className="font-bold">UNISWAP V2 POOL RESERVES</span>
               <span>{targetChain.name.toUpperCase()}</span>
             </div>
             <div className={`grid grid-cols-2 gap-4 ${theme.text}`}>
               <div>
-                <div className={`text-[10px] ${theme.text}/50`}>{sym0} RESERVE</div>
-                <div className={`text-base font-bold ${theme.primary}`}>{parseFloat(formatUnits(reserves[0], dec0)).toLocaleString()}</div>
+                <div className={`text-[10px] ${theme.text}/50`}>
+                  {sym0} RESERVE
+                </div>
+                <div className={`text-base font-bold ${theme.primary}`}>
+                  {parseFloat(formatUnits(reserves[0], dec0)).toLocaleString()}
+                </div>
               </div>
               <div>
-                <div className={`text-[10px] ${theme.text}/50`}>{sym1} RESERVE</div>
-                <div className={`text-base font-bold ${theme.primary}`}>{parseFloat(formatUnits(reserves[1], dec1)).toLocaleString()}</div>
+                <div className={`text-[10px] ${theme.text}/50`}>
+                  {sym1} RESERVE
+                </div>
+                <div className={`text-base font-bold ${theme.primary}`}>
+                  {parseFloat(formatUnits(reserves[1], dec1)).toLocaleString()}
+                </div>
               </div>
             </div>
           </div>
-        )
+        );
       } catch {
         return (
           <div className="text-red-400 my-1 p-2 border border-red-900/50 bg-red-950/30 rounded max-w-md text-xs">
             <div className="font-bold">Failed to read pool contract.</div>
-            <div>Ensure {poolAddress} is a valid V2 pair or V3 pool address.</div>
+            <div>
+              Ensure {poolAddress} is a valid V2 pair or V3 pool address.
+            </div>
           </div>
-        )
+        );
       }
     }
-  }
-
+  };
 
   const fetchTokenBalanceData = async (
     userAddress: Address,
@@ -443,7 +628,7 @@ export default function TerminalShell({
       case "network":
       case "net":
         let netText = "";
-        const queryArg = args.slice(1).join(" "); // Captures multi-word names like "op mainnet"
+        const queryArg = args.slice(1).join(" ");
         if (!queryArg) {
           const currentChainObj = SUPPORTED_CHAINS.find(
             (c) => c.id === activeChainId
@@ -452,6 +637,8 @@ export default function TerminalShell({
         } else if (queryArg === "0") {
           setActiveChainId(null);
           setActiveDexId(null);
+          savePreference("chainId", null);
+          savePreference("dexId", null);
           netText = "Network cleared.";
         } else {
           const targetChain = resolveChain(queryArg);
@@ -506,6 +693,7 @@ export default function TerminalShell({
           if (!targetDex) dexText = "DEX not found.";
           else {
             setActiveDexId(targetDex.id);
+            savePreference("dexId", targetDex.id);
             dexText = `[✓] DEX set to ${targetDex.name}`;
           }
         }
@@ -1104,7 +1292,7 @@ export default function TerminalShell({
       <TerminalHeader
         theme={theme}
         currentThemeKey={currentThemeKey}
-        onThemeChange={onThemeChange}
+        onThemeChange={handleThemeSwitch}
       />
 
       {/* TERMINAL CONTENT CONTAINER */}
