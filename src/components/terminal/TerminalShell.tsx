@@ -2,7 +2,13 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useAccount, useConnect, useDisconnect, usePublicClient } from "wagmi";
-import { formatEther } from "viem";
+import {
+  formatEther,
+  formatUnits,
+  isAddress,
+  parseAbi,
+  type Address
+} from "viem";
 
 type LogItem = {
   id: string;
@@ -10,11 +16,111 @@ type LogItem = {
   content: React.ReactNode;
 };
 
+// Standard ERC-20 minimal ABI for reading token state
+const erc20Abi = parseAbi([
+  "function balanceOf(address owner) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
+  "function name() view returns (string)"
+]);
+
+// Preset token registry for high-frequency assets
+const COMMON_TOKENS: Record<
+  number,
+  Record<
+    string,
+    { address: Address; decimals: number; symbol: string; name: string }
+  >
+> = {
+  1: {
+    // Mainnet
+    USDC: {
+      address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      decimals: 6,
+      symbol: "USDC",
+      name: "USD Coin"
+    },
+    USDT: {
+      address: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      decimals: 6,
+      symbol: "USDT",
+      name: "Tether USD"
+    },
+    WBTC: {
+      address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+      decimals: 8,
+      symbol: "WBTC",
+      name: "Wrapped BTC"
+    },
+    DAI: {
+      address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+      decimals: 18,
+      symbol: "DAI",
+      name: "Dai Stablecoin"
+    },
+    UNI: {
+      address: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+      decimals: 18,
+      symbol: "UNI",
+      name: "Uniswap"
+    },
+    LINK: {
+      address: "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+      decimals: 18,
+      symbol: "LINK",
+      name: "ChainLink"
+    }
+  },
+  42161: {
+    // Arbitrum
+    USDC: {
+      address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+      decimals: 6,
+      symbol: "USDC",
+      name: "USD Coin"
+    },
+    USDT: {
+      address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+      decimals: 6,
+      symbol: "USDT",
+      name: "Tether USD"
+    },
+    WBTC: {
+      address: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
+      decimals: 8,
+      symbol: "WBTC",
+      name: "Wrapped BTC"
+    },
+    ARB: {
+      address: "0x912CE59144191C1204E64559FE8253a0e49E6548",
+      decimals: 18,
+      symbol: "ARB",
+      name: "Arbitrum"
+    }
+  },
+  8453: {
+    // Base
+    USDC: {
+      address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      decimals: 6,
+      symbol: "USDC",
+      name: "USD Coin"
+    },
+    AERO: {
+      address: "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+      decimals: 18,
+      symbol: "AERO",
+      name: "Aerodrome"
+    }
+  }
+};
+
 export default function TerminalShell({
   onToggleRain
 }: {
   onToggleRain: () => void;
 }) {
+  const [mounted, setMounted] = useState(false);
   const [logs, setLogs] = useState<LogItem[]>([
     {
       id: "1",
@@ -39,7 +145,10 @@ export default function TerminalShell({
   const { disconnect } = useDisconnect();
   const publicClient = usePublicClient();
 
-  // Scroll to bottom without triggering browser flexbox layout shifts
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (logContainerRef.current) {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
@@ -100,6 +209,163 @@ export default function TerminalShell({
     }
   };
 
+  const fetchTokenBalance = async (
+    userAddress: Address,
+    queryToken?: string
+  ) => {
+    if (!publicClient) throw new Error("Client unavailable");
+
+    const chainId = publicClient.chain.id;
+    const chainName = publicClient.chain.name || "Ethereum";
+
+    // 1. Fetch Native Token (ETH) Balance if no token specified
+    if (!queryToken) {
+      const rawBalance = await publicClient.getBalance({
+        address: userAddress
+      });
+      const formatted = parseFloat(formatEther(rawBalance)).toLocaleString(
+        undefined,
+        { maximumFractionDigits: 4 }
+      );
+      const symbol = publicClient.chain?.nativeCurrency?.symbol || "ETH";
+
+      return (
+        <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow">
+          <div className="flex justify-between items-center text-xs text-[#00ff66]/70 mb-1">
+            <span>NATIVE ACCOUNT BALANCE</span>
+            <span>{chainName.toUpperCase()}</span>
+          </div>
+          <div className="text-2xl font-bold my-1 text-[#00ff66]">
+            {formatted}{" "}
+            <span className="text-sm font-normal text-[#00ff66]/80">
+              {symbol}
+            </span>
+          </div>
+          <div className="text-xs text-[#00ff66]/50 truncate mt-2 border-t border-[#00ff66]/10 pt-2">
+            HOLDER: {userAddress}
+          </div>
+        </div>
+      );
+    }
+
+    let tokenAddress: Address | null = null;
+    let tokenDecimals = 18;
+    let tokenSymbol = queryToken.toUpperCase();
+    let tokenName = "ERC-20 Token";
+
+    // 2. Case A: Direct Contract Address (0x...)
+    if (isAddress(queryToken)) {
+      tokenAddress = queryToken as Address;
+      try {
+        const [rawDec, sym, name] = await Promise.all([
+          publicClient.readContract({
+            address: tokenAddress,
+            abi: erc20Abi,
+            functionName: "decimals"
+          }),
+          publicClient.readContract({
+            address: tokenAddress,
+            abi: erc20Abi,
+            functionName: "symbol"
+          }),
+          publicClient.readContract({
+            address: tokenAddress,
+            abi: erc20Abi,
+            functionName: "name"
+          })
+        ]);
+        tokenDecimals = Number(rawDec);
+        tokenSymbol = String(sym);
+        tokenName = String(name);
+      } catch {
+        return (
+          <div className="text-red-400">
+            Error: Target address {queryToken} is not a valid ERC-20 contract on{" "}
+            {chainName}.
+          </div>
+        );
+      }
+    } else {
+      // 3. Case B: Preset registry lookup
+      const preset = COMMON_TOKENS[chainId]?.[tokenSymbol];
+      if (preset) {
+        tokenAddress = preset.address;
+        tokenDecimals = preset.decimals;
+        tokenSymbol = preset.symbol;
+        tokenName = preset.name;
+      } else {
+        // Fallback: DexScreener search
+        try {
+          const res = await fetch(
+            `https://api.dexscreener.com/latest/dex/search?q=${queryToken}`
+          );
+          const data = await res.json();
+          const pair = data.pairs?.find(
+            (p: { chainId: string }) =>
+              p.chainId.toLowerCase() ===
+                publicClient.chain.name.toLowerCase() ||
+              p.chainId === "ethereum"
+          );
+
+          if (pair?.baseToken?.address && isAddress(pair.baseToken.address)) {
+            tokenAddress = pair.baseToken.address as Address;
+            tokenSymbol = pair.baseToken.symbol;
+            tokenName = pair.baseToken.name;
+            tokenDecimals = Number(
+              await publicClient.readContract({
+                address: tokenAddress,
+                abi: erc20Abi,
+                functionName: "decimals"
+              })
+            );
+          }
+        } catch {
+          // Pass-through
+        }
+      }
+    }
+
+    if (!tokenAddress) {
+      return (
+        <div className="text-red-400">
+          Error: Could not resolve token "{queryToken}" on {chainName}. Try
+          passing the contract address directly.
+        </div>
+      );
+    }
+
+    // 4. Query ERC-20 balanceOf
+    const rawBal = await publicClient.readContract({
+      address: tokenAddress,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [userAddress]
+    });
+
+    const formattedBal = parseFloat(
+      formatUnits(rawBal as bigint, tokenDecimals)
+    ).toLocaleString(undefined, { maximumFractionDigits: 4 });
+
+    return (
+      <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow">
+        <div className="flex justify-between items-center text-xs text-[#00ff66]/70 mb-1">
+          <span>{tokenName.toUpperCase()}</span>
+          <span>{chainName.toUpperCase()}</span>
+        </div>
+        <div className="text-2xl font-bold my-1 text-[#00ff66]">
+          {formattedBal}{" "}
+          <span className="text-sm font-normal text-[#00ff66]/80">
+            {tokenSymbol}
+          </span>
+        </div>
+        <div className="text-xs text-[#00ff66]/50 truncate mt-2 border-t border-[#00ff66]/10 pt-2 flex flex-col gap-0.5">
+          <div>CONTRACT: {tokenAddress}</div>
+          <div>HOLDER: {userAddress}</div>
+        </div>
+      </div>
+    );
+  };
+
   const handleCommand = async (cmd: string) => {
     const trimmed = cmd.trim();
     if (!trimmed) return;
@@ -131,9 +397,9 @@ export default function TerminalShell({
               wallet session
             </div>
             <div>
-              <span className="font-bold">balance</span> (or{" "}
-              <span className="font-bold">bal</span>) - Query current connected
-              wallet balance
+              <span className="font-bold">balance [symbol|address]</span> (or{" "}
+              <span className="font-bold">bal</span>) - Query ETH or ERC-20
+              token balance (e.g. bal, bal USDC, bal 0xa0b8...)
             </div>
             <div>
               <span className="font-bold">price &lt;symbol&gt;</span> - Query
@@ -197,31 +463,8 @@ export default function TerminalShell({
           ]);
 
           try {
-            if (!publicClient) throw new Error("Client unavailable");
-
-            const rawBalance = await publicClient.getBalance({ address });
-            const formatted = parseFloat(formatEther(rawBalance)).toFixed(4);
-            const chainName = publicClient.chain?.name || "Ethereum";
-            const symbol = publicClient.chain?.nativeCurrency?.symbol || "ETH";
-
-            const balanceWidget = (
-              <div className="my-2 p-3 border border-[#00ff66]/40 bg-[#001105]/80 rounded max-w-md matrix-glow">
-                <div className="flex justify-between items-center text-xs text-[#00ff66]/70 mb-1">
-                  <span>ACCOUNT BALANCE</span>
-                  <span>{chainName.toUpperCase()}</span>
-                </div>
-                <div className="text-2xl font-bold my-1 text-[#00ff66]">
-                  {formatted}{" "}
-                  <span className="text-sm font-normal text-[#00ff66]/80">
-                    {symbol}
-                  </span>
-                </div>
-                <div className="text-xs text-[#00ff66]/50 truncate mt-2 border-t border-[#00ff66]/10 pt-2">
-                  ADDRESS: {address}
-                </div>
-              </div>
-            );
-
+            const tokenQuery = args[1];
+            const balanceWidget = await fetchTokenBalance(address, tokenQuery);
             setLogs((prev) => [
               ...prev.slice(0, -1),
               {
@@ -343,7 +586,7 @@ export default function TerminalShell({
 
       <div className="flex items-center mt-4 text-[#00ff66] border-t border-[#00ff66]/20 pt-3 shrink-0">
         <span className="mr-2 font-bold matrix-glow">
-          {isConnected ? `[${address?.slice(0, 6)}...] >` : ">"}
+          {mounted && isConnected ? `[${address?.slice(0, 6)}...] >` : ">"}
         </span>
         <input
           ref={inputRef}
