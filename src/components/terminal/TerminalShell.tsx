@@ -1212,13 +1212,30 @@ export default function TerminalShell({
         break;
 
       case "connect":
-        if (isConnected) connect({ connector: connectors[0] });
-        else
+        if (!isConnected) {
+          // Find the injected or first available connector
+          const connector = connectors[0];
+          if (connector) {
+            connect({ connector });
+            newEntry = {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              text: "Initiating wallet connection handshake..."
+            };
+          } else {
+            newEntry = {
+              id: (Date.now() + 1).toString(),
+              type: "text",
+              text: "ERROR: No wallet connector found."
+            };
+          }
+        } else {
           newEntry = {
             id: (Date.now() + 1).toString(),
             type: "text",
-            text: "Initiating handshake..."
+            text: "Wallet is already connected."
           };
+        }
         break;
 
       case "disconnect":
