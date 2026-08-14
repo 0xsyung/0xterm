@@ -1,19 +1,23 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { Providers } from './providers'
-import MatrixRain from '@/components/terminal/MatrixRain'
-import TerminalShell from '@/components/terminal/TerminalShell'
+import { useState } from "react";
+import { Providers } from "./providers";
+import MatrixRain from "@/components/terminal/MatrixRain";
+import TerminalShell from "@/components/terminal/TerminalShell";
 
 export default function Home() {
-  const [rainActive, setRainActive] = useState(true)
+  const [rainActive, setRainActive] = useState(true);
+
+  const handleToggleRain = () => {
+    setRainActive((prev) => !prev);
+  };
 
   return (
-    
-      
-        
-         setRainActive((prev) => !prev)} />
-      
-    
-  )
+    <Providers>
+      <main className="relative w-screen h-screen crt-overlay bg-[#030503] overflow-hidden">
+        <MatrixRain active={rainActive} />
+        <TerminalShell onToggleRain={handleToggleRain} />
+      </main>
+    </Providers>
+  );
 }

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 
 export default function MatrixRain({ active = true }: { active?: boolean }) {
-  const canvasRef = useRef(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     if (!active) return;
@@ -54,5 +54,10 @@ export default function MatrixRain({ active = true }: { active?: boolean }) {
   }, [active]);
 
   if (!active) return null;
-  return;
+  return (
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 pointer-events-none opacity-20 z-0"
+    />
+  );
 }
