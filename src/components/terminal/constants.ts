@@ -287,7 +287,7 @@ export const IMPLEMENTATION_ADDRESSES: Record<number, { erc20: Address; erc721: 
 
   // Sepolia Testnet
   11155111: {
-    erc20: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // Circle USDC (Testnet)
+    erc20: "0x7f837e0F0D3127AdfEEC592EB08578099A4e0501", // USDC
     erc721: "0x7a3159290ba6672c3cc5741f6bcdf5261266cd15" // Commonly used Sepolia Mock NFT (VFToken)
   },
 
