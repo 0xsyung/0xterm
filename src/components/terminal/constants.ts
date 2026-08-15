@@ -270,3 +270,36 @@ export const resolveChain = (query?: string): Chain | undefined => {
 
   return SUPPORTED_CHAINS.find(c => c.id.toString() === q || c.name.toLowerCase().includes(q))
 }
+
+export const IMPLEMENTATION_ADDRESSES: Record<number, { erc20: Address; erc721: Address }> = {
+  // Ethereum Mainnet
+  1: {
+    erc20: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
+    erc721: "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D" // Bored Ape Yacht Club
+  },
+
+  // Arbitrum One
+  42161: {
+    erc20: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // Native USDC
+    erc721: "0x6325439389E0797Ab35752B4F43a14C004f22A9c" // Smol Brains
+  },
+
+
+  // Sepolia Testnet
+  11155111: {
+    erc20: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // Circle USDC (Testnet)
+    erc721: "0x7a3159290ba6672c3cc5741f6bcdf5261266cd15" // Commonly used Sepolia Mock NFT (VFToken)
+  },
+
+  // Arbitrum Sepolia
+  421614: {
+    erc20: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // USDC (Testnet)
+    erc721: "0x0152305ef563f964029ef12f10944ed4bb41f68d" // Standard Sepolia NFT Proxy
+  },
+
+  // Base Sepolia
+  84532: {
+    erc20: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // USDC (Testnet)
+    erc721: "0x075eb9dc52177aa3492e1d26f0fde3d729625d2f" // Standard Base Sepolia Mock NFT
+  }
+};

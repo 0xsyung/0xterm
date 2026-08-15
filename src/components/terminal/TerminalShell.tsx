@@ -51,9 +51,11 @@ import {
   INTERFACE_ID_ERC20,
   INTERFACE_ID_ERC721,
   COMMON_TOKENS,
-  resolveChain
+  resolveChain,
+  IMPLEMENTATION_ADDRESSES
 } from "./constants";
 import type { LogEntry, ThemeMode, DexProtocol } from "./types";
+import DeployWidget from "./widgets/DeployWidget";
 
 const MAX_LOGS = 100;
 
@@ -970,6 +972,77 @@ export default function TerminalShell({
     clear: () => {
       setLogs([]);
       return null;
+    },
+    deploy: async (args) => {
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected."
+        };
+      if (!activeChainId)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network first using 'network <name>'."
+        };
+
+      const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
+
+      // NEW SAFETY CHECK: Prevent deployment on Mainnet
+      if (!targetChain.testnet) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] Deployment is disabled on mainnet (${targetChain.name}). Please switch to a testnet (e.g., Sepolia or Base Sepolia) to deploy tokens.`
+        };
+      }
+
+      const type = args[1]?.toLowerCase();
+      if (type !== "erc20" && type !== "erc721") {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: deploy <erc20|erc721> <name> <symbol> [decimals]"
+        };
+      }
+
+      const name = args[2];
+      const symbol = args[3];
+      const decimals =
+        type === "erc20" ? (args[4] ? parseInt(args[4]) : 18) : 0;
+
+      if (!name || !symbol) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `Usage: deploy ${type} <name> <symbol>${type === "erc20" ? " [decimals]" : ""}`
+        };
+      }
+
+      const implementations = IMPLEMENTATION_ADDRESSES[activeChainId];
+      if (!implementations || !implementations[type as "erc20" | "erc721"]) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] No base implementation contract defined for ${type.toUpperCase()} on ${targetChain.name}. Update constants.ts first.`
+        };
+      }
+
+      const deployWidget = (
+        <DeployWidget
+          theme={theme}
+          type={type as "erc20" | "erc721"}
+          name={name}
+          symbol={symbol}
+          decimals={decimals}
+          implementation={implementations[type as "erc20" | "erc721"]}
+          targetChain={targetChain}
+          userAddress={address as Address}
+        />
+      );
+
+      return { id: generateId(), type: "component", component: deployWidget };
     },
     help: () => ({ id: generateId(), type: "help" }),
     networks: () => ({ id: generateId(), type: "networks" }),
@@ -2738,30 +2811,30 @@ export default function TerminalShell({
           if (activeChainId && DEX_REGISTRY[activeChainId]) {
             candidates = DEX_REGISTRY[activeChainId].map((d) => d.id);
           }
-        
-        // 2. Theming
+
+          // 2. Theming
         } else if (
           (command === "theme" || command === "style") &&
           currentArgIdx === 1
         ) {
           candidates = Object.keys(THEMES);
-        
-        // 3. Tokens Command
+
+          // 3. Tokens Command
         } else if (command === "tokens" && currentArgIdx === 1) {
           candidates = ["erc20", "erc721"];
-        
-        // 4. Contract Checking
+
+          // 4. Contract Checking
         } else if (command === "is" && currentArgIdx === 1) {
           candidates = ["erc20", "erc721", "nft"];
-        
-        // 5. Register Command (Allows for optional symbol argument)
+
+          // 5. Register Command (Allows for optional symbol argument)
         } else if (
           (command === "register" || command === "reg") &&
           (currentArgIdx === 2 || currentArgIdx === 3)
         ) {
           candidates = ["erc20", "erc721"];
-        
-        // 6. RPC Management
+
+          // 6. RPC Management
         } else if (command === "rpc") {
           if (currentArgIdx === 1) {
             candidates = [
@@ -2785,22 +2858,32 @@ export default function TerminalShell({
               candidates.push(...Object.keys(rpcProviders[activeChainId]));
             }
           }
-        
-        // 7. Liquidity & Pool Fee Tiers (Arg 3)
+
+          // 7. Liquidity & Pool Fee Tiers (Arg 3)
         } else if (
-          ["createpool", "initialize", "initpool", "getpool", "findpool"].includes(command) &&
+          [
+            "createpool",
+            "initialize",
+            "initpool",
+            "getpool",
+            "findpool"
+          ].includes(command) &&
           currentArgIdx === 3
         ) {
           candidates = ["100", "500", "3000", "10000"];
-        
-        // 8. Add Liquidity Fee Tiers (Arg 5)
+
+          // 8. Add Liquidity Fee Tiers (Arg 5)
         } else if (
           ["addliq", "provideliq"].includes(command) &&
           currentArgIdx === 5
         ) {
           candidates = ["100", "500", "3000", "10000"];
-        
-        // 9. Standard Token Resolution
+
+          // 9. Deploy Command
+        } else if (command === "deploy" && currentArgIdx === 1) {
+          candidates = ["erc20", "erc721"];
+
+          // 10. Standard Token Resolution
         } else {
           let isTokenArg = false;
           if (
