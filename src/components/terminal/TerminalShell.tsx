@@ -2728,8 +2728,9 @@ export default function TerminalShell({
 
         let candidates: string[] = [];
 
+        // 1. Networks & Dexes
         if (
-          (command === "network" || command === "net") &&
+          (command === "network" || command === "net" || command === "nets") &&
           currentArgIdx === 1
         ) {
           candidates = SUPPORTED_CHAINS.map((c) => c.name);
@@ -2737,21 +2738,37 @@ export default function TerminalShell({
           if (activeChainId && DEX_REGISTRY[activeChainId]) {
             candidates = DEX_REGISTRY[activeChainId].map((d) => d.id);
           }
+        
+        // 2. Theming
         } else if (
           (command === "theme" || command === "style") &&
           currentArgIdx === 1
         ) {
           candidates = Object.keys(THEMES);
+        
+        // 3. Tokens Command
+        } else if (command === "tokens" && currentArgIdx === 1) {
+          candidates = ["erc20", "erc721"];
+        
+        // 4. Contract Checking
         } else if (command === "is" && currentArgIdx === 1) {
           candidates = ["erc20", "erc721", "nft"];
-        } else if (command === "register" && currentArgIdx === 3) {
+        
+        // 5. Register Command (Allows for optional symbol argument)
+        } else if (
+          (command === "register" || command === "reg") &&
+          (currentArgIdx === 2 || currentArgIdx === 3)
+        ) {
           candidates = ["erc20", "erc721"];
+        
+        // 6. RPC Management
         } else if (command === "rpc") {
           if (currentArgIdx === 1) {
             candidates = [
               "use",
               "add",
               "remove",
+              "rm",
               "alchemy",
               "infura",
               "quicknode"
@@ -2760,13 +2777,30 @@ export default function TerminalShell({
             currentArgIdx === 2 &&
             (rawArgs[1]?.toLowerCase() === "use" ||
               rawArgs[1]?.toLowerCase() === "switch" ||
-              rawArgs[1]?.toLowerCase() === "remove")
+              rawArgs[1]?.toLowerCase() === "remove" ||
+              rawArgs[1]?.toLowerCase() === "rm")
           ) {
             candidates = ["default"];
             if (activeChainId && rpcProviders[activeChainId]) {
               candidates.push(...Object.keys(rpcProviders[activeChainId]));
             }
           }
+        
+        // 7. Liquidity & Pool Fee Tiers (Arg 3)
+        } else if (
+          ["createpool", "initialize", "initpool", "getpool", "findpool"].includes(command) &&
+          currentArgIdx === 3
+        ) {
+          candidates = ["100", "500", "3000", "10000"];
+        
+        // 8. Add Liquidity Fee Tiers (Arg 5)
+        } else if (
+          ["addliq", "provideliq"].includes(command) &&
+          currentArgIdx === 5
+        ) {
+          candidates = ["100", "500", "3000", "10000"];
+        
+        // 9. Standard Token Resolution
         } else {
           let isTokenArg = false;
           if (
