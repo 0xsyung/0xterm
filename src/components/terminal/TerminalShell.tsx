@@ -1581,10 +1581,26 @@ export default function TerminalShell({
           type: "text",
           text: "Select network first using 'network <name>'."
         };
+
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
-      const target = args[1]?.toLowerCase();
-      const kind = target === "erc721" || target === "nft" ? "erc721" : "erc20";
-      let addrArg = kind === "erc721" ? args[2] : args[1];
+
+      let kind = "erc20"; // Default assumption
+      let addrArg = "";
+
+      // Parse arguments: handle both "is erc20 0x..." and "is 0x..."
+      if (args[1]) {
+        const typeArg = args[1].toLowerCase();
+        if (typeArg === "erc721" || typeArg === "nft") {
+          kind = "erc721";
+          addrArg = args[2];
+        } else if (typeArg === "erc20") {
+          kind = "erc20";
+          addrArg = args[2];
+        } else {
+          // User likely omitted the type and went straight to the address
+          addrArg = args[1];
+        }
+      }
 
       // Normalize addresses with an invalid EIP-55 checksum.
       if (addrArg && !isAddress(addrArg)) {
@@ -1599,10 +1615,7 @@ export default function TerminalShell({
         return {
           id: generateId(),
           type: "text",
-          text:
-            kind === "erc721"
-              ? "Usage: is erc721 <contractAddress>"
-              : "Usage: is erc20 <contractAddress>"
+          text: "Usage: is <erc20|erc721> <contractAddress>"
         };
 
       const client = getClient(targetChain);
