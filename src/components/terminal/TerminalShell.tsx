@@ -398,13 +398,23 @@ export default function TerminalShell({
             })
           );
           if (is721) {
-            let name = "", symbol = "";
+            let name = "",
+              symbol = "";
             try {
               const [n, s] = await Promise.all([
-                client.readContract({ address, abi: erc721Abi, functionName: "name" }),
-                client.readContract({ address, abi: erc721Abi, functionName: "symbol" })
+                client.readContract({
+                  address,
+                  abi: erc721Abi,
+                  functionName: "name"
+                }),
+                client.readContract({
+                  address,
+                  abi: erc721Abi,
+                  functionName: "symbol"
+                })
               ]);
-              name = String(n); symbol = String(s);
+              name = String(n);
+              symbol = String(s);
             } catch {}
             return { type: "erc721", name, symbol };
           }
@@ -421,11 +431,36 @@ export default function TerminalShell({
         );
         if (is20 && hint !== "erc721") {
           const [decimals, sym, name] = await Promise.all([
+<<<<<<< HEAD
             client.readContract({ address, abi: erc20FullAbi, functionName: "decimals" }),
             client.readContract({ address, abi: erc20FullAbi, functionName: "symbol" }),
             client.readContract({ address, abi: erc20FullAbi, functionName: "name" })
           ]);
           return { type: "erc20", name: String(name), symbol: String(sym), decimals: Number(decimals) };
+=======
+            client.readContract({
+              address,
+              abi: erc20FullAbi,
+              functionName: "decimals"
+            }),
+            client.readContract({
+              address,
+              abi: erc20FullAbi,
+              functionName: "symbol"
+            }),
+            client.readContract({
+              address,
+              abi: erc20FullAbi,
+              functionName: "name"
+            })
+          ]);
+          return {
+            type: "erc20",
+            name: String(name),
+            symbol: String(sym),
+            decimals: Number(decimals)
+          };
+>>>>>>> ec2c6ba (feat: add tokens command to list registered tokens)
         }
       } catch {}
     }
@@ -434,6 +469,7 @@ export default function TerminalShell({
     const erc721Candidates = hint === "erc20" ? [] : ["ownerOf", "tokenURI"];
     for (const fn of erc721Candidates) {
       try {
+<<<<<<< HEAD
         await client.readContract({ address, abi: erc721Abi, functionName: fn as any });
         let name = "", symbol = "";
         try {
@@ -442,6 +478,30 @@ export default function TerminalShell({
             client.readContract({ address, abi: erc721Abi, functionName: "symbol" })
           ]);
           name = String(n); symbol = String(s);
+=======
+        await client.readContract({
+          address,
+          abi: erc721Abi,
+          functionName: fn as any
+        });
+        let name = "",
+          symbol = "";
+        try {
+          const [n, s] = await Promise.all([
+            client.readContract({
+              address,
+              abi: erc721Abi,
+              functionName: "name"
+            }),
+            client.readContract({
+              address,
+              abi: erc721Abi,
+              functionName: "symbol"
+            })
+          ]);
+          name = String(n);
+          symbol = String(s);
+>>>>>>> ec2c6ba (feat: add tokens command to list registered tokens)
         } catch {}
         return { type: "erc721", name, symbol };
       } catch {}
@@ -451,10 +511,33 @@ export default function TerminalShell({
     if (hint !== "erc721") {
       try {
         const [total, dec, sym, name] = await Promise.all([
+<<<<<<< HEAD
           client.readContract({ address, abi: erc20FullAbi, functionName: "totalSupply" }),
           client.readContract({ address, abi: erc20FullAbi, functionName: "decimals" }),
           client.readContract({ address, abi: erc20FullAbi, functionName: "symbol" }),
           client.readContract({ address, abi: erc20FullAbi, functionName: "name" })
+=======
+          client.readContract({
+            address,
+            abi: erc20FullAbi,
+            functionName: "totalSupply"
+          }),
+          client.readContract({
+            address,
+            abi: erc20FullAbi,
+            functionName: "decimals"
+          }),
+          client.readContract({
+            address,
+            abi: erc20FullAbi,
+            functionName: "symbol"
+          }),
+          client.readContract({
+            address,
+            abi: erc20FullAbi,
+            functionName: "name"
+          })
+>>>>>>> ec2c6ba (feat: add tokens command to list registered tokens)
         ]);
         return {
           type: "erc20",
@@ -916,6 +999,82 @@ export default function TerminalShell({
     },
     help: () => ({ id: generateId(), type: "help" }),
     networks: () => ({ id: generateId(), type: "networks" }),
+    tokens: (args) => {
+      if (!activeChainId) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network first."
+        };
+      }
+
+      const filterType = args[1]?.toLowerCase();
+      if (filterType && filterType !== "erc20" && filterType !== "erc721") {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Invalid filter. Use 'tokens', 'tokens erc20', or 'tokens erc721'."
+        };
+      }
+
+      const common = COMMON_TOKENS[activeChainId] || {};
+      const custom = customTokens[activeChainId] || {};
+
+      const allTokens: Array<{
+        symbol: string;
+        address: string;
+        type: string;
+        isCustom: boolean;
+      }> = [];
+
+      for (const [symbol, info] of Object.entries(common)) {
+        allTokens.push({
+          symbol,
+          address: info.address,
+          type: "erc20",
+          isCustom: false
+        });
+      }
+
+      for (const [symbol, info] of Object.entries(custom)) {
+        allTokens.push({
+          symbol,
+          address: info.address,
+          type: info.tokenType || "erc20",
+          isCustom: true
+        });
+      }
+
+      let filteredTokens = allTokens;
+      if (filterType) {
+        filteredTokens = allTokens.filter((t) => t.type === filterType);
+      }
+
+      if (filteredTokens.length === 0) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `No ${filterType ? filterType.toUpperCase() + " " : ""}tokens found for this network.`
+        };
+      }
+
+      const lines = [
+        `[Available ${filterType ? filterType.toUpperCase() + " " : ""}Tokens]`
+      ];
+      for (const t of filteredTokens) {
+        const typeBadge = t.type === "erc721" ? "[ERC721]" : "[ERC20]";
+        const customBadge = t.isCustom ? "(Custom)" : "";
+        lines.push(
+          `${t.symbol.padEnd(8)} | ${typeBadge} ${t.address} ${customBadge}`
+        );
+      }
+
+      return {
+        id: generateId(),
+        type: "text",
+        text: lines.join("\n")
+      };
+    },
     network: async (args) => {
       let netText = "";
       const queryArg = args.slice(1).join(" ");
@@ -1262,14 +1421,30 @@ export default function TerminalShell({
           : lowerArgs.includes("erc20")
             ? "erc20"
             : undefined;
+<<<<<<< HEAD
       const symbolArg = args[2] && !lowerArgs[0].match(/^(erc20|erc721|nft)$/)
         ? args[2]
         : undefined;
+=======
+      const symbolArg =
+        args[2] && !lowerArgs[0].match(/^(erc20|erc721|nft)$/)
+          ? args[2]
+          : undefined;
+>>>>>>> ec2c6ba (feat: add tokens command to list registered tokens)
 
       const detected = await detectTokenType(tokenAddress, targetChain, hint);
 
       // Confirmation resolver: register anyway or cancel
+<<<<<<< HEAD
       const doRegister = (info: { name: string; symbol: string; decimals?: number; tokenType: "erc20" | "erc721" }) => {
+=======
+      const doRegister = (info: {
+        name: string;
+        symbol: string;
+        decimals?: number;
+        tokenType: "erc20" | "erc721";
+      }) => {
+>>>>>>> ec2c6ba (feat: add tokens command to list registered tokens)
         const symbolToUse = (symbolArg ? symbolArg : info.symbol).toUpperCase();
 
         const existingCommon = COMMON_TOKENS[targetChain.id]?.[symbolToUse];
@@ -1278,6 +1453,7 @@ export default function TerminalShell({
           symbolToUse === targetChain.nativeCurrency.symbol.toUpperCase();
 
         if (existingCommon || existingCustom || isNative) {
+<<<<<<< HEAD
           setLogs((prev) => [
             ...prev,
             {
@@ -1286,6 +1462,18 @@ export default function TerminalShell({
               text: `[!] Error: Symbol "${symbolToUse}" already exists on ${targetChain.name}. Please register with a unique symbol (e.g., 'register ${tokenAddress} UNIQUE_SYMBOL').`
             } as LogEntry
           ].slice(-MAX_LOGS));
+=======
+          setLogs((prev) =>
+            [
+              ...prev,
+              {
+                id: generateId(),
+                type: "text",
+                text: `[!] Error: Symbol "${symbolToUse}" already exists on ${targetChain.name}. Please register with a unique symbol (e.g., 'register ${tokenAddress} UNIQUE_SYMBOL').`
+              } as LogEntry
+            ].slice(-MAX_LOGS)
+          );
+>>>>>>> ec2c6ba (feat: add tokens command to list registered tokens)
           return;
         }
 
@@ -1310,6 +1498,7 @@ export default function TerminalShell({
         setCustomTokens(updatedAllTokens);
         saveCustomTokenToStorage(updatedAllTokens);
 
+<<<<<<< HEAD
         setLogs((prev) => [
           ...prev,
           {
@@ -1318,6 +1507,18 @@ export default function TerminalShell({
             text: `[✓] Successfully registered ${info.tokenType === "erc721" ? "NFT" : "token"} "${symbolToUse}" (${info.name}${info.decimals !== undefined ? `, ${info.decimals} decimals` : ""}) at ${tokenAddress} on ${targetChain.name}.`
           } as LogEntry
         ].slice(-MAX_LOGS));
+=======
+        setLogs((prev) =>
+          [
+            ...prev,
+            {
+              id: generateId(),
+              type: "text",
+              text: `[✓] Successfully registered ${info.tokenType === "erc721" ? "NFT" : "token"} "${symbolToUse}" (${info.name}${info.decimals !== undefined ? `, ${info.decimals} decimals` : ""}) at ${tokenAddress} on ${targetChain.name}.`
+            } as LogEntry
+          ].slice(-MAX_LOGS)
+        );
+>>>>>>> ec2c6ba (feat: add tokens command to list registered tokens)
       };
 
       if (detected) {
@@ -1340,6 +1541,7 @@ export default function TerminalShell({
             tokenType: hint === "erc721" ? "erc721" : "erc20"
           }),
         onNo: () =>
+<<<<<<< HEAD
           setLogs((prev) => [
             ...prev,
             {
@@ -1348,6 +1550,18 @@ export default function TerminalShell({
               text: `[✓] Cancelled. ${tokenAddress} was not registered.`
             } as LogEntry
           ].slice(-MAX_LOGS))
+=======
+          setLogs((prev) =>
+            [
+              ...prev,
+              {
+                id: generateId(),
+                type: "text",
+                text: `[✓] Cancelled. ${tokenAddress} was not registered.`
+              } as LogEntry
+            ].slice(-MAX_LOGS)
+          )
+>>>>>>> ec2c6ba (feat: add tokens command to list registered tokens)
       });
 
       return {
@@ -1484,8 +1698,21 @@ export default function TerminalShell({
       let meta = "";
       try {
         const [sym, name] = await Promise.all([
+<<<<<<< HEAD
           client.readContract({ address, abi: erc20FullAbi, functionName: "symbol" }),
           client.readContract({ address, abi: erc20FullAbi, functionName: "name" })
+=======
+          client.readContract({
+            address,
+            abi: erc20FullAbi,
+            functionName: "symbol"
+          }),
+          client.readContract({
+            address,
+            abi: erc20FullAbi,
+            functionName: "name"
+          })
+>>>>>>> ec2c6ba (feat: add tokens command to list registered tokens)
         ]);
         meta = ` (${String(name)} / ${String(sym)})`;
       } catch {

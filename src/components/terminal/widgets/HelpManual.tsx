@@ -41,6 +41,10 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
           price &lt;tA&gt; [tB] [pool|api]
         </div>
         <div>Query token price from on-chain pool or API</div>
+        <div className={`font-bold ${theme.primary}`}>
+          tokens [erc20|erc721]
+        </div>
+        <div>List all registered tokens for the active network</div>
         <div className={`font-bold ${theme.primary}`}>export</div>
         <div>Export settings & custom tokens to JSON</div>
         <div className={`font-bold ${theme.primary}`}>import &lt;json&gt;</div>
@@ -75,9 +79,7 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
           is &lt;erc20|erc721&gt; &lt;address&gt;
         </div>
         <div>Check if address is a valid ERC20 or ERC721/NFT contract</div>
-        <div className={`font-bold ${theme.primary}`}>
-          info &lt;address&gt;
-        </div>
+        <div className={`font-bold ${theme.primary}`}>info &lt;address&gt;</div>
         <div>Print metadata of an ERC20 or ERC721/NFT token contract</div>
       </div>
       <div
