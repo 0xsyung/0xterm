@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 0xterm
 
-## Getting Started
+`0xterm` is a retro-styled, web-based terminal interface designed for interacting with decentralized finance (DeFi) protocols and EVM-compatible smart contracts. It bridges the gap between classic command-line user experiences and modern Web3 tooling.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## **Features**
+
+* **Interactive CLI Shell:** Type commands or use integrated widgets inside a terminal environment complete with Matrix rain effects and logs.
+* **DeFi Operations:**
+  * Swap tokens.
+  * Add liquidity and manage pools.
+  * Initialize new liquidity pools[cite: 1].
+  * Check account and token balances[cite: 1].
+* **Foundry Smart Contract Backend:** Complete development environment for testing, deploying, and managing core contracts (Tokens, Routers, WETH)[cite: 1].
+* **Wagmi-Powered Web3 Integration:** Robust support for connecting EVM wallets and switching networks seamlessly[cite: 1].
+
+---
+
+## **Project Architecture**
+
+```text
+0xterm-main/
+├── contracts/             # Foundry smart contracts workspace
+│   ├── script/            # Deployment and setup scripts (e.g., DeployTokens.s.sol)
+│   ├── src/               # Smart contract sources (MockToken, SimpleRouter, WETH9)
+│   └── test/              # Foundry test files
+├── logo-generator/        # Python script utility for generating project logos
+└── src/                   # Next.js frontend application
+    ├── app/               # App router pages, global styles, and providers
+    ├── components/        # Terminal shell, prompt, logs, and matrix visual effects
+    │   └── terminal/
+    │       └── widgets/   # Modular DeFi UI widgets (Swap, Liquidity, Balance, etc.)
+    └── config/            # Web3 and Wagmi configurations
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## **Getting Started**
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### **1. Prerequisites**
+* Node.js (v18+ recommended)[cite: 1]
+* npm or yarn[cite: 1]
+* [Foundry](https://book.getfoundry.sh/) (for smart contract compilation and testing)[cite: 1]
 
-## Learn More
+### **2. Frontend Installation & Running**
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Run the development server:
+    ```bash
+    Bash
+    npm run dev
+    ```
+3. Open http://localhost:3000 in your browser.
 
-To learn more about Next.js, take a look at the following resources:
+### **3. Smart Contracts (Foundry)
+Navigate to the contracts/ directory to run tests or deploy contracts:
+```bash
+Bash
+cd contracts
+forge test
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## **License**
+This project is licensed under the MIT License.
