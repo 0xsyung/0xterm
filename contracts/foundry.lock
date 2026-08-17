@@ -5,6 +5,12 @@
       "rev": "bf647bd6046f2f7da30d0c2bf435e5c76a780c1b"
     }
   },
+  "lib/openzeppelin-contracts-upgradeable": {
+    "tag": {
+      "name": "v5.7.0",
+      "rev": "14f52c54d3a1eefbda3d4071efba24d3c1e07e8a"
+    }
+  },
   "lib/solidity-lib": {
     "tag": {
       "name": "v2.1.0",

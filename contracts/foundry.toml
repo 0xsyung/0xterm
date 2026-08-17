@@ -7,6 +7,7 @@ remappings = [
     "@uniswap/v2-core/=lib/v2-core/",
     "@uniswap/v2-periphery/=lib/v2-periphery/",
     "@uniswap/lib/=lib/solidity-lib/",
+    "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
 ]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
