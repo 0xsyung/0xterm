@@ -7,3 +7,6 @@
 [submodule "contracts/lib/solidity-lib"]
 	path = contracts/lib/solidity-lib
 	url = https://github.com/Uniswap/solidity-lib
+[submodule "contracts/lib/openzeppelin-contracts-upgradeable"]
+	path = contracts/lib/openzeppelin-contracts-upgradeable
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable
