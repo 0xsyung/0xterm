@@ -22,8 +22,9 @@
 ```text
 0xterm-main/
 ├── contracts/             # Foundry smart contracts workspace
-│   ├── script/            # Deployment and setup scripts (e.g., DeployTokens.s.sol)
-│   ├── src/               # Smart contract sources (MockToken, SimpleRouter, WETH9)
+│   ├── script/            # Deployment scripts (DeployTokens.s.sol, DeployERC20Base.s.sol)
+│   ├── src/               # Smart contract sources (MockToken, SimpleRouter, WETH9,
+│   │                      #   ERC20Base, ERC721Base, Counter)
 │   └── test/              # Foundry test files
 ├── logo-generator/        # Python script utility for generating project logos
 └── src/                   # Next.js frontend application
@@ -50,15 +51,13 @@
    ```
 2. Run the development server:
     ```bash
-    Bash
     npm run dev
     ```
 3. Open http://localhost:3000 in your browser.
 
-### **3. Smart Contracts (Foundry)
+### **3. Smart Contracts (Foundry)**
 Navigate to the contracts/ directory to run tests or deploy contracts:
 ```bash
-Bash
 cd contracts
 forge test
 ```
