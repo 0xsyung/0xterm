@@ -7,7 +7,7 @@
 "use client";
 
 import { useState } from "react";
-import { useWriteContract } from "wagmi";
+import { useWriteContract, usePublicClient } from "wagmi";
 import { uniV3PoolAbi } from "../constants";
 
 export default function InitializePoolWidget({
@@ -18,8 +18,9 @@ export default function InitializePoolWidget({
   theme
 }: any) {
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient({ chainId: targetChain.id });
   const [status, setStatus] = useState<
-    "ready" | "signing" | "success" | "error"
+    "ready" | "signing" | "waiting_confirmation" | "success" | "error"
   >("ready");
   const [txHash, setTxHash] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -30,12 +31,22 @@ export default function InitializePoolWidget({
     try {
       const initialSqrtPrice = 79228162514264337593543950336n;
       const hash = await writeContractAsync({
+        chainId: targetChain.id,
         address: poolAddress,
         abi: uniV3PoolAbi,
         functionName: "initialize",
         args: [initialSqrtPrice]
       });
       setTxHash(hash);
+      setStatus("waiting_confirmation");
+      if (publicClient) {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        if (receipt.status === "reverted") {
+          setStatus("error");
+          setErrorMsg("Pool initialization reverted on-chain.");
+          return;
+        }
+      }
       setStatus("success");
     } catch (err: any) {
       setStatus("error");
@@ -76,7 +87,7 @@ export default function InitializePoolWidget({
 
       {status === "success" && txHash && (
         <div className="p-2 border border-emerald-500/50 bg-emerald-950/40 text-emerald-400 rounded space-y-1">
-          <div className="font-bold">[✓] POOL INITIALIZED SUCCESSFULLY!</div>
+          <div className="font-bold">[✓] POOL INITIALIZED — CONFIRMED ON-CHAIN!</div>
           <div className="text-[10px] truncate">TX HASH: {txHash}</div>
           {blockExplorer && (
             <a
@@ -103,6 +114,11 @@ export default function InitializePoolWidget({
         {status === "signing" && (
           <div className="text-yellow-400 font-bold animate-pulse">
             SIGN INITIALIZATION IN WALLET...
+          </div>
+        )}
+        {status === "waiting_confirmation" && (
+          <div className="text-yellow-400 font-bold animate-pulse">
+            WAITING FOR ON-CHAIN CONFIRMATION...
           </div>
         )}
       </div>

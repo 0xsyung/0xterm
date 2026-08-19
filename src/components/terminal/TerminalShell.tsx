@@ -1020,14 +1020,11 @@ export default function TerminalShell({
         };
       }
 
-      const implementations = IMPLEMENTATION_ADDRESSES[activeChainId];
-      if (!implementations || !implementations[type as "erc20" | "erc721"]) {
-        return {
-          id: generateId(),
-          type: "text",
-          text: `[!] No base implementation contract defined for ${type.toUpperCase()} on ${targetChain.name}. Update constants.ts first.`
-        };
-      }
+      // Prefer a registry-defined implementation; if missing, the widget will
+      // auto-deploy one from the bundled creation bytecode and cache it per chain.
+      const implementation = IMPLEMENTATION_ADDRESSES[activeChainId]?.[
+        type as "erc20" | "erc721"
+      ];
 
       const deployWidget = (
         <DeployWidget
@@ -1036,7 +1033,7 @@ export default function TerminalShell({
           name={name}
           symbol={symbol}
           decimals={decimals}
-          implementation={implementations[type as "erc20" | "erc721"]}
+          implementation={implementation}
           targetChain={targetChain}
           userAddress={address as Address}
         />
@@ -2465,9 +2462,15 @@ export default function TerminalShell({
         };
 
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
-      const activeDex = DEX_REGISTRY[activeChainId].find(
+      const activeDex = DEX_REGISTRY[activeChainId]?.find(
         (d) => d.id === activeDexId
-      )!;
+      );
+      if (!activeDex)
+        return {
+          id: generateId(),
+          type: "text",
+          text: `No DEX available on ${targetChain.name}. Type "dexes" to check available DEXes.`
+        };
 
       const [tokenA, tokenB] = await Promise.all([
         resolveTokenDetails(args[1], targetChain),
@@ -2509,13 +2512,35 @@ export default function TerminalShell({
         return {
           id: generateId(),
           type: "text",
-          text: "Usage: swap <amount> <fromToken> <toToken>"
+          text: "Usage: swap <amount> <fromToken> <toToken> [slippage%]"
         };
 
+      // Optional 4th argument: slippage tolerance as a percentage (e.g. "1" = 1%).
+      // Defaults to 0.5% when omitted.
+      let slippagePct = 0.5;
+      const slippageArg = args[4];
+      if (slippageArg !== undefined) {
+        const parsed = Number(slippageArg);
+        if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 100) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] Invalid slippage "${slippageArg}". Use a percentage between 0 and 100 (e.g. 'swap 100 USDC DAI 1').`
+          };
+        }
+        slippagePct = parsed;
+      }
+
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
-      const activeDex = DEX_REGISTRY[activeChainId].find(
+      const activeDex = DEX_REGISTRY[activeChainId]?.find(
         (d) => d.id === activeDexId
-      )!;
+      );
+      if (!activeDex)
+        return {
+          id: generateId(),
+          type: "text",
+          text: `No DEX available on ${targetChain.name}. Type "dexes" to check available DEXes.`
+        };
 
       const [fromToken, toToken] = await Promise.all([
         resolveTokenDetails(args[2], targetChain),
@@ -2530,6 +2555,103 @@ export default function TerminalShell({
         ? WRAPPED_NATIVE[targetChain.id] || toToken.address
         : toToken.address;
 
+      if (addrIn.toLowerCase() === addrOut.toLowerCase()) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Tokens must be different."
+        };
+      }
+
+      // Compute a real minimum-output from an on-chain quote, then apply the
+      // user's slippage tolerance. Falls back to 0 when the pool can't be
+      // quoted (e.g. no liquidity yet), so the swap is not blocked.
+      const client = getClient(targetChain);
+      let expectedOutWei = 0n;
+      try {
+        if (activeDex.type === "V2") {
+          const pair = (await client.readContract({
+            address: activeDex.factory,
+            abi: uniV2FactoryAbi,
+            functionName: "getPair",
+            args: [addrIn, addrOut]
+          })) as Address;
+          if (pair && pair !== NATIVE_TOKEN_ADDRESS) {
+            const [token0, reserves] = await Promise.all([
+              client.readContract({
+                address: pair,
+                abi: uniV2PairAbi,
+                functionName: "token0"
+              }),
+              client.readContract({
+                address: pair,
+                abi: uniV2PairAbi,
+                functionName: "getReserves"
+              })
+            ]);
+            const inIsToken0 =
+              (token0 as string).toLowerCase() === addrIn.toLowerCase();
+            const reserveIn = inIsToken0 ? reserves[0] : reserves[1];
+            const reserveOut = inIsToken0 ? reserves[1] : reserves[0];
+            if (reserveIn > 0n && reserveOut > 0n) {
+              expectedOutWei = (await client.readContract({
+                address: pair,
+                abi: uniV2PairAbi,
+                functionName: "getAmountOut",
+                args: [amountInWei, reserveIn, reserveOut]
+              })) as bigint;
+            }
+          }
+        } else {
+          const pool = (await client.readContract({
+            address: activeDex.factory,
+            abi: uniV3FactoryAbi,
+            functionName: "getPool",
+            args: [addrIn, addrOut, 3000]
+          })) as Address;
+          if (pool && pool !== NATIVE_TOKEN_ADDRESS) {
+            const [token0, slot0] = await Promise.all([
+              client.readContract({
+                address: pool,
+                abi: parseAbi(["function token0() view returns (address)"]),
+                functionName: "token0"
+              }),
+              client.readContract({
+                address: pool,
+                abi: uniV3PoolAbi,
+                functionName: "slot0"
+              })
+            ]);
+            const inIsToken0 =
+              (token0 as string).toLowerCase() === addrIn.toLowerCase();
+            // V3 exact-input quote: sqrtPrice -> price -> expected output, with
+            // a 0.1% pool fee and 0.5% user slippage applied for safety.
+            const sqrtPrice = Number(slot0[0]) / 2 ** 96;
+            const price = Math.pow(sqrtPrice, 2);
+            const outInDecimals = inIsToken0
+              ? (Number(amountInWei) * price) / 10 ** fromToken.decimals
+              : (Number(amountInWei) / price) / 10 ** fromToken.decimals;
+            const outFloat = outInDecimals * 10 ** toToken.decimals;
+            expectedOutWei = BigInt(Math.floor(outFloat * 0.995));
+          }
+        }
+      } catch {
+        // Quote failed — leave expectedOutWei as 0.
+      }
+
+      // Slippage-tolerance check: only accept a valid slippage when we have a
+      // real on-chain quote; otherwise fall back to a 50% guard so a user
+      // quoting without liquidity isn't stuck at zero.
+      let amountOutMin = 0n;
+      if (expectedOutWei > 0n) {
+        const tolerated = (expectedOutWei * BigInt(Math.round(slippagePct * 100))) / 10000n;
+        amountOutMin = expectedOutWei - tolerated;
+      } else {
+        const fallbackGuard = (amountInWei * 50n) / 100n;
+        amountOutMin =
+          fromToken.isNative || toToken.isNative ? fallbackGuard : 0n;
+      }
+
       let txData: `0x${string}`,
         txValue = "0x0" as `0x${string}`,
         approvalAddress: Address | undefined;
@@ -2541,7 +2663,7 @@ export default function TerminalShell({
               "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable"
             ]),
             functionName: "swapExactETHForTokens",
-            args: [0n, [addrIn, addrOut], address, deadline]
+            args: [amountOutMin, [addrIn, addrOut], address, deadline]
           });
           txValue = toHex(amountInWei);
         } else {
@@ -2550,7 +2672,7 @@ export default function TerminalShell({
               "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)"
             ]),
             functionName: "swapExactTokensForTokens",
-            args: [amountInWei, 0n, [addrIn, addrOut], address, deadline]
+            args: [amountInWei, amountOutMin, [addrIn, addrOut], address, deadline]
           });
           approvalAddress = activeDex.router;
         }
@@ -2566,7 +2688,7 @@ export default function TerminalShell({
               recipient: address,
               deadline,
               amountIn: amountInWei,
-              amountOutMinimum: 0n,
+              amountOutMinimum: amountOutMin,
               sqrtPriceLimitX96: 0n
             }
           ]
@@ -2584,6 +2706,8 @@ export default function TerminalShell({
           fromAmountFormatted={args[1]}
           toAmountFormatted="ROUTED"
           amountInWei={amountInWei}
+          amountOutMin={amountOutMin}
+          slippagePct={slippagePct}
           transactionRequest={{
             to: activeDex.router,
             data: txData,

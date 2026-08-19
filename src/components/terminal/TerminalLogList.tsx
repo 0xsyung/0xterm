@@ -46,12 +46,19 @@ export default function TerminalLogList({
               key={log.id}
               className={`text-xs space-y-1 my-2 ${theme.text}`}
             >
-              {dexList.map((d: DexProtocol) => (
-                <div key={d.id}>
-                  • {d.name} ({d.type}) - ID:{" "}
-                  <span className={`font-bold ${theme.primary}`}>{d.id}</span>
+              {dexList.length === 0 ? (
+                <div className="text-yellow-400">
+                  No DEX available on this chain. swap / createpool / price
+                  pool require a DEX.
                 </div>
-              ))}
+              ) : (
+                dexList.map((d: DexProtocol) => (
+                  <div key={d.id}>
+                    • {d.name} ({d.type}) - ID:{" "}
+                    <span className={`font-bold ${theme.primary}`}>{d.id}</span>
+                  </div>
+                ))
+              )}
             </div>
           );
         }
