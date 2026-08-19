@@ -7,7 +7,34 @@ remappings = [
     "@uniswap/v2-core/=lib/v2-core/",
     "@uniswap/v2-periphery/=lib/v2-periphery/",
     "@uniswap/lib/=lib/solidity-lib/",
+    "@uniswap/v3-core/=lib/v3-core/",
+    "@uniswap/v3-periphery/=lib/v3-periphery/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/",
     "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+]
+
+# Uniswap V3 fork deployment: v3-periphery v1.0.0 needs OZ v3.4.2 + base64-sol.
+# Isolated in its own profile so the default profile keeps OZ v5 for the
+# upgradeable ERC20Base/ERC721Base build. The deploy script lives in
+# script-univ3/ so the default `forge build` never compiles it (its v3-periphery
+# imports would break under the default profile's OZ v5 remappings).
+[profile.univ3]
+# Build only the univ3 deploy script (plus whatever it imports). Scoping src
+# away from src/ avoids recompiling the OZ-v5 upgradeable contracts under the
+# v3 profile's OZ v3.4.2 remappings. The script reaches WETH9 via a relative
+# ../src/WETH9.sol import, which works regardless.
+src = "script-univ3"
+script = "script-univ3"
+out = "out-univ3"
+libs = ["lib"]
+remappings = [
+    "@uniswap/v2-core/=lib/v2-core/",
+    "@uniswap/v2-periphery/=lib/v2-periphery/",
+    "@uniswap/lib/=lib/solidity-lib/",
+    "@uniswap/v3-core/=lib/v3-core/",
+    "@uniswap/v3-periphery/=lib/v3-periphery/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "base64-sol/=lib/base64/",
 ]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

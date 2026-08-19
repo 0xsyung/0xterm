@@ -63,12 +63,17 @@ export default function AddLiquidityWidget({
 
         if (allowanceA < amountAWei) {
           const hashA = await writeContractAsync({
+            chainId: targetChain.id,
             address: tokenA.address,
             abi: erc20Abi,
             functionName: "approve",
             args: [spender, amountAWei * 10n]
           });
-          await client.waitForTransactionReceipt({ hash: hashA });
+          const receiptA = await client.waitForTransactionReceipt({
+            hash: hashA
+          });
+          if (receiptA.status === "reverted")
+            throw new Error("Approval for token A reverted on-chain.");
         }
       }
 
@@ -83,12 +88,17 @@ export default function AddLiquidityWidget({
 
         if (allowanceB < amountBWei) {
           const hashB = await writeContractAsync({
+            chainId: targetChain.id,
             address: tokenB.address,
             abi: erc20Abi,
             functionName: "approve",
             args: [spender, amountBWei * 10n]
           });
-          await client.waitForTransactionReceipt({ hash: hashB });
+          const receiptB = await client.waitForTransactionReceipt({
+            hash: hashB
+          });
+          if (receiptB.status === "reverted")
+            throw new Error("Approval for token B reverted on-chain.");
         }
       }
 
@@ -145,6 +155,7 @@ export default function AddLiquidityWidget({
             : amountAWei;
 
         const mintHash = await writeContractAsync({
+          chainId: targetChain.id,
           address: activeDex.positionManager,
           abi: nonfungiblePositionManagerAbi,
           functionName: "mint",
@@ -170,10 +181,16 @@ export default function AddLiquidityWidget({
               : 0n
         });
         setTxHash(mintHash);
+        const mintReceipt = await client.waitForTransactionReceipt({
+          hash: mintHash
+        });
+        if (mintReceipt.status === "reverted")
+          throw new Error("Minting liquidity position reverted on-chain.");
       } else {
         setStep("minting");
         const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
         const hash = await writeContractAsync({
+          chainId: targetChain.id,
           address: activeDex.router,
           abi: uniV2RouterAbi,
           functionName: "addLiquidity",
@@ -189,6 +206,9 @@ export default function AddLiquidityWidget({
           ]
         });
         setTxHash(hash);
+        const receipt = await client.waitForTransactionReceipt({ hash });
+        if (receipt.status === "reverted")
+          throw new Error("Adding liquidity reverted on-chain.");
       }
 
       setStep("success");
@@ -236,7 +256,9 @@ export default function AddLiquidityWidget({
 
       {step === "success" && txHash && (
         <div className="p-2 border border-emerald-500/50 bg-emerald-950/40 text-emerald-400 rounded space-y-1">
-          <div className="font-bold">[✓] LIQUIDITY ADDED SUCCESSFULLY!</div>
+          <div className="font-bold">
+            [✓] LIQUIDITY ADDED — CONFIRMED ON-CHAIN!
+          </div>
           <div className="text-[10px] truncate">TX HASH: {txHash}</div>
           {blockExplorer && (
             <a
@@ -272,7 +294,7 @@ export default function AddLiquidityWidget({
         )}
         {step === "minting" && (
           <div className="text-yellow-400 font-bold animate-pulse">
-            MINTING LIQUIDITY POSITION...
+            SUBMITTING & WAITING FOR ON-CHAIN CONFIRMATION...
           </div>
         )}
       </div>

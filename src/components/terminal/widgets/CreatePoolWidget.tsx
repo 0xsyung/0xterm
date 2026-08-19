@@ -7,12 +7,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useWriteContract } from 'wagmi'
+import { useWriteContract, usePublicClient } from 'wagmi'
 import { uniV2FactoryAbi, uniV3FactoryAbi } from '../constants'
 
 export default function CreatePoolWidget({ targetChain, activeDex, tokenA, tokenB, addrA, addrB, fee, theme }: any) {
   const { writeContractAsync } = useWriteContract()
-  const [status, setStatus] = useState<'ready' | 'signing' | 'success' | 'error'>('ready')
+  const publicClient = usePublicClient({ chainId: targetChain.id })
+  const [status, setStatus] = useState<'ready' | 'signing' | 'waiting_confirmation' | 'success' | 'error'>('ready')
   const [txHash, setTxHash] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
@@ -21,12 +22,22 @@ export default function CreatePoolWidget({ targetChain, activeDex, tokenA, token
     setErrorMsg(null)
     try {
       const hash = await writeContractAsync({
+        chainId: targetChain.id,
         address: activeDex.factory,
         abi: activeDex.type === 'V2' ? uniV2FactoryAbi : uniV3FactoryAbi,
         functionName: activeDex.type === 'V2' ? 'createPair' : 'createPool',
         args: activeDex.type === 'V2' ? [addrA, addrB] : [addrA, addrB, fee],
       })
       setTxHash(hash)
+      setStatus('waiting_confirmation')
+      if (publicClient) {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash })
+        if (receipt.status === 'reverted') {
+          setStatus('error')
+          setErrorMsg('Create pool transaction reverted on-chain.')
+          return
+        }
+      }
       setStatus('success')
     } catch (err: any) {
       setStatus('error')
@@ -68,7 +79,7 @@ export default function CreatePoolWidget({ targetChain, activeDex, tokenA, token
 
       {status === 'success' && txHash && (
         <div className="p-2 border border-emerald-500/50 bg-emerald-950/40 text-emerald-400 rounded space-y-1">
-          <div className="font-bold">[✓] FACTORY TRANSACTION SUBMITTED!</div>
+          <div className="font-bold">[✓] POOL CREATED — CONFIRMED ON-CHAIN!</div>
           <div className="text-[10px] truncate">TX HASH: {txHash}</div>
           {blockExplorer && (
             <a href={`${blockExplorer}/tx/${txHash}`} target="_blank" rel="noreferrer" className="text-[10px] underline hover:opacity-80 block pt-0.5">
@@ -86,6 +97,9 @@ export default function CreatePoolWidget({ targetChain, activeDex, tokenA, token
         )}
         {status === 'signing' && (
           <div className="text-yellow-400 font-bold animate-pulse">SIGN FACTORY DEPLOYMENT IN WALLET...</div>
+        )}
+        {status === 'waiting_confirmation' && (
+          <div className="text-yellow-400 font-bold animate-pulse">WAITING FOR ON-CHAIN CONFIRMATION...</div>
         )}
       </div>
     </div>

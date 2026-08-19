@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useSendTransaction, useWriteContract, usePublicClient } from "wagmi";
-import { parseAbi, type Address, type Chain } from "viem";
+import { formatUnits, parseAbi, type Address, type Chain } from "viem";
 
 const erc20Abi = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
@@ -29,6 +29,8 @@ type SwapWidgetProps = {
   fromAmountFormatted: string;
   toAmountFormatted: string;
   amountInWei: bigint;
+  amountOutMin?: bigint;
+  slippagePct?: number;
   transactionRequest: {
     to: Address;
     data: `0x${string}`;
@@ -47,6 +49,8 @@ export default function SwapWidget({
   fromAmountFormatted,
   toAmountFormatted,
   amountInWei,
+  amountOutMin = 0n,
+  slippagePct = 0.5,
   transactionRequest,
   approvalAddress,
   estimatedGasUsd
@@ -56,8 +60,10 @@ export default function SwapWidget({
     | "checking_approval"
     | "needs_approval"
     | "approving"
+    | "waiting_approval_confirmation"
     | "ready"
     | "swapping"
+    | "waiting_swap_confirmation"
     | "success"
     | "error"
   >("checking_approval");
@@ -105,14 +111,21 @@ export default function SwapWidget({
 
     try {
       const hash = await writeContractAsync({
+        chainId: targetChain.id,
         address: fromToken.address,
         abi: erc20Abi,
         functionName: "approve",
         args: [approvalAddress, amountInWei]
       });
 
+      setStatus("waiting_approval_confirmation");
       if (publicClient) {
-        await publicClient.waitForTransactionReceipt({ hash });
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        if (receipt.status === "reverted") {
+          setStatus("error");
+          setErrorMsg("Approval transaction reverted on-chain.");
+          return;
+        }
       }
       setStatus("ready");
     } catch (err: unknown) {
@@ -127,12 +140,24 @@ export default function SwapWidget({
 
     try {
       const hash = await sendTransactionAsync({
+        chainId: targetChain.id,
         to: transactionRequest.to,
         data: transactionRequest.data,
         value: BigInt(transactionRequest.value || "0x0")
       });
 
       setTxHash(hash);
+      setStatus("waiting_swap_confirmation");
+      if (publicClient) {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        if (receipt.status === "reverted") {
+          setStatus("error");
+          setErrorMsg(
+            "Swap transaction reverted on-chain. Check slippage or pool liquidity."
+          );
+          return;
+        }
+      }
       setStatus("success");
     } catch (err: unknown) {
       setStatus("ready");
@@ -192,6 +217,18 @@ export default function SwapWidget({
         </div>
       )}
 
+      <div className="text-[11px] text-[#00ff66]/60 border-t border-[#00ff66]/10 pt-2 flex justify-between">
+        <span>SLIPPAGE TOLERANCE:</span>
+        <span className="text-[#00ff66] font-bold">
+          {slippagePct}%
+          {amountOutMin > 0n && (
+            <span className="ml-2 opacity-70">
+              (MIN OUT: {formatUnits(amountOutMin, toToken.decimals)} {toToken.symbol})
+            </span>
+          )}
+        </span>
+      </div>
+
       {errorMsg && (
         <div className="p-2 border border-red-500/50 bg-red-950/40 text-red-400 rounded">
           ERROR: {errorMsg}
@@ -201,7 +238,7 @@ export default function SwapWidget({
       {status === "success" && txHash && (
         <div className="p-2 border border-emerald-500/50 bg-emerald-950/40 text-emerald-400 rounded space-y-1">
           <div className="font-bold">
-            [✓] SWAP TRANSACTION SUBMITTED SUCCESSFULLY!
+            [✓] SWAP CONFIRMED ON-CHAIN SUCCESSFULLY!
           </div>
           <div className="text-[10px] truncate">TX HASH: {txHash}</div>
           {blockExplorer && (
@@ -239,6 +276,12 @@ export default function SwapWidget({
           </div>
         )}
 
+        {status === "waiting_approval_confirmation" && (
+          <div className="text-yellow-400 font-bold animate-pulse">
+            WAITING FOR APPROVAL CONFIRMATION ON-CHAIN...
+          </div>
+        )}
+
         {status === "ready" && (
           <button
             onClick={handleExecuteSwap}
@@ -251,6 +294,12 @@ export default function SwapWidget({
         {status === "swapping" && (
           <div className="text-yellow-400 font-bold animate-pulse">
             SIGN SWAP TRANSACTION IN WALLET...
+          </div>
+        )}
+
+        {status === "waiting_swap_confirmation" && (
+          <div className="text-yellow-400 font-bold animate-pulse">
+            WAITING FOR SWAP CONFIRMATION ON-CHAIN...
           </div>
         )}
       </div>

@@ -105,7 +105,10 @@ export const WRAPPED_NATIVE: Record<number, Address> = {
   8453: '0x4200000000000000000000000000000000000006',
   84532: '0x4200000000000000000000000000000000000006',
   137: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270',
-  80002: '0x0000000000000000000000000000000000000000',
+  // 80002 (Polygon Amoy): no official Uniswap V3 — 0xterm deploys its own fork
+  // (see contracts/script-univ3/DeployUniswapV3Fork.s.sol). Fill this and
+  // DEX_REGISTRY[80002] after the fork is broadcast.
+  // 80002: '<WETH9 from fork deploy>',
   10: '0x4200000000000000000000000000000000000006',
   11155420: '0x4200000000000000000000000000000000000006'
 }
@@ -134,9 +137,14 @@ export const DEX_REGISTRY: Record<number, DexProtocol[]> = {
   137: [
     { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },
   ],
-  80002: [
-    { id: 'univ3', name: 'Uniswap V3 (Amoy)', router: '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E', factory: '0x0227628f3F023bb0B980b67D528571c95c6DaC1c', type: 'V3' },
-  ],
+  // 80002 (Polygon Amoy): no official Uniswap V3 — 0xterm deploys its own
+  // fork via contracts/script-univ3/DeployUniswapV3Fork.s.sol. Until it is
+  // broadcast, Amoy has NO DEX: `swap`/`createpool`/`price pool` surface a
+  // clear "no DEX on this chain" error instead of stale wrong-chain addresses.
+  // Fill this with the fork's router/factory after deploy:
+  // 80002: [
+  //   { id: 'univ3', name: 'Uniswap V3 (Amoy fork)', router: '<router>', factory: '<factory>', positionManager: '<npm>', type: 'V3' },
+  // ],
   10: [
     { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },
   ],
@@ -191,6 +199,7 @@ export const uniV2PairAbi = parseAbi([
   'function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)',
   'function token0() view returns (address)',
   'function token1() view returns (address)',
+  'function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) view returns (uint amountOut)',
 ])
 
 // ERC-165 / ERC-721 interface detection (for the `is` command)
