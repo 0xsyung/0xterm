@@ -1664,17 +1664,23 @@ export default function TerminalShell({
       const verified: string[] = [];
 
       if (isErc721) {
-        const fnChecks: [string, string][] = [
-          ["balanceOf", "balanceOf(address) → uint256"],
-          ["ownerOf", "ownerOf(uint256) → address"],
-          ["safeTransferFrom", "safeTransferFrom(address,address,uint256)"]
+        // Only view functions can be probed read-only. safeTransferFrom /
+        // transferFrom are writes: they revert on eth_call against a real NFT
+        // (no approval), so they always false-negative — skip them. ownerOf is
+        // the strongest signal; try tokenId 0 then 1 so an unminted first token
+        // doesn't false-negative.
+        const fnChecks: [string, readonly unknown[], string][] = [
+          ["ownerOf", [0n], "ownerOf(0) → address"],
+          ["ownerOf", [1n], "ownerOf(1) → address"],
+          ["balanceOf", [address], "balanceOf(address) → uint256"]
         ];
-        for (const [fn, label] of fnChecks) {
+        for (const [fn, fnArgs, label] of fnChecks) {
           try {
             await client.readContract({
               address,
               abi: erc721Abi,
-              functionName: fn as any
+              functionName: fn as any,
+              args: fnArgs as [bigint] | [bigint] | [Address]
             });
             verified.push(label);
           } catch {
@@ -1682,20 +1688,21 @@ export default function TerminalShell({
           }
         }
       } else {
-        const fnChecks: [string, string][] = [
-          ["totalSupply", "totalSupply() → uint256"],
-          ["balanceOf", "balanceOf(address) → uint256"],
-          ["transfer", "transfer(address,uint256) → bool"],
-          ["transferFrom", "transferFrom(address,address,uint256) → bool"],
-          ["approve", "approve(address,uint256) → bool"],
-          ["allowance", "allowance(address,address) → uint256"]
+        // Only view functions can be probed read-only. transfer / transferFrom
+        // / approve are writes: they revert on eth_call against a real ERC-20,
+        // so they always false-negative — skip them.
+        const fnChecks: [string, readonly unknown[], string][] = [
+          ["totalSupply", [], "totalSupply() → uint256"],
+          ["balanceOf", [address], "balanceOf(address) → uint256"],
+          ["allowance", [address, address], "allowance(address,address) → uint256"]
         ];
-        for (const [fn, label] of fnChecks) {
+        for (const [fn, fnArgs, label] of fnChecks) {
           try {
             await client.readContract({
               address,
               abi: erc20FullAbi,
-              functionName: fn as any
+              functionName: fn as any,
+              args: fnArgs as readonly [Address] | readonly [Address, Address]
             });
             verified.push(label);
           } catch {
@@ -1706,7 +1713,7 @@ export default function TerminalShell({
 
       const okCount = verified.length;
       const missingCount = checks.length;
-      const allCore = okCount === (isErc721 ? 3 : 6);
+      const allCore = okCount === 3;
 
       // Report optional metadata too
       let meta = "";
@@ -1734,7 +1741,7 @@ export default function TerminalShell({
         `${
           isErc721 ? "ERC-721" : "ERC-20"
         } interface (${wantsId}): ${interfaceSupported ? "yes" : "no"}`,
-        `Core functions callable: ${okCount}/${isErc721 ? 3 : 6}`,
+        `Core functions callable: ${okCount}/3`,
         ...verified.map((v) => `  ✓ ${v}`),
         ...checks.map((c) => `  ✗ ${c}`),
         ``

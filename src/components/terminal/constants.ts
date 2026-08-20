@@ -126,10 +126,10 @@ export const DEX_REGISTRY: Record<number, DexProtocol[]> = {
     { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },
   ],
   421614: [
-    { id: 'univ3', name: 'Uniswap V3 (Sepolia)', router: '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E', factory: '0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e', positionManager: '0x6b2937Bde17889EDCf8fbD8dE31C3C2a70Bc4d65', type: 'V3' },
+    { id: 'univ3', name: 'Uniswap V3 (Sepolia)', router: '0x101F443B4d1b059569D643917553c771E1b9663E', factory: '0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e', positionManager: '0x6b2937Bde17889EDCf8fbD8dE31C3C2a70Bc4d65', type: 'V3' },
   ],
   8453: [
-    { id: 'univ3', name: 'Uniswap V3', router: '0x262664982669b3F4E6441a1F6f4E6c7C0113f993', factory: '0x33128a8f17eb86e9a38f321d5dadf5f14c000109', positionManager: '0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1', type: 'V3' },
+    { id: 'univ3', name: 'Uniswap V3', router: '0x2626664c2603336E57B271c5C0b26F421741e481', factory: '0x33128a8f17eb86e9a38f321d5dadf5f14c000109', positionManager: '0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1', type: 'V3' },
   ],
   84532: [
     { id: 'univ3', name: 'Uniswap V3 (Sepolia)', router: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4', factory: '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24', positionManager: '0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2', type: 'V3' },
@@ -149,7 +149,7 @@ export const DEX_REGISTRY: Record<number, DexProtocol[]> = {
     { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },
   ],
   11155420: [
-    { id: 'univ3', name: 'Uniswap V3 (Sepolia)', router: '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E', factory: '0x0227628f3F023bb0B980b67D528571c95c6DaC1c', type: 'V3' },
+    { id: 'univ3', name: 'Uniswap V3 (Sepolia)', router: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4', factory: '0x8CE191193D15ea94e11d327b4c7ad8bbE520f6aF', positionManager: '0xdA75cEf1C93078e8b736FCA5D5a30adb97C8957d', type: 'V3' },
   ]
 }
 
