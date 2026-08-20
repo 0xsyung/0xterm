@@ -113,6 +113,22 @@ export const WRAPPED_NATIVE: Record<number, Address> = {
   11155420: '0x4200000000000000000000000000000000000006'
 }
 
+// DexScreener `pairs[].chainId` values keyed by 0xterm chain id. viem's
+// `chain.name` ("Arbitrum One", "Polygon") doesn't match DexScreener's slugs
+// ("arbitrum", "polygon-pos"), so matching must go through this map.
+export const DEXSCREENER_CHAIN: Record<number, string> = {
+  1: "ethereum",
+  11155111: "ethereum", // Sepolia — DexScreener folds testnets under their L1
+  42161: "arbitrum",
+  421614: "arbitrum",
+  8453: "base",
+  84532: "base",
+  137: "polygon-pos",
+  80002: "polygon-pos",
+  10: "optimism",
+  11155420: "optimism"
+}
+
 export const DEX_REGISTRY: Record<number, DexProtocol[]> = {
   1: [
     { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },

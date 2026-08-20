@@ -52,7 +52,8 @@ import {
   INTERFACE_ID_ERC721,
   COMMON_TOKENS,
   resolveChain,
-  IMPLEMENTATION_ADDRESSES
+  IMPLEMENTATION_ADDRESSES,
+  DEXSCREENER_CHAIN
 } from "./constants";
 import type { LogEntry, ThemeMode, DexProtocol } from "./types";
 import DeployWidget from "./widgets/DeployWidget";
@@ -1138,9 +1139,16 @@ export default function TerminalShell({
         if (!targetChain) netText = "Network not recognized.";
         else {
           handleChainSwitch(targetChain.id);
-          if (isConnected)
-            await switchChainAsync({ chainId: targetChain.id }).catch(() => {});
-          netText = `[✓] Network set to ${targetChain.name}`;
+          if (isConnected) {
+            try {
+              await switchChainAsync({ chainId: targetChain.id });
+              netText = `[✓] Network set to ${targetChain.name}`;
+            } catch {
+              netText = `[!] Wallet rejected the switch to ${targetChain.name}. Terminal selection changed, but connected wallet is still on the old chain — on-chain commands will hit it.`;
+            }
+          } else {
+            netText = `[✓] Network set to ${targetChain.name}`;
+          }
         }
       }
       return { id: generateId(), type: "text", text: netText };
@@ -1948,7 +1956,7 @@ export default function TerminalShell({
         return {
           id: generateId(),
           type: "text",
-          text: "Usage: price <tokenA> [tokenB] [pool|api]"
+          text: "Usage: price <tokenA> [tokenB] [feeTier] [pool|api]"
         };
 
       let source = "pool";
@@ -1963,6 +1971,16 @@ export default function TerminalShell({
 
       const queryA = filteredArgs[0];
       let queryB = filteredArgs[1];
+      // Optional fee tier for V3 pool lookups (e.g. 'price ETH USDC 3000').
+      // Only valid for the on-chain pool source.
+      let feeTier = 3000;
+      const feeArg = filteredArgs[2];
+      if (feeArg !== undefined) {
+        const parsed = Number(feeArg);
+        if (Number.isFinite(parsed) && [100, 500, 3000, 10000].includes(parsed)) {
+          feeTier = parsed;
+        }
+      }
       const targetChain = activeChainId
         ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
         : null;
@@ -2039,7 +2057,7 @@ export default function TerminalShell({
               address: activeDex.factory,
               abi: uniV3FactoryAbi,
               functionName: "getPool",
-              args: [addrA, addrB, 3000]
+              args: [addrA, addrB, feeTier]
             });
           }
 
@@ -2207,21 +2225,34 @@ export default function TerminalShell({
           };
         }
 
-        const chainName = targetChain ? targetChain.name.toLowerCase() : "";
+        const chainSlug = targetChain
+          ? DEXSCREENER_CHAIN[targetChain.id]
+          : undefined;
 
         let pair = data.pairs.find((p: any) => {
-          const matchesChain = p.chainId.toLowerCase() === chainName;
+          const matchesChain = chainSlug
+            ? p.chainId.toLowerCase() === chainSlug
+            : true;
           const matchesQuote = queryB
             ? p.quoteToken.symbol.toLowerCase() === queryB.toLowerCase()
             : true;
           return matchesChain && matchesQuote;
         });
 
-        if (!pair)
+        if (!pair && chainSlug)
           pair = data.pairs.find(
-            (p: any) => p.chainId.toLowerCase() === chainName
+            (p: any) => p.chainId.toLowerCase() === chainSlug
           );
-        if (!pair) pair = data.pairs[0];
+
+        if (!pair) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `No ${targetChain ? targetChain.name : ""} price data found for "${queryA}"${
+              queryB ? ` against ${queryB}` : ""
+            }. Try 'price <tokenA> <tokenB>' or omit 'api' to read the pool on-chain.`
+          };
+        }
 
         const priceUsd = pair.priceUsd;
         const priceNative = pair.priceNative;
@@ -2519,7 +2550,7 @@ export default function TerminalShell({
         return {
           id: generateId(),
           type: "text",
-          text: "Usage: swap <amount> <fromToken> <toToken> [slippage%]"
+          text: "Usage: swap <amount> <fromToken> <toToken> [slippage%] [feeTier]"
         };
 
       // Optional 4th argument: slippage tolerance as a percentage (e.g. "1" = 1%).
@@ -2536,6 +2567,22 @@ export default function TerminalShell({
           };
         }
         slippagePct = parsed;
+      }
+
+      // Optional 5th argument: Uniswap V3 fee tier in basis points (e.g. "3000"
+      // = 0.3%). Defaults to 3000 (0.3%). Only used for V3 pools.
+      let feeTier = 3000;
+      const feeArg = args[5];
+      if (feeArg !== undefined) {
+        const parsed = Number(feeArg);
+        if (!Number.isFinite(parsed) || ![100, 500, 3000, 10000].includes(parsed)) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] Invalid fee tier "${feeArg}". Use one of 100, 500, 3000, 10000 (e.g. 'swap 100 USDC DAI 1 3000').`
+          };
+        }
+        feeTier = parsed;
       }
 
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
@@ -2614,7 +2661,7 @@ export default function TerminalShell({
             address: activeDex.factory,
             abi: uniV3FactoryAbi,
             functionName: "getPool",
-            args: [addrIn, addrOut, 3000]
+            args: [addrIn, addrOut, feeTier]
           })) as Address;
           if (pool && pool !== NATIVE_TOKEN_ADDRESS) {
             const [token0, slot0] = await Promise.all([
@@ -2691,7 +2738,7 @@ export default function TerminalShell({
             {
               tokenIn: addrIn,
               tokenOut: addrOut,
-              fee: 3000,
+              fee: feeTier,
               recipient: address,
               deadline,
               amountIn: amountInWei,
