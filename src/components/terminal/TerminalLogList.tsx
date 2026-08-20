@@ -11,6 +11,7 @@ import CreatePoolWidget from "./widgets/CreatePoolWidget";
 import InitializePoolWidget from "./widgets/InitializePoolWidget";
 import AddLiquidityWidget from "./widgets/AddLiquidityWidget";
 import BalanceWidget from "./widgets/BalanceWidget";
+import PortfolioWidget from "./widgets/PortfolioWidget";
 import { DEX_REGISTRY } from "./constants";
 import type { LogEntry, DexProtocol } from "./types";
 
@@ -78,6 +79,8 @@ export default function TerminalLogList({
           );
         if (log.type === "balance")
           return <BalanceWidget key={log.id} {...log.payload} theme={theme} />;
+        if (log.type === "portfolio")
+          return <PortfolioWidget key={log.id} {...log.payload} theme={theme} />;
 
         return (
           <div key={log.id} className={`${theme.text}/90`}>
