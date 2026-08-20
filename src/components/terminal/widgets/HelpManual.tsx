@@ -76,6 +76,14 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
         </div>
         <div>Check token balance</div>
         <div className={`font-bold ${theme.primary}`}>
+          portfolio [native|erc20]
+        </div>
+        <div>Wallet balances + USD value across all chains (P/L vs snapshot)</div>
+        <div className={`font-bold ${theme.primary}`}>snapshot [label]</div>
+        <div>Record current portfolio baseline for P/L tracking</div>
+        <div className={`font-bold ${theme.primary}`}>pnl</div>
+        <div>Show portfolio P/L vs last snapshot</div>
+        <div className={`font-bold ${theme.primary}`}>
           is &lt;erc20|erc721&gt; &lt;address&gt;
         </div>
         <div>Check if address is a valid ERC20 or ERC721/NFT contract</div>

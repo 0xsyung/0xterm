@@ -56,6 +56,10 @@ import {
   DEXSCREENER_CHAIN
 } from "./constants";
 import type { LogEntry, ThemeMode, DexProtocol } from "./types";
+import PortfolioWidget, {
+  type PortfolioHolding,
+  type SnapshotHolding
+} from "./widgets/PortfolioWidget";
 import DeployWidget from "./widgets/DeployWidget";
 
 const MAX_LOGS = 100;
@@ -961,6 +965,154 @@ export default function TerminalShell({
       balance: formatUnits(bal as bigint, token.decimals),
       symbol: token.symbol
     };
+  };
+
+  // Price a token in USD: DexScreener first, then on-chain V3 pool, then
+  // on-chain V2 pool (all quoted against the chain's wrapped native). Native
+  // gets priced via DexScreener; tokens derive USD = priceInNative * nativeUsd.
+  const getTokenPriceUsd = async (
+    chain: Chain,
+    symbol: string,
+    address: Address,
+    isNative: boolean
+  ): Promise<number | null> => {
+    // 1) DexScreener
+    const slug = DEXSCREENER_CHAIN[chain.id];
+    if (slug) {
+      try {
+        const res = await fetch(
+          `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(symbol)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const pairs: any[] = data.pairs || [];
+          const pair = pairs.find(
+            (p: any) =>
+              p.chainId.toLowerCase() === slug &&
+              (isNative
+                ? true
+                : p.baseToken.symbol.toLowerCase() === symbol.toLowerCase())
+          );
+          if (pair && pair.priceUsd) {
+            const usd = parseFloat(pair.priceUsd);
+            if (Number.isFinite(usd) && usd > 0) return usd;
+          }
+        }
+      } catch {
+        // fall through to on-chain
+      }
+    }
+
+    // Native: priced via DexScreener only (no pool pair to read).
+    if (isNative) return getNativePriceUsd(chain);
+
+    // 2) On-chain V3 pool (quote vs wrapped native)
+    // 3) On-chain V2 pool (quote vs wrapped native)
+    const dexes = DEX_REGISTRY[chain.id] || [];
+    const wrappedNative = WRAPPED_NATIVE[chain.id];
+    if (!wrappedNative || dexes.length === 0) return null;
+
+    const client = getClient(chain);
+    const nativeUsd = await getNativePriceUsd(chain);
+    if (nativeUsd === null) return null;
+
+    for (const dex of dexes) {
+      if (dex.type === "V3") {
+        for (const feeTier of [3000, 500, 10000]) {
+          try {
+            const pool = (await client.readContract({
+              address: dex.factory,
+              abi: uniV3FactoryAbi,
+              functionName: "getPool",
+              args: [address, wrappedNative, feeTier]
+            })) as Address;
+            if (!pool || pool === NATIVE_TOKEN_ADDRESS) continue;
+            const [token0, slot0] = await Promise.all([
+              client.readContract({
+                address: pool,
+                abi: parseAbi(["function token0() view returns (address)"]),
+                functionName: "token0"
+              }),
+              client.readContract({
+                address: pool,
+                abi: uniV3PoolAbi,
+                functionName: "slot0"
+              })
+            ]);
+            const sqrtPrice = Number(slot0[0]) / 2 ** 96;
+            const pRaw = Math.pow(sqrtPrice, 2);
+            const isToken0 =
+              (token0 as string).toLowerCase() === address.toLowerCase();
+            const priceInNative = isToken0 ? pRaw : 1 / pRaw;
+            return priceInNative * nativeUsd;
+          } catch {
+            continue;
+          }
+        }
+      } else if (dex.type === "V2") {
+        try {
+          const pair = (await client.readContract({
+            address: dex.factory,
+            abi: uniV2FactoryAbi,
+            functionName: "getPair",
+            args: [address, wrappedNative]
+          })) as Address;
+          if (!pair || pair === NATIVE_TOKEN_ADDRESS) continue;
+          const [token0, reserves] = await Promise.all([
+            client.readContract({
+              address: pair,
+              abi: uniV2PairAbi,
+              functionName: "token0"
+            }),
+            client.readContract({
+              address: pair,
+              abi: uniV2PairAbi,
+              functionName: "getReserves"
+            })
+          ]);
+          const isToken0 =
+            (token0 as string).toLowerCase() === address.toLowerCase();
+          const reserveToken = isToken0 ? reserves[0] : reserves[1];
+          const reserveNative = isToken0 ? reserves[1] : reserves[0];
+          if (reserveNative === 0n) continue;
+          const priceInNative =
+            Number(reserveToken) / Number(reserveNative);
+          return priceInNative * nativeUsd;
+        } catch {
+          continue;
+        }
+      }
+    }
+    return null;
+  };
+
+  // Native token USD price via DexScreener (cache per chain in-memory).
+  const nativePriceCache: Record<number, number | null> = {};
+  const getNativePriceUsd = async (chain: Chain): Promise<number | null> => {
+    if (chain.id in nativePriceCache) return nativePriceCache[chain.id];
+    const slug = DEXSCREENER_CHAIN[chain.id];
+    let price: number | null = null;
+    if (slug) {
+      try {
+        const res = await fetch(
+          `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(chain.nativeCurrency.symbol)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const pair = (data.pairs || []).find(
+            (p: any) => p.chainId.toLowerCase() === slug
+          );
+          if (pair && pair.priceUsd) {
+            const usd = parseFloat(pair.priceUsd);
+            if (Number.isFinite(usd) && usd > 0) price = usd;
+          }
+        }
+      } catch {
+        // leave null
+      }
+    }
+    nativePriceCache[chain.id] = price;
+    return price;
   };
 
   // COMMAND REGISTRY
@@ -2789,6 +2941,217 @@ export default function TerminalShell({
         args[1]
       );
       return { id: generateId(), type: "balance", payload: balData };
+    },
+    portfolio: async (args) => {
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected."
+        };
+
+      const filterType = args[1]?.toLowerCase();
+      if (filterType && filterType !== "native" && filterType !== "erc20") {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Invalid filter. Use 'portfolio', 'portfolio native', or 'portfolio erc20'."
+        };
+      }
+
+      const snapshot =
+        (typeof window !== "undefined"
+          ? JSON.parse(
+              localStorage.getItem(
+                `0xterm_user_${address.toLowerCase()}`
+              ) || "{}"
+            ).portfolioSnapshot
+          : null) || null;
+
+      const holdings: PortfolioHolding[] = [];
+
+      for (const chain of SUPPORTED_CHAINS) {
+        const client = getClient(chain);
+        let nativeBal = 0n;
+        try {
+          nativeBal = await client.getBalance({ address: address as Address });
+        } catch {
+          nativeBal = 0n;
+        }
+
+        // Native token
+        const nativePrice = await getTokenPriceUsd(
+          chain,
+          chain.nativeCurrency.symbol,
+          WRAPPED_NATIVE[chain.id] || NATIVE_TOKEN_ADDRESS as Address,
+          true
+        );
+        const nativeBalance = formatEther(nativeBal);
+        const nativeValue =
+          nativePrice !== null ? nativePrice * parseFloat(nativeBalance) : null;
+
+        if (filterType !== "erc20") {
+          holdings.push({
+            chainName: chain.name,
+            chainId: chain.id,
+            symbol: chain.nativeCurrency.symbol,
+            type: "native",
+            balance: nativeBalance,
+            priceUsd: nativePrice,
+            valueUsd: nativeValue,
+            change24h: null,
+            priceSource: nativePrice !== null ? "api" : "—"
+          });
+        }
+
+        // Registered tokens (COMMON_TOKENS + customTokens)
+        const registered = {
+          ...(COMMON_TOKENS[chain.id] || {}),
+          ...(customTokens[chain.id] || {})
+        };
+        for (const [symbol, info] of Object.entries(registered)) {
+          if (filterType === "native") continue;
+          if (info.address === NATIVE_TOKEN_ADDRESS) continue;
+          const addr = info.address as Address;
+          try {
+            const bal = (await client.readContract({
+              address: addr,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [address as Address]
+            })) as bigint;
+            const decimals = info.decimals ?? 18;
+            const formatted = formatUnits(bal, decimals);
+            if (parseFloat(formatted) === 0) continue; // skip zero balances
+
+            const price = await getTokenPriceUsd(chain, symbol, addr, false);
+            holdings.push({
+              chainName: chain.name,
+              chainId: chain.id,
+              symbol,
+              type: "erc20",
+              balance: formatted,
+              priceUsd: price,
+              valueUsd: price !== null ? price * parseFloat(formatted) : null,
+              change24h: null,
+              priceSource: price !== null ? "api" : "—"
+            });
+          } catch {
+            // skip tokens that fail to read (e.g. non-ERC20 or wrong chain)
+          }
+        }
+      }
+
+      // Build snapshot-holding map for the widget (from saved snapshot prices)
+      const snapMap: Record<string, SnapshotHolding> = {};
+      if (snapshot?.holdings) {
+        for (const [key, val] of Object.entries(snapshot.holdings)) {
+          const v = val as { price: number | null; balance: string };
+          snapMap[key] = { price: v.price ?? null, balance: v.balance ?? "0" };
+        }
+      }
+
+      return {
+        id: generateId(),
+        type: "portfolio",
+        payload: {
+          holdings,
+          snapshot: snapMap,
+          snapshotLabel: snapshot?.label,
+          snapshotTime: snapshot?.timestamp
+        }
+      };
+    },
+    snapshot: async (args) => {
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected."
+        };
+
+      const label = args[1] || `snapshot-${Date.now().toString().slice(-6)}`;
+      const holdings: Record<string, SnapshotHolding> = {};
+
+      for (const chain of SUPPORTED_CHAINS) {
+        const client = getClient(chain);
+        let nativeBal = 0n;
+        try {
+          nativeBal = await client.getBalance({ address: address as Address });
+        } catch {
+          nativeBal = 0n;
+        }
+        const nativePrice = await getTokenPriceUsd(
+          chain,
+          chain.nativeCurrency.symbol,
+          WRAPPED_NATIVE[chain.id] || NATIVE_TOKEN_ADDRESS as Address,
+          true
+        );
+        holdings[`${chain.id}:${chain.nativeCurrency.symbol}`] = {
+          price: nativePrice,
+          balance: formatEther(nativeBal)
+        };
+
+        const registered = {
+          ...(COMMON_TOKENS[chain.id] || {}),
+          ...(customTokens[chain.id] || {})
+        };
+        for (const [symbol, info] of Object.entries(registered)) {
+          if (info.address === NATIVE_TOKEN_ADDRESS) continue;
+          try {
+            const bal = (await client.readContract({
+              address: info.address as Address,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [address as Address]
+            })) as bigint;
+            const decimals = info.decimals ?? 18;
+            holdings[`${chain.id}:${symbol}`] = {
+              price: await getTokenPriceUsd(chain, symbol, info.address as Address, false),
+              balance: formatUnits(bal, decimals)
+            };
+          } catch {
+            // skip failed reads
+          }
+        }
+      }
+
+      savePreference("portfolioSnapshot", {
+        label,
+        timestamp: Date.now(),
+        holdings
+      });
+
+      const count = Object.keys(holdings).length;
+      return {
+        id: generateId(),
+        type: "text",
+        text: `[✓] Snapshot "${label}" saved (${count} holdings) at ${new Date().toLocaleString()}. Run 'portfolio' to see P/L vs this snapshot.`
+      };
+    },
+    pnl: async (args) => {
+      if (!isConnected || !address)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected."
+        };
+      const prefs = JSON.parse(
+        localStorage.getItem(`0xterm_user_${address.toLowerCase()}`) || "{}"
+      );
+      const snap = prefs.portfolioSnapshot;
+      if (!snap) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "No snapshot found. Run 'snapshot' first to establish a P/L baseline."
+        };
+      }
+      return {
+        id: generateId(),
+        type: "text",
+        text: `Snapshot "${snap.label}" at ${new Date(snap.timestamp).toLocaleString()} with ${Object.keys(snap.holdings).length} holdings. Run 'portfolio' for per-token P/L.`
+      };
     },
     pool: async (args) => {
       if (!activeChainId)
