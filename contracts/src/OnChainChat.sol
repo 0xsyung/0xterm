@@ -104,13 +104,15 @@ contract OnChainChat is Ownable {
     }
 
     /**
-     * @notice Sweep accumulated message fees to the current owner.
+     * @notice Sweep accumulated message fees to an arbitrary recipient.
+     * @param to address that receives the accumulated native balance
      */
-    function withdraw() external onlyOwner {
+    function withdraw(address to) external onlyOwner {
+        require(to != address(0), "Chat: zero address");
         uint256 bal = address(this).balance;
         require(bal > 0, "Chat: nothing to withdraw");
-        (bool ok, ) = payable(owner()).call{value: bal}("");
+        (bool ok, ) = payable(to).call{value: bal}("");
         require(ok, "Chat: withdraw failed");
-        emit FeeWithdrawn(owner(), bal);
+        emit FeeWithdrawn(to, bal);
     }
 }

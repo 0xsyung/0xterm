@@ -88,10 +88,10 @@ cast call --rpc-url $SEPOLIA_RPC_URL <contract> "owner()(address)"
   cast send --rpc-url $SEPOLIA_RPC_URL --account <account-name> \
     <contract> "setFee(uint256)" <new-fee-wei>
   ```
-- **Sweep accumulated fees** to the owner, owner only:
+- **Sweep accumulated fees** to any address, owner only:
   ```bash
   cast send --rpc-url $SEPOLIA_RPC_URL --account <account-name> \
-    <contract> "withdraw()"
+    <contract> "withdraw(address)" <recipient-address>
   ```
 - **Transfer ownership** (e.g. to a multi-sig), owner only:
   ```bash

@@ -109,25 +109,31 @@ contract OnChainChatTest is Test {
         chat.setFee(1);
     }
 
-    function test_Withdraw_SendsBalanceToOwner() public {
+    function test_Withdraw_SendsToRecipient() public {
         sendAs(alice, bob, IV, CT, FEE);
         sendAs(alice, bob, IV, CT, FEE);
 
         uint256 bal = address(chat).balance;
         assertEq(bal, 2 * FEE);
-        uint256 before = address(this).balance;
+        uint256 before = carol.balance;
 
         vm.expectEmit();
-        emit OnChainChat.FeeWithdrawn(address(this), bal);
-        chat.withdraw();
+        emit OnChainChat.FeeWithdrawn(carol, bal);
+        chat.withdraw(carol);
 
         assertEq(address(chat).balance, 0);
-        assertEq(address(this).balance - before, bal);
+        assertEq(carol.balance - before, bal);
     }
 
     function test_Withdraw_NoBalance_Reverts() public {
         vm.expectRevert("Chat: nothing to withdraw");
-        chat.withdraw();
+        chat.withdraw(address(this));
+    }
+
+    function test_Withdraw_ZeroAddress_Reverts() public {
+        sendAs(alice, bob, IV, CT, FEE);
+        vm.expectRevert("Chat: zero address");
+        chat.withdraw(address(0));
     }
 
     function test_Withdraw_OnlyOwner() public {
@@ -135,7 +141,7 @@ contract OnChainChatTest is Test {
 
         vm.prank(bob);
         vm.expectRevert();
-        chat.withdraw();
+        chat.withdraw(bob);
     }
 
     function test_TransferOwnership_NewOwnerCanWithdraw() public {
@@ -145,7 +151,7 @@ contract OnChainChatTest is Test {
         assertEq(chat.owner(), bob);
 
         vm.prank(bob);
-        chat.withdraw();
+        chat.withdraw(bob);
         assertEq(address(chat).balance, 0);
         assertEq(bob.balance, FEE);
     }
