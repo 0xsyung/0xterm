@@ -3011,7 +3011,8 @@ export default function TerminalShell({
             priceUsd: nativePrice,
             valueUsd: nativeValue,
             change24h: null,
-            priceSource: nativePrice !== null ? "api" : "—"
+            priceSource: nativePrice !== null ? "api" : "—",
+            isTestnet: !!chain.testnet
           });
         }
 
@@ -3045,7 +3046,8 @@ export default function TerminalShell({
               priceUsd: price,
               valueUsd: price !== null ? price * parseFloat(formatted) : null,
               change24h: null,
-              priceSource: price !== null ? "api" : "—"
+              priceSource: price !== null ? "api" : "—",
+              isTestnet: !!chain.testnet
             });
           } catch {
             // skip tokens that fail to read (e.g. non-ERC20 or wrong chain)
