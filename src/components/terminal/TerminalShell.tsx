@@ -60,6 +60,7 @@ import PortfolioWidget, {
   type PortfolioHolding,
   type SnapshotHolding
 } from "./widgets/PortfolioWidget";
+import { trackEvent } from "../../lib/analytics";
 import DeployWidget from "./widgets/DeployWidget";
 
 const MAX_LOGS = 100;
@@ -285,6 +286,15 @@ export default function TerminalShell({
       console.error("Failed to save custom tokens", e);
     }
   };
+
+  const prevConnected = useRef(isConnected);
+
+  useEffect(() => {
+    if (isConnected && !prevConnected.current) {
+      trackEvent("wallet_connect");
+    }
+    prevConnected.current = isConnected;
+  }, [isConnected]);
 
   useEffect(() => {
     if (isConnected && address) {
@@ -3267,6 +3277,7 @@ export default function TerminalShell({
 
     const args = trimmed.split(/\s+/).filter(Boolean);
     const command = args[0].toLowerCase();
+    trackEvent("command_run", { command });
     const handler = commands[command];
 
     if (!handler) {
