@@ -272,7 +272,7 @@ export const chatAbi = parseAbi([
   'function fee() view returns (uint256)',
   'function owner() view returns (address)',
   'function setFee(uint256 newFee)',
-  'function withdraw()',
+  'function withdraw(address to)',
   'function transferOwnership(address newOwner)',
 ])
 
