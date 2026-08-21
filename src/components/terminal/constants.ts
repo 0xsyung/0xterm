@@ -258,6 +258,24 @@ export const COMMON_TOKENS: Record<number, Record<string, { address: Address; de
   11155420: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Optimism Sepolia Ether' } }
 }
 
+// OnChainChat — encrypted 1:1 messaging (testnets only). The contract stores
+// only `iv + ciphertext` blobs; messages are decrypted in the browser.
+// Fill with the deployed address from contracts/script/ChatDeploy.md.
+export const CHAT_CONTRACT: Record<number, Address> = {
+  // 11155111: '0x...'
+}
+
+export const chatAbi = parseAbi([
+  'function sendMessage(address to, bytes12 iv, bytes calldata senderKey, bytes calldata ciphertext) payable returns (uint256 id)',
+  'function getMessages(address to, uint256 start, uint256 count) view returns ((address from, uint256 timestamp, bytes12 iv, bytes senderKey, bytes ciphertext)[] msgs)',
+  'function inboxCount(address to) view returns (uint256)',
+  'function fee() view returns (uint256)',
+  'function owner() view returns (address)',
+  'function setFee(uint256 newFee)',
+  'function withdraw()',
+  'function transferOwnership(address newOwner)',
+])
+
 export const resolveChain = (query?: string): Chain | undefined => {
   if (!query) return undefined
   const q = query.toLowerCase().trim()

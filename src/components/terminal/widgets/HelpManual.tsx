@@ -91,6 +91,16 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
         <div>Print metadata of an ERC20 or ERC721/NFT token contract</div>
         <div className={`font-bold ${theme.primary}`}>ens &lt;name.eth | address&gt;</div>
         <div>Resolve an ENS name to an address, or an address to its ENS name</div>
+        <div className={`font-bold ${theme.primary}`}>key</div>
+        <div>Show your chat public key (share it so peers can message you)</div>
+        <div className={`font-bold ${theme.primary}`}>
+          chat &lt;address&gt; &lt;peerKeyHex&gt; &lt;message&gt;
+        </div>
+        <div>Send an encrypted 1:1 message (testnets only, tiny fee)</div>
+        <div className={`font-bold ${theme.primary}`}>inbox [&lt;address&gt;]</div>
+        <div>Read &amp; decrypt your chat messages</div>
+        <div className={`font-bold ${theme.primary}`}>chatfee</div>
+        <div>Show current message fee on the active network</div>
       </div>
       <div
         className={`border-t ${theme.border} pt-2 mt-1 text-[10px] opacity-60`}
