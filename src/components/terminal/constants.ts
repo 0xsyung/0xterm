@@ -258,7 +258,7 @@ export const COMMON_TOKENS: Record<number, Record<string, { address: Address; de
   11155420: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Optimism Sepolia Ether' } }
 }
 
-// OnChainChat — encrypted 1:1 messaging (testnets only). The contract stores
+// Chat — encrypted 1:1 messaging (testnets only). The contract stores
 // only `iv + ciphertext` blobs; messages are decrypted in the browser.
 // Fill with the deployed address from contracts/script/ChatDeploy.md.
 export const CHAT_CONTRACT: Record<number, Address> = {

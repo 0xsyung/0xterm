@@ -1,6 +1,6 @@
-# Deploy OnChainChat (encrypted 1:1 messaging)
+# Deploy Chat (encrypted 1:1 messaging)
 
-`OnChainChat` stores encrypted messages on-chain (testnets only). The contract
+`Chat` stores encrypted messages on-chain (testnets only). The contract
 never sees plaintext — it holds `iv + ciphertext` blobs. A tiny per-message
 fee deters spam; fees accumulate in the contract and are swept to the owner.
 
@@ -34,7 +34,7 @@ cast wallet address <account-name>
 cd contracts
 export SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
 
-forge script script/DeployOnChainChat.s.sol \
+forge script script/DeployChat.s.sol \
   --rpc-url $SEPOLIA_RPC_URL \
   --account <account-name> \
   --sender <YOUR_ADDRESS> \
@@ -47,7 +47,7 @@ This simulates the deployment and prints the predicted contract address + gas.
 ## 4. Broadcast for real
 
 ```bash
-forge script script/DeployOnChainChat.s.sol \
+forge script script/DeployChat.s.sol \
   --rpc-url $SEPOLIA_RPC_URL \
   --account <account-name> \
   --sender <YOUR_ADDRESS> \
@@ -55,7 +55,7 @@ forge script script/DeployOnChainChat.s.sol \
 ```
 
 The terminal will prompt for the keystore password, then submit the deployment
-and print `OnChainChat deployed at: <address>`.
+and print `Chat deployed at: <address>`.
 
 > Same pattern works for other testnets — swap `SEPOLIA_RPC_URL` (e.g. Amoy
 > `https://polygon-amoy-bor-rpc.publicnode.com`).
@@ -66,7 +66,7 @@ Open `src/components/terminal/constants.ts` and fill the placeholder:
 
 ```ts
 export const CHAT_CONTRACT: Record<number, Address> = {
-  // 11155111: '<OnChainChat address on Sepolia>',
+  // 11155111: '<Chat address on Sepolia>',
 }
 ```
 
