@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @title OnChainChat
+ * @title Chat
  * @dev Encrypted 1:1 messaging stored on-chain. The contract only ever holds
  *      opaque ciphertext (iv + encrypted bytes) — it can never read messages.
  *      Decryption happens in the browser via ECDH + AES-GCM.
@@ -15,7 +15,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  *      be moved, and setFee() lets the owner tune the spam threshold without
  *      redeploying.
  */
-contract OnChainChat is Ownable {
+contract Chat is Ownable {
     uint256 public fee;
 
     struct Message {

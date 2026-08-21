@@ -2,10 +2,10 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {OnChainChat} from "../src/OnChainChat.sol";
+import {Chat} from "../src/Chat.sol";
 
-contract OnChainChatTest is Test {
-    OnChainChat chat;
+contract ChatTest is Test {
+    Chat chat;
     address alice = makeAddr("alice");
     address bob = makeAddr("bob");
     address carol = makeAddr("carol");
@@ -16,7 +16,7 @@ contract OnChainChatTest is Test {
     receive() external payable {}
 
     function setUp() public {
-        chat = new OnChainChat(FEE);
+        chat = new Chat(FEE);
     }
 
     /// 33-byte compressed secp256k1 public key placeholder (valid length only)
@@ -42,7 +42,7 @@ contract OnChainChatTest is Test {
         assertEq(chat.inboxCount(alice), 0); // not in sender's inbox
         assertEq(chat.inboxCount(carol), 0);
 
-        OnChainChat.Message memory m = chat.getMessages(bob, 0, 10)[0];
+        Chat.Message memory m = chat.getMessages(bob, 0, 10)[0];
         assertEq(m.from, alice);
         assertEq(m.iv, IV);
         assertEq(m.senderKey, SENDER_KEY);
@@ -84,10 +84,10 @@ contract OnChainChatTest is Test {
         for (uint256 i = 0; i < 5; i++) {
             sendAs(alice, bob, IV, CT, FEE);
         }
-        OnChainChat.Message[] memory all = chat.getMessages(bob, 0, 10);
+        Chat.Message[] memory all = chat.getMessages(bob, 0, 10);
         assertEq(all.length, 5);
 
-        OnChainChat.Message[] memory slice = chat.getMessages(bob, 2, 2);
+        Chat.Message[] memory slice = chat.getMessages(bob, 2, 2);
         assertEq(slice.length, 2);
         // message ids are sequential from messageCount
         assertEq(all[2].timestamp, block.timestamp);
@@ -95,7 +95,7 @@ contract OnChainChatTest is Test {
     }
 
     function test_GetMessages_OutOfRange_ReturnsEmpty() public view {
-        OnChainChat.Message[] memory msgs = chat.getMessages(bob, 0, 10);
+        Chat.Message[] memory msgs = chat.getMessages(bob, 0, 10);
         assertEq(msgs.length, 0);
     }
 
@@ -118,7 +118,7 @@ contract OnChainChatTest is Test {
         uint256 before = carol.balance;
 
         vm.expectEmit();
-        emit OnChainChat.FeeWithdrawn(carol, bal);
+        emit Chat.FeeWithdrawn(carol, bal);
         chat.withdraw(carol);
 
         assertEq(address(chat).balance, 0);
