@@ -8,7 +8,14 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
+import {
+  useAccount,
+  useConnect,
+  useDisconnect,
+  useSwitchChain,
+  useSignMessage,
+  useWriteContract
+} from "wagmi";
 import {
   formatEther,
   formatUnits,
@@ -53,8 +60,19 @@ import {
   COMMON_TOKENS,
   resolveChain,
   IMPLEMENTATION_ADDRESSES,
-  DEXSCREENER_CHAIN
+  DEXSCREENER_CHAIN,
+  CHAT_CONTRACT,
+  chatAbi
 } from "./constants";
+import {
+  deriveKeysFromSignature,
+  deriveAesKey,
+  encryptMessage,
+  decryptMessage,
+  hexToBytes,
+  bytesToHex,
+  KEY_MESSAGE
+} from "../../lib/chatCrypto";
 import type { LogEntry, ThemeMode, DexProtocol } from "./types";
 import PortfolioWidget, {
   type PortfolioHolding,
@@ -249,6 +267,8 @@ export default function TerminalShell({
   const { connectors, connect } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChainAsync } = useSwitchChain();
+  const { signMessageAsync } = useSignMessage();
+  const { writeContractAsync } = useWriteContract();
 
   const { open } = useAppKit();
 
@@ -367,6 +387,24 @@ export default function TerminalShell({
       transport: activeUrl ? http(activeUrl) : http()
     });
   };
+
+  // --- Chat helpers (encrypted 1:1 messaging) -----------------------------
+  // The messaging key pair derives from a wallet signature on KEY_MESSAGE. We
+  // cache the derived pair in a ref so repeated chat/inbox calls don't re-sign.
+  const chatKeyCache = useRef<{ signature: string; pair: import("../../lib/chatCrypto").ChatKeyPair } | null>(null);
+
+  const getChatKeyPair = async (): Promise<import("../../lib/chatCrypto").ChatKeyPair> => {
+    if (!isConnected || !address) throw new Error("Connect a wallet to use chat.");
+    const sig = await signMessageAsync({ message: KEY_MESSAGE });
+    if (chatKeyCache.current && chatKeyCache.current.signature === sig)
+      return chatKeyCache.current.pair;
+    const pair = await deriveKeysFromSignature(sig);
+    chatKeyCache.current = { signature: sig, pair };
+    return pair;
+  };
+
+  const chatContractAddress = (chainId: number): string | null =>
+    CHAT_CONTRACT[chainId] || null;
 
   const handleThemeSwitch = (newTheme: ThemeMode) => {
     onThemeChange(newTheme);
@@ -3227,6 +3265,216 @@ export default function TerminalShell({
         };
       }
     },
+    chat: async (args) => {
+      if (!isConnected || !address)
+        return { id: generateId(), type: "text", text: "[!] Connect a wallet to send chat messages." };
+      if (args.length < 4)
+        return {
+          id: generateId(),
+          type: "text",
+          text:
+            'Usage: chat <recipientAddress> <peerPublicKeyHex> "<message...>"\n' +
+            "The recipient's public key comes from their wallet (they run \"key\")." +
+            " Share keys out-of-band once, then message freely."
+        };
+
+      const recipient = args[1];
+      const peerPubHex = args[2];
+      const message = args.slice(3).join(" ");
+      if (!isAddress(recipient))
+        return { id: generateId(), type: "text", text: `[!] "${recipient}" is not a valid address.` };
+
+      const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!chain)
+        return { id: generateId(), type: "text", text: "[!] Set a network first (network <name|id>)." };
+      const contract = chatContractAddress(chain.id);
+      if (!contract)
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] No chat contract deployed on ${chain.name}. Testnets only — see contracts/script/ChatDeploy.md.`
+        };
+
+      let peerPub: Uint8Array;
+      try {
+        peerPub = hexToBytes(peerPubHex);
+      } catch {
+        return { id: generateId(), type: "text", text: "[!] Invalid peer public key hex." };
+      }
+
+      try {
+        const myPair = await getChatKeyPair();
+        const aesKey = await deriveAesKey(myPair.privateKey, peerPub);
+        const { iv, ciphertext } = await encryptMessage(aesKey, message);
+        const fee = await getClient(chain).readContract({
+          address: contract as Address,
+          abi: chatAbi,
+          functionName: "fee"
+        });
+
+        const hash = await writeContractAsync({
+          address: contract as Address,
+          abi: chatAbi,
+          functionName: "sendMessage",
+          args: [
+            recipient as Address,
+            bytesToHex(iv),
+            bytesToHex(myPair.publicKey),
+            bytesToHex(ciphertext)
+          ],
+          value: fee
+        });
+
+        return [
+          {
+            id: generateId(),
+            type: "text",
+            text: `[✓] Encrypted message sent to ${recipient} (fee ${fee})`
+          },
+          {
+            id: generateId(),
+            type: "text",
+            text: `   tx: ${hash}`
+          }
+        ];
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] chat failed: ${err.message || err}`
+        };
+      }
+    },
+    inbox: async (args) => {
+      if (!isConnected || !address)
+        return { id: generateId(), type: "text", text: "[!] Connect a wallet to read chat." };
+
+      const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!chain)
+        return { id: generateId(), type: "text", text: "[!] Set a network first." };
+      const contract = chatContractAddress(chain.id);
+      if (!contract)
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] No chat contract deployed on ${chain.name}. Testnets only.`
+        };
+
+      // Read YOUR inbox by default; pass an address to read a peer's outbox→your
+      // view. In practice reading your own inbox is the main path.
+      const target = args[1] && isAddress(args[1]) ? getAddress(args[1]) : getAddress(address);
+
+      try {
+        const count = await getClient(chain).readContract({
+          address: contract as Address,
+          abi: chatAbi,
+          functionName: "inboxCount",
+          args: [target as Address]
+        });
+        if (Number(count) === 0)
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[✗] No messages for ${target}.`
+          };
+
+        const msgs = await getClient(chain).readContract({
+          address: contract as Address,
+          abi: chatAbi,
+          functionName: "getMessages",
+          args: [target as Address, 0n, count]
+        });
+
+        // Derive own key and decrypt each message with the sender's stored
+        // public key. A message only decrypts if it was sent to us (ECDH
+        // shared secret matches our key + their senderKey).
+        const myPair = await getChatKeyPair();
+        const decrypted = [];
+        for (const m of msgs) {
+          try {
+            const iv = hexToBytes(m.iv as string);
+            const ct = hexToBytes(m.ciphertext as string);
+            const senderPub = hexToBytes(m.senderKey as string);
+            const aesKey = await deriveAesKey(myPair.privateKey, senderPub);
+            const text = await decryptMessage(aesKey, { iv, ciphertext: ct });
+            decrypted.push({
+              from: m.from as string,
+              timestamp: Number(m.timestamp),
+              iv: m.iv as string,
+              ciphertext: m.ciphertext as string,
+              decrypted: text
+            });
+          } catch {
+            decrypted.push({
+              from: m.from as string,
+              timestamp: Number(m.timestamp),
+              iv: m.iv as string,
+              ciphertext: m.ciphertext as string,
+              decryptFailed: true
+            });
+          }
+        }
+
+        return {
+          id: generateId(),
+          type: "chat",
+          payload: { messages: decrypted, peer: target, self: address }
+        };
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] inbox failed: ${err.message || err}`
+        };
+      }
+    },
+    key: async () => {
+      if (!isConnected || !address)
+        return { id: generateId(), type: "text", text: "[!] Connect a wallet to derive your chat key." };
+      try {
+        const pair = await getChatKeyPair();
+        return {
+          id: generateId(),
+          type: "text",
+          text:
+            `Chat public key (${address}):\n` +
+            `${bytesToHex(pair.publicKey)}\n` +
+            `Share this with peers so they can send you encrypted messages.`
+        };
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] key failed: ${err.message || err}`
+        };
+      }
+    },
+    chatfee: async () => {
+      const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!chain)
+        return { id: generateId(), type: "text", text: "[!] Set a network first." };
+      const contract = chatContractAddress(chain.id);
+      if (!contract)
+        return { id: generateId(), type: "text", text: `[!] No chat contract on ${chain.name}.` };
+      try {
+        const fee = await getClient(chain).readContract({
+          address: contract as Address,
+          abi: chatAbi,
+          functionName: "fee"
+        });
+        return {
+          id: generateId(),
+          type: "text",
+          text: `Chat fee on ${chain.name}: ${formatEther(fee)} ${chain.nativeCurrency.symbol}`
+        };
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] chatfee failed: ${err.message || err}`
+        };
+      }
+    },
     connect: () => {
       if (!isConnected) {
         open();
@@ -3303,6 +3551,8 @@ export default function TerminalShell({
   commands.exp = commands.export;
   commands.imp = commands.import;
   commands.style = commands.theme;
+  commands.msg = commands.chat;
+  commands.messages = commands.inbox;
 
   const availableCommands = Object.keys(commands);
 
