@@ -1195,6 +1195,7 @@ export default function TerminalShell({
       return { id: generateId(), type: "component", component: deployWidget };
     },
     help: () => ({ id: generateId(), type: "help" }),
+    "?": () => ({ id: generateId(), type: "help" }),
     networks: () => ({ id: generateId(), type: "networks" }),
     tokens: (args) => {
       if (!activeChainId) {
