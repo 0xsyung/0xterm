@@ -89,6 +89,8 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
         <div>Check if address is a valid ERC20 or ERC721/NFT contract</div>
         <div className={`font-bold ${theme.primary}`}>info &lt;address&gt;</div>
         <div>Print metadata of an ERC20 or ERC721/NFT token contract</div>
+        <div className={`font-bold ${theme.primary}`}>ens &lt;name.eth | address&gt;</div>
+        <div>Resolve an ENS name to an address, or an address to its ENS name</div>
       </div>
       <div
         className={`border-t ${theme.border} pt-2 mt-1 text-[10px] opacity-60`}

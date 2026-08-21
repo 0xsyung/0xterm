@@ -3184,6 +3184,49 @@ export default function TerminalShell({
       const poolWidget = await fetchOnChainLiquidity(args[1], targetChain);
       return { id: generateId(), type: "component", component: poolWidget };
     },
+    ens: async (args) => {
+      if (!args[1])
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: ens <name.eth | address> — resolve an ENS name to its address, or reverse-resolve an address to its primary ENS name."
+        };
+
+      const ethChain = SUPPORTED_CHAINS.find((c) => c.id === 1)!;
+      const client = getClient(ethChain);
+      const query = args[1].trim();
+
+      const isEnsName =
+        query.toLowerCase().endsWith(".eth") ||
+        !isAddress(query);
+
+      try {
+        if (isEnsName) {
+          const addr = await client.getEnsAddress({ name: query });
+          return {
+            id: generateId(),
+            type: "text",
+            text: addr
+              ? `[✓] ${query} → ${addr}`
+              : `[✗] No ENS record found for "${query}".`
+          };
+        }
+        const name = await client.getEnsName({ address: getAddress(query) });
+        return {
+          id: generateId(),
+          type: "text",
+          text: name
+            ? `[✓] ${getAddress(query)} → ${name}`
+            : `[✗] No primary ENS name found for ${getAddress(query)}.`
+        };
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] ENS lookup failed: ${err.message || err}`
+        };
+      }
+    },
     connect: () => {
       if (!isConnected) {
         open();
