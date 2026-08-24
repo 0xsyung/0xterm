@@ -1166,11 +1166,10 @@ export default function TerminalShell({
   };
 
   // --- new-message poller ----------------------------------------------
-  // Background check every 10s for unread chat messages. When a new message is
-  // found it prints a notification and PAUSES (so it won't spam). Re-enabled by
-  // running `inbox` (a manual fetch resets the baseline + unpauses).
+  // Background check every 60s for unread chat messages. When a new message is
+  // found it prints a notification (no pause — running `inbox` is just a manual
+  // fetch; the poller keeps going and only reports genuinely new messages).
   const chatBaseline = useRef<Record<string, number>>({});
-  const chatPollPaused = useRef(false);
 
   useEffect(() => {
     if (!isConnected || !address) return;
@@ -1182,7 +1181,6 @@ export default function TerminalShell({
     const client = getClient(chain);
 
     const check = async () => {
-      if (chatPollPaused.current) return;
       try {
         const senders = (await client.readContract({
           address: contract as Address,
@@ -1220,7 +1218,6 @@ export default function TerminalShell({
 
         if (newest) {
           chatBaseline.current = fresh;
-          chatPollPaused.current = true;
           setLogs((prev) =>
             [
               ...prev,
@@ -1240,7 +1237,7 @@ export default function TerminalShell({
     };
 
     check();
-    const id = setInterval(check, 10_000);
+    const id = setInterval(check, 60_000);
     return () => clearInterval(id);
   }, [isConnected, address, activeChainId]);
 
@@ -3539,7 +3536,8 @@ export default function TerminalShell({
             a.payload.messages[0].timestamp - b.payload.messages[0].timestamp
         );
 
-        // messages fetched — reset the poller baseline + resume it
+        // messages fetched — reset the poller baseline so it only reports
+        // messages that arrive after this read
         const fresh: Record<string, number> = {};
         for (const s of senders) {
           fresh[s.toLowerCase()] = Number(
@@ -3552,7 +3550,6 @@ export default function TerminalShell({
           );
         }
         chatBaseline.current = fresh;
-        chatPollPaused.current = false;
 
         return threads;
       } catch (err: any) {
