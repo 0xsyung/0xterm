@@ -392,15 +392,16 @@ export default function TerminalShell({
   // --- Chat helpers (encrypted 1:1 messaging) -----------------------------
   // The messaging key pair derives from a wallet signature on KEY_MESSAGE. We
   // cache the derived pair in a ref so repeated chat/inbox calls don't re-sign.
-  const chatKeyCache = useRef<{ signature: string; pair: import("../../lib/chatCrypto").ChatKeyPair } | null>(null);
+  const chatKeyCache = useRef<import("../../lib/chatCrypto").ChatKeyPair | null>(null);
 
   const getChatKeyPair = async (): Promise<import("../../lib/chatCrypto").ChatKeyPair> => {
     if (!isConnected || !address) throw new Error("Connect a wallet to use chat.");
+    // cache first — signing "0xterm.chat.v1" is only needed once per session;
+    // without this, every chat/inbox would re-prompt the user to sign
+    if (chatKeyCache.current) return chatKeyCache.current;
     const sig = await signMessageAsync({ message: KEY_MESSAGE });
-    if (chatKeyCache.current && chatKeyCache.current.signature === sig)
-      return chatKeyCache.current.pair;
     const pair = await deriveKeysFromSignature(sig);
-    chatKeyCache.current = { signature: sig, pair };
+    chatKeyCache.current = pair;
     return pair;
   };
 

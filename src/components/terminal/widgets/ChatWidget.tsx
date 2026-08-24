@@ -4,7 +4,7 @@
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
-import React from "react";
+import React, { useState } from "react";
 
 export type ChatMessage = {
   from: string;
@@ -27,6 +27,18 @@ export default function ChatWidget({
   theme: any;
 }) {
   const shortPeer = `${peer.slice(0, 6)}…${peer.slice(-4)}`;
+  const [copied, setCopied] = useState(false);
+
+  const copyPeer = async () => {
+    try {
+      await navigator.clipboard.writeText(peer);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard unavailable — ignore
+    }
+  };
+
   return (
     <div
       className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} text-xs space-y-2 max-w-2xl`}
@@ -34,13 +46,20 @@ export default function ChatWidget({
       <div
         className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
       >
-        <span
-          className="font-bold"
-          title={peer}
-        >
+        <span className="font-bold" title={peer}>
           CHAT · from {shortPeer}
         </span>
-        <span className="uppercase text-[10px]">encrypted on-chain</span>
+        <span className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={copyPeer}
+            title={`Copy ${peer} to reply`}
+            className={`uppercase text-[10px] underline cursor-pointer ${theme.primary}`}
+          >
+            {copied ? "copied ✓" : "copy"}
+          </button>
+          <span className="uppercase text-[10px]">encrypted on-chain</span>
+        </span>
       </div>
       {messages.length === 0 ? (
         <div className={`${theme.text}/50`}>
