@@ -26,6 +26,7 @@ export default function ChatWidget({
   self?: string;
   theme: any;
 }) {
+  const shortPeer = `${peer.slice(0, 6)}…${peer.slice(-4)}`;
   return (
     <div
       className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} text-xs space-y-2 max-w-2xl`}
@@ -33,7 +34,12 @@ export default function ChatWidget({
       <div
         className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
       >
-        <span className="font-bold">CHAT · {peer}</span>
+        <span
+          className="font-bold"
+          title={peer}
+        >
+          CHAT · from {shortPeer}
+        </span>
         <span className="uppercase text-[10px]">encrypted on-chain</span>
       </div>
       {messages.length === 0 ? (
@@ -67,7 +73,7 @@ export default function ChatWidget({
                 )}
               </div>
               <div className={`text-[10px] ${theme.text}/50`}>
-                {isSelf ? "you" : `${m.from.slice(0, 6)}…${m.from.slice(-4)}`} · {time}
+                {isSelf ? "you" : `from ${m.from.slice(0, 6)}…${m.from.slice(-4)}`} · {time}
               </div>
             </div>
           );
