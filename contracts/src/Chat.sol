@@ -40,6 +40,12 @@ contract Chat is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     mapping(address => address[]) public sendersOf;
     uint256 public messageCount;
 
+    // public-key registry: keys[address] = the owner's 33-byte compressed
+    // secp256k1 public key (their chat/messaging key). Lets a stranger send a
+    // message knowing only the recipient's ADDRESS — no out-of-band key
+    // exchange needed. Anyone may register/update their own key, at any time.
+    mapping(address => bytes) public keys;
+
     event MessageSent(
         address indexed from,
         address indexed to,
@@ -49,6 +55,7 @@ contract Chat is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     );
     event FeeChanged(uint256 newFee);
     event FeeWithdrawn(address indexed to, uint256 amount);
+    event PublicKeyRegistered(address indexed who, bytes key);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -99,6 +106,19 @@ contract Chat is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         _addSender(to, msg.sender);
 
         emit MessageSent(msg.sender, to, id, block.timestamp, ciphertext.length);
+    }
+
+    /// Register (or rotate) the caller's chat public key — 33-byte compressed
+    /// secp256k1, matching what sendMessage() stores as senderKey.
+    function setPublicKey(bytes calldata key) external {
+        require(key.length == 33, "Chat: invalid public key");
+        keys[msg.sender] = key;
+        emit PublicKeyRegistered(msg.sender, key);
+    }
+
+    /// The recipient's registered public key, or empty bytes if not registered.
+    function getPublicKey(address who) external view returns (bytes memory) {
+        return keys[who];
     }
 
     /// record `from` in `to`'s sender list on first message (else no-op)
