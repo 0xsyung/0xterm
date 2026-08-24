@@ -262,7 +262,7 @@ export const COMMON_TOKENS: Record<number, Record<string, { address: Address; de
 // only `iv + ciphertext` blobs; messages are decrypted in the browser.
 // Fill with the deployed address from contracts/script/ChatDeploy.md.
 export const CHAT_CONTRACT: Record<number, Address> = {
-  // 11155111: '0x...'
+  11155111: '0x694eA7938238037731bD0F3a3aE9F6FD2C2097ce',
 }
 
 export const chatAbi = parseAbi([
