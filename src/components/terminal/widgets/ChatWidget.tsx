@@ -19,14 +19,17 @@ export default function ChatWidget({
   messages,
   peer,
   self,
-  theme
+  theme,
+  peerLabel
 }: {
   messages: ChatMessage[];
   peer: string;
   self?: string;
   theme: any;
+  peerLabel?: string;
 }) {
   const shortPeer = `${peer.slice(0, 6)}…${peer.slice(-4)}`;
+  const label = peerLabel || shortPeer;
   const [copied, setCopied] = useState(false);
 
   const copyPeer = async () => {
@@ -47,7 +50,7 @@ export default function ChatWidget({
         className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
       >
         <span className="font-bold flex items-center gap-1.5" title={peer}>
-          CHAT · from {shortPeer}
+          CHAT · from {label}
           <button
             type="button"
             onClick={copyPeer}
@@ -90,7 +93,10 @@ export default function ChatWidget({
                 )}
               </div>
               <div className={`text-[10px] ${theme.text}/50`}>
-                {isSelf ? "you" : `from ${m.from.slice(0, 6)}…${m.from.slice(-4)}`} · {time}
+                {isSelf
+                  ? "you"
+                  : `from ${m.from.toLowerCase() === peer.toLowerCase() ? label : `${m.from.slice(0, 6)}…${m.from.slice(-4)}`}`}{" "}
+                · {time}
               </div>
             </div>
           );

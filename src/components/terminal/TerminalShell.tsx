@@ -408,6 +408,29 @@ export default function TerminalShell({
   const chatContractAddress = (chainId: number): string | null =>
     CHAT_CONTRACT[chainId] || null;
 
+  // ENS lives on Ethereum mainnet regardless of the active chain, so these
+  // helpers always query the mainnet client.
+  const resolveChatRecipient = async (input: string): Promise<Address> => {
+    const trimmed = input.trim();
+    if (isAddress(trimmed)) return getAddress(trimmed);
+    const ethClient = getClient(SUPPORTED_CHAINS.find((c) => c.id === 1)!);
+    const addr = await ethClient.getEnsAddress({ name: trimmed });
+    if (!addr)
+      throw new Error(
+        `"${trimmed}" is neither a valid address nor a resolvable ENS name.`
+      );
+    return addr;
+  };
+
+  const ensNameFor = async (addr: string): Promise<string | null> => {
+    try {
+      const ethClient = getClient(SUPPORTED_CHAINS.find((c) => c.id === 1)!);
+      return (await ethClient.getEnsName({ address: getAddress(addr) })) || null;
+    } catch {
+      return null;
+    }
+  };
+
   const handleThemeSwitch = (newTheme: ThemeMode) => {
     onThemeChange(newTheme);
     savePreference("theme", newTheme);
@@ -3350,13 +3373,21 @@ export default function TerminalShell({
         return {
           id: generateId(),
           type: "text",
-          text: 'Usage: chat <recipientAddress> "<message...>"'
+          text: 'Usage: chat <recipientAddress | ens.eth> "<message...>"'
         };
 
-      const recipient = args[1];
+      const recipientInput = args[1];
       const message = args.slice(2).join(" ");
-      if (!isAddress(recipient))
-        return { id: generateId(), type: "text", text: `[!] "${recipient}" is not a valid address.` };
+      let recipient: Address;
+      try {
+        recipient = await resolveChatRecipient(recipientInput);
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] ${err.message || err}`
+        };
+      }
 
       const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
       if (!chain)
@@ -3430,7 +3461,7 @@ export default function TerminalShell({
           {
             id: generateId(),
             type: "text",
-            text: `[✓] Encrypted message sent to ${recipient} (fee ${fee})`
+            text: `[✓] Encrypted message sent to ${isAddress(recipientInput.trim()) ? recipient : `${recipientInput.trim()} → ${recipient}`} (fee ${fee})`
           },
           {
             id: generateId(),
@@ -3524,10 +3555,11 @@ export default function TerminalShell({
               });
             }
           }
+          const peerLabel = (await ensNameFor(sender)) || undefined;
           threads.push({
             id: generateId(),
             type: "chat",
-            payload: { messages, peer: sender, self: address }
+            payload: { messages, peer: sender, self: address, peerLabel }
           });
         }
         // render oldest thread first (by its first message)
