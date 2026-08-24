@@ -27,6 +27,7 @@ import {
   encodeFunctionData,
   toHex,
   parseAbi,
+  namehash,
   type Address,
   type Chain
 } from "viem";
@@ -62,7 +63,9 @@ import {
   IMPLEMENTATION_ADDRESSES,
   DEXSCREENER_CHAIN,
   CHAT_CONTRACT,
-  chatAbi
+  chatAbi,
+  ENS_CONTRACT,
+  ensRegistryAbi
 } from "./constants";
 import {
   deriveKeysFromSignature,
@@ -408,24 +411,61 @@ export default function TerminalShell({
   const chatContractAddress = (chainId: number): string | null =>
     CHAT_CONTRACT[chainId] || null;
 
-  // ENS lives on Ethereum mainnet regardless of the active chain, so these
-  // helpers always query the mainnet client.
+  // ENS resolves on the ACTIVE chain. Mainnet uses viem's canonical v1
+  // universal resolver; testnets use 0xterm's own ENS contract (ENS_CONTRACT),
+  // since public testnets run ENSv2 (beta) or deprecated v1.
   const resolveChatRecipient = async (input: string): Promise<Address> => {
     const trimmed = input.trim();
     if (isAddress(trimmed)) return getAddress(trimmed);
-    const ethClient = getClient(SUPPORTED_CHAINS.find((c) => c.id === 1)!);
-    const addr = await ethClient.getEnsAddress({ name: trimmed });
-    if (!addr)
+
+    const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+    if (!chain) throw new Error("Set a network first (network <name|id>).");
+
+    if (chain.id === 1) {
+      const addr = await getClient(chain).getEnsAddress({ name: trimmed });
+      if (!addr)
+        throw new Error(`"${trimmed}" has no record on Ethereum mainnet.`);
+      return addr;
+    }
+
+    const contract = ENS_CONTRACT[chain.id];
+    if (!contract)
       throw new Error(
-        `"${trimmed}" is neither a valid address nor a resolvable ENS name.`
+        `No ENS on ${chain.name} yet — deploy via contracts/script/EnsDeploy.md.`
       );
+    const node = namehash(trimmed.toLowerCase());
+    const addr = (await getClient(chain).readContract({
+      address: contract as Address,
+      abi: ensRegistryAbi,
+      functionName: "addr",
+      args: [node]
+    })) as `0x${string}`;
+    if (addr === "0x0000000000000000000000000000000000000000")
+      throw new Error(`"${trimmed}" is not registered on ${chain.name} ENS.`);
     return addr;
   };
 
   const ensNameFor = async (addr: string): Promise<string | null> => {
     try {
-      const ethClient = getClient(SUPPORTED_CHAINS.find((c) => c.id === 1)!);
-      return (await ethClient.getEnsName({ address: getAddress(addr) })) || null;
+      const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!chain) return null;
+
+      if (chain.id === 1) {
+        return (
+          (await getClient(chain).getEnsName({ address: getAddress(addr) })) ||
+          null
+        );
+      }
+
+      const contract = ENS_CONTRACT[chain.id];
+      if (!contract) return null;
+      const name = (await getClient(chain).readContract({
+        address: contract as Address,
+        abi: ensRegistryAbi,
+        functionName: "nameOfAddr",
+        args: [getAddress(addr)]
+      })) as string;
+      return name || null;
     } catch {
       return null;
     }
@@ -3324,33 +3364,115 @@ export default function TerminalShell({
       return { id: generateId(), type: "component", component: poolWidget };
     },
     ens: async (args) => {
+      const sub = args[1]?.toLowerCase();
+
+      if (sub === "set" || sub === "clear") {
+        if (!isConnected || !address)
+          return { id: generateId(), type: "text", text: "[!] Connect a wallet to manage ENS records." };
+
+        const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+        if (!chain)
+          return { id: generateId(), type: "text", text: "[!] Set a network first (network <name|id>)." };
+        const contract = ENS_CONTRACT[chain.id];
+        if (!contract)
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] No ENS on ${chain.name} yet — deploy via contracts/script/EnsDeploy.md.`
+          };
+        if (chain.id === 1)
+          return {
+            id: generateId(),
+            type: "text",
+            text: "[!] The 0xterm ENS registry is testnet-only; mainnet uses the canonical ENS."
+          };
+
+        const who = getAddress(address);
+        const doWrite = async (
+          fn: "setRecord" | "clearRecord",
+          writeArgs:
+            | readonly [`0x${string}`, `0x${string}`, string]
+            | readonly [`0x${string}`, `0x${string}`],
+          label: string
+        ): Promise<LogEntry | LogEntry[]> => {
+          try {
+            const hash = await writeContractAsync({
+              address: contract as Address,
+              abi: ensRegistryAbi,
+              functionName: fn,
+              args: writeArgs
+            });
+            return [
+              { id: generateId(), type: "text", text: `[✓] ${label}` },
+              { id: generateId(), type: "text", text: `   tx: ${hash}` }
+            ];
+          } catch (err: any) {
+            return { id: generateId(), type: "text", text: `[!] ens ${sub} failed: ${err.message || err}` };
+          }
+        };
+
+        if (sub === "clear") {
+          // no params — remove the caller's own current name (one per address)
+          let myName = "";
+          try {
+            myName = (await getClient(chain).readContract({
+              address: contract as Address,
+              abi: ensRegistryAbi,
+              functionName: "nameOfAddr",
+              args: [who]
+            })) as string;
+          } catch {
+            myName = "";
+          }
+          if (!myName)
+            return {
+              id: generateId(),
+              type: "text",
+              text: "[✗] You don't have an ENS name registered on this network."
+            };
+          const node = namehash(myName.toLowerCase());
+          return doWrite("clearRecord", [node, who], `Cleared ${myName} ↔ ${who}`);
+        }
+
+        if (args.length < 3)
+          return { id: generateId(), type: "text", text: "Usage: ens set <name.eth>" };
+        const name = args[2].trim();
+        if (isAddress(name))
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] "${name}" looks like an address — pass a name like alice.eth.`
+          };
+        const node = namehash(name.toLowerCase());
+        return doWrite(
+          "setRecord",
+          [node, who, name.toLowerCase()],
+          `Registered ${name.toLowerCase()} ↔ ${who}`
+        );
+      }
+
       if (!args[1])
         return {
           id: generateId(),
           type: "text",
-          text: "Usage: ens <name.eth | address> — resolve an ENS name to its address, or reverse-resolve an address to its primary ENS name."
+          text: "Usage: ens <name.eth | address> | set <name.eth> | clear — resolve a name/address, or register/clear your record (one name per address, on the active network)."
         };
 
-      const ethChain = SUPPORTED_CHAINS.find((c) => c.id === 1)!;
-      const client = getClient(ethChain);
       const query = args[1].trim();
-
       const isEnsName =
         query.toLowerCase().endsWith(".eth") ||
         !isAddress(query);
 
       try {
         if (isEnsName) {
-          const addr = await client.getEnsAddress({ name: query });
+          const addr = await resolveChatRecipient(query);
           return {
             id: generateId(),
             type: "text",
-            text: addr
-              ? `[✓] ${query} → ${addr}`
-              : `[✗] No ENS record found for "${query}".`
+            text: `[✓] ${query} → ${addr}`
           };
         }
-        const name = await client.getEnsName({ address: getAddress(query) });
+        const name = await ensNameFor(getAddress(query));
         return {
           id: generateId(),
           type: "text",
@@ -3830,6 +3952,10 @@ export default function TerminalShell({
           // 4. Contract Checking
         } else if (command === "is" && currentArgIdx === 1) {
           candidates = ["erc20", "erc721", "nft"];
+
+          // 4b. ENS subcommands
+        } else if (command === "ens" && currentArgIdx === 1) {
+          candidates = ["set", "clear"];
 
           // 5. Register Command (Allows for optional symbol argument)
         } else if (
