@@ -1165,6 +1165,85 @@ export default function TerminalShell({
     return price;
   };
 
+  // --- new-message poller ----------------------------------------------
+  // Background check every 10s for unread chat messages. When a new message is
+  // found it prints a notification and PAUSES (so it won't spam). Re-enabled by
+  // running `inbox` (a manual fetch resets the baseline + unpauses).
+  const chatBaseline = useRef<Record<string, number>>({});
+  const chatPollPaused = useRef(false);
+
+  useEffect(() => {
+    if (!isConnected || !address) return;
+    const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+    const contract = chain ? chatContractAddress(chain.id) : null;
+    if (!chain || !contract) return;
+
+    const me = getAddress(address);
+    const client = getClient(chain);
+
+    const check = async () => {
+      if (chatPollPaused.current) return;
+      try {
+        const senders = (await client.readContract({
+          address: contract as Address,
+          abi: chatAbi,
+          functionName: "getSenders",
+          args: [me]
+        })) as readonly Address[];
+
+        const fresh: Record<string, number> = {};
+        let newest: Address | null = null;
+        let newestCount = 0;
+        for (const s of senders) {
+          const count = Number(
+            await client.readContract({
+              address: contract as Address,
+              abi: chatAbi,
+              functionName: "threadCount",
+              args: [me, s]
+            })
+          );
+          fresh[s.toLowerCase()] = count;
+          if (count > 0 && count > (chatBaseline.current[s.toLowerCase()] || 0)) {
+            if (!newest || count > newestCount) {
+              newest = s;
+              newestCount = count;
+            }
+          }
+        }
+
+        // First run: just record the baseline, don't notify.
+        if (Object.keys(chatBaseline.current).length === 0 && Object.keys(fresh).length > 0) {
+          chatBaseline.current = fresh;
+          return;
+        }
+
+        if (newest) {
+          chatBaseline.current = fresh;
+          chatPollPaused.current = true;
+          setLogs((prev) =>
+            [
+              ...prev,
+              {
+                id: generateId(),
+                type: "text",
+                text: `🔔 New encrypted message from ${newest.slice(0, 6)}…${newest.slice(-4)} — run "inbox" to read it.`
+              } as LogEntry
+            ].slice(-MAX_LOGS)
+          );
+        } else {
+          chatBaseline.current = fresh;
+        }
+      } catch {
+        // network/contract hiccup — ignore, try again next tick
+      }
+    };
+
+    check();
+    const id = setInterval(check, 10_000);
+    return () => clearInterval(id);
+  }, [isConnected, address, activeChainId]);
+
   // COMMAND REGISTRY
   type CommandHandler = (
     args: string[],
@@ -3459,6 +3538,22 @@ export default function TerminalShell({
           (a, b) =>
             a.payload.messages[0].timestamp - b.payload.messages[0].timestamp
         );
+
+        // messages fetched — reset the poller baseline + resume it
+        const fresh: Record<string, number> = {};
+        for (const s of senders) {
+          fresh[s.toLowerCase()] = Number(
+            await getClient(chain).readContract({
+              address: contract as Address,
+              abi: chatAbi,
+              functionName: "threadCount",
+              args: [target as Address, s]
+            })
+          );
+        }
+        chatBaseline.current = fresh;
+        chatPollPaused.current = false;
+
         return threads;
       } catch (err: any) {
         return {
