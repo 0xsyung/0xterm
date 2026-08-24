@@ -2,7 +2,9 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Chat} from "../src/Chat.sol";
+import {ChatV2} from "./ChatV2.t.sol";
 
 contract ChatTest is Test {
     Chat chat;
@@ -16,7 +18,8 @@ contract ChatTest is Test {
     receive() external payable {}
 
     function setUp() public {
-        chat = new Chat(FEE);
+        Chat impl = new Chat();
+        chat = Chat(address(new ERC1967Proxy(address(impl), abi.encodeCall(Chat.initialize, (FEE)))));
     }
 
     /// 33-byte compressed secp256k1 public key placeholder (valid length only)
@@ -29,25 +32,51 @@ contract ChatTest is Test {
         chat.sendMessage{value: fee}(to, iv, SENDER_KEY, ct);
     }
 
-    function test_Constructor_SetsOwnerAndFee() public view {
+    function test_Proxy_OwnerAndFee() public view {
         assertEq(chat.owner(), address(this));
         assertEq(chat.fee(), FEE);
     }
 
-    function test_SendMessage_StoresCiphertextPerRecipient() public {
+    function test_SendMessage_StoresInRecipientThreadOnly() public {
         sendAs(alice, bob, IV, CT, FEE);
 
-        assertEq(chat.inboxCount(bob), 1);
+        assertEq(chat.threadCount(bob, alice), 1);
+        assertEq(chat.threadCount(alice, bob), 0); // not mirrored to sender
+        assertEq(chat.threadCount(bob, carol), 0); // separate thread
         assertEq(chat.messageCount(), 1);
-        assertEq(chat.inboxCount(alice), 0); // not in sender's inbox
-        assertEq(chat.inboxCount(carol), 0);
 
-        Chat.Message memory m = chat.getMessages(bob, 0, 10)[0];
+        Chat.Message memory m = chat.getThread(bob, alice, 0, 10)[0];
         assertEq(m.from, alice);
         assertEq(m.iv, IV);
         assertEq(m.senderKey, SENDER_KEY);
         assertEq(m.ciphertext, CT);
         assertEq(m.timestamp, block.timestamp);
+    }
+
+    function test_Senders_ListedOncePerRecipient() public {
+        sendAs(alice, bob, IV, CT, FEE);
+        sendAs(alice, bob, IV, CT, FEE); // same sender, second message
+
+        address[] memory senders = chat.getSenders(bob);
+        assertEq(senders.length, 1);
+        assertEq(senders[0], alice);
+
+        sendAs(carol, bob, IV, CT, FEE);
+        senders = chat.getSenders(bob);
+        assertEq(senders.length, 2);
+        assertEq(senders[1], carol);
+
+        assertEq(chat.getSenders(alice).length, 0); // nobody messaged alice
+    }
+
+    function test_Threads_IsolatedPerSender() public {
+        sendAs(alice, bob, IV, CT, FEE);
+        sendAs(alice, bob, IV, CT, FEE);
+        sendAs(carol, bob, IV, CT, FEE);
+
+        assertEq(chat.threadCount(bob, alice), 2);
+        assertEq(chat.threadCount(bob, carol), 1);
+        assertEq(chat.threadCount(carol, bob), 0); // carol's inbox untouched
     }
 
     function test_SendMessage_FeeTooLow_Reverts() public {
@@ -72,30 +101,34 @@ contract ChatTest is Test {
     }
 
     function test_SendMessage_IdenticalCiphertexts_GetDistinctIds() public {
-        // same content, same iv — contract just stores them as separate messages
-        sendAs(alice, bob, IV, CT, FEE);
-        sendAs(alice, bob, IV, CT, FEE);
+        // same content, same iv — stored as separate messages, and the nonce
+        // in the id guarantees each send gets a UNIQUE id even for identical bytes
+        vm.deal(alice, 2 * FEE);
+        vm.startPrank(alice);
+        bytes32 id1 = chat.sendMessage{value: FEE}(bob, IV, SENDER_KEY, CT);
+        bytes32 id2 = chat.sendMessage{value: FEE}(bob, IV, SENDER_KEY, CT);
+        vm.stopPrank();
 
-        assertEq(chat.inboxCount(bob), 2);
+        assertEq(chat.threadCount(bob, alice), 2);
         assertEq(chat.messageCount(), 2);
+        assertTrue(id1 != id2, "identical messages must get distinct ids");
     }
 
-    function test_GetMessages_Slicing() public {
+    function test_GetThread_Slicing() public {
         for (uint256 i = 0; i < 5; i++) {
             sendAs(alice, bob, IV, CT, FEE);
         }
-        Chat.Message[] memory all = chat.getMessages(bob, 0, 10);
+        Chat.Message[] memory all = chat.getThread(bob, alice, 0, 10);
         assertEq(all.length, 5);
 
-        Chat.Message[] memory slice = chat.getMessages(bob, 2, 2);
+        Chat.Message[] memory slice = chat.getThread(bob, alice, 2, 2);
         assertEq(slice.length, 2);
-        // message ids are sequential from messageCount
         assertEq(all[2].timestamp, block.timestamp);
         assertEq(slice[0].timestamp, all[2].timestamp);
     }
 
-    function test_GetMessages_OutOfRange_ReturnsEmpty() public view {
-        Chat.Message[] memory msgs = chat.getMessages(bob, 0, 10);
+    function test_GetThread_OutOfRange_ReturnsEmpty() public view {
+        Chat.Message[] memory msgs = chat.getThread(bob, alice, 0, 10);
         assertEq(msgs.length, 0);
     }
 
@@ -154,5 +187,32 @@ contract ChatTest is Test {
         chat.withdraw(bob);
         assertEq(address(chat).balance, 0);
         assertEq(bob.balance, FEE);
+    }
+
+    /// UUPS upgrade preserves chat history (storage lives in the proxy).
+    function test_Upgrade_PreservesHistory() public {
+        sendAs(alice, bob, IV, CT, FEE);
+        assertEq(chat.threadCount(bob, alice), 1);
+
+        ChatV2 implV2 = new ChatV2();
+        chat.upgradeToAndCall(address(implV2), "");
+
+        // v2 exposes a new function (extraFeeForTest) on top of the same layout
+        ChatV2(address(chat)).setExtraFeeForTest(12345);
+        assertEq(ChatV2(address(chat)).extraFeeForTest(), 12345);
+        // history preserved through the upgrade
+        assertEq(chat.threadCount(bob, alice), 1);
+        Chat.Message memory m = chat.getThread(bob, alice, 0, 10)[0];
+        assertEq(m.from, alice);
+        assertEq(m.ciphertext, CT);
+    }
+
+    /// only the owner can upgrade
+    function test_Upgrade_OnlyOwner() public {
+        ChatV2 implV2 = new ChatV2();
+
+        vm.prank(alice);
+        vm.expectRevert();
+        chat.upgradeToAndCall(address(implV2), "");
     }
 }

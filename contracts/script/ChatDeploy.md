@@ -4,6 +4,19 @@
 never sees plaintext — it holds `iv + ciphertext` blobs. A tiny per-message
 fee deters spam; fees accumulate in the contract and are swept to the owner.
 
+**Per-thread storage.** History is keyed `inbox[recipient][sender]` — one
+conversation per `(recipient, sender)` pair, so reading a thread is a single
+`getThread` call (no scanning the whole inbox). `getSenders(recipient)` lists
+the distinct senders so the UI can enumerate all conversations. Every message
+also emits `MessageSent(from, to, id, ts, len)`.
+
+**Upgradeable (UUPS proxy).** `Chat` runs behind an `ERC1967Proxy`. The proxy
+owns the storage (all chat history); the logic lives in a separate
+implementation contract. Upgrading later only swaps the implementation via
+`UpgradeChat.s.sol` — the proxy address (and therefore every message) never
+moves. The proxy address differs per chain, so wire the per-chain proxy
+address into the frontend `CHAT_CONTRACT`.
+
 ## 1. Prerequisites
 
 - Foundry installed (`foundryup`).
@@ -55,18 +68,20 @@ forge script script/DeployChat.s.sol \
 ```
 
 The terminal will prompt for the keystore password, then submit the deployment
-and print `Chat deployed at: <address>`.
+and print `Chat proxy deployed at: <address>` (the proxy is what callers use;
+the implementation address is printed alongside it).
 
 > Same pattern works for other testnets — swap `SEPOLIA_RPC_URL` (e.g. Amoy
 > `https://polygon-amoy-bor-rpc.publicnode.com`).
 
 ## 5. After a successful broadcast — wire the address into the frontend
 
-Open `src/components/terminal/constants.ts` and fill the placeholder:
+Open `src/components/terminal/constants.ts` and fill the placeholder with the
+**proxy** address (not the implementation):
 
 ```ts
 export const CHAT_CONTRACT: Record<number, Address> = {
-  // 11155111: '<Chat address on Sepolia>',
+  // 11155111: '<Chat proxy address on Sepolia>',
 }
 ```
 
@@ -81,7 +96,30 @@ cast call --rpc-url $SEPOLIA_RPC_URL <contract> "fee()(uint256)"
 cast call --rpc-url $SEPOLIA_RPC_URL <contract> "owner()(address)"
 ```
 
-## 7. Operator actions
+## 7. Upgrade the logic (history is preserved)
+
+Deploy a new implementation and point the proxy at it. Storage (all chat
+history) lives in the proxy, so nothing is lost.
+
+```bash
+forge script script/UpgradeChat.s.sol:UpgradeChat \
+  --rpc-url $SEPOLIA_RPC_URL \
+  --account <account-name> \
+  --sender <OWNER_ADDRESS> \
+  --sig "run(address)" <PROXY_ADDRESS> \
+  --broadcast --slow
+```
+
+Dry-run first (omit `--broadcast`) to see the new implementation address and
+gas. Only the proxy owner (the `--sender` that deployed) may run this.
+
+> **IMPORTANT — storage layout.** The new implementation must keep the same
+> storage slots for all existing state (`fee`, `inbox`, `sendersOf`,
+> `messageCount`): keep those fields first, in the same order, and only
+> *append* new state at the end. Reordering or renaming existing fields
+> silently corrupts history.
+
+## 8. Operator actions
 
 - **Set the fee** (spam threshold), owner only:
   ```bash

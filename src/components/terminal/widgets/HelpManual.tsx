@@ -98,7 +98,7 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
         </div>
         <div>Send an encrypted 1:1 message (testnets only, tiny fee)</div>
         <div className={`font-bold ${theme.primary}`}>inbox [&lt;address&gt;]</div>
-        <div>Read &amp; decrypt your chat messages</div>
+        <div>Read &amp; decrypt your chat threads (one per sender)</div>
         <div className={`font-bold ${theme.primary}`}>chatfee</div>
         <div>Show current message fee on the active network</div>
       </div>
