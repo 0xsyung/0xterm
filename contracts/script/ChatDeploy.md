@@ -14,8 +14,8 @@ also emits `MessageSent(from, to, id, ts, len)`.
 chat public key (`setPublicKey` / `getPublicKey`). A sender can encrypt to a
 stranger knowing only their **address** — the recipient's key comes from the
 on-chain registry, no out-of-band key exchange. Registration is one
-`setPublicKey` tx, triggered automatically the first time a user runs `chat`
-or `key`.
+`setPublicKey` tx, triggered automatically the first time a user sends a
+`chat` message (subsequent sends skip it — the key is already registered).
 
 **Upgradeable (UUPS proxy).** `Chat` runs behind an `ERC1967Proxy`. The proxy
 owns the storage (all chat history); the logic lives in a separate

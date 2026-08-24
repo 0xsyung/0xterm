@@ -3296,16 +3296,25 @@ export default function TerminalShell({
         const myPair = await getChatKeyPair();
         const client = getClient(chain);
 
-        // register my own key so the recipient can reply via address lookup
-        await writeContractAsync({
+        // register my own key so the recipient can reply via address lookup —
+        // only once; subsequent chats skip the write (key unchanged)
+        const myRegistered = (await client.readContract({
           address: contract as Address,
           abi: chatAbi,
-          functionName: "setPublicKey",
-          args: [bytesToHex(myPair.publicKey)]
-        });
+          functionName: "getPublicKey",
+          args: [address as Address]
+        })) as `0x${string}`;
+        if (!myRegistered || myRegistered === "0x" || myRegistered === "0x0") {
+          await writeContractAsync({
+            address: contract as Address,
+            abi: chatAbi,
+            functionName: "setPublicKey",
+            args: [bytesToHex(myPair.publicKey)]
+          });
+        }
 
         // the recipient's key comes from the on-chain registry — no out-of-band
-        // exchange. They must have registered once (e.g. by running chat/key).
+        // exchange. They must have registered once (their first chat auto-registers).
         const peerKey = (await client.readContract({
           address: contract as Address,
           abi: chatAbi,
@@ -3316,7 +3325,7 @@ export default function TerminalShell({
           return {
             id: generateId(),
             type: "text",
-            text: `[!] ${recipient} hasn't registered a chat key yet. Ask them to use the app once (run "key" or send a message), then retry.`
+            text: `[!] ${recipient} hasn't registered a chat key yet. Ask them to send their first chat message, then retry.`
           };
 
         const aesKey = await deriveAesKey(myPair.privateKey, hexToBytes(peerKey));
@@ -3455,40 +3464,6 @@ export default function TerminalShell({
           id: generateId(),
           type: "text",
           text: `[!] inbox failed: ${err.message || err}`
-        };
-      }
-    },
-    key: async () => {
-      if (!isConnected || !address)
-        return { id: generateId(), type: "text", text: "[!] Connect a wallet to derive your chat key." };
-      const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
-      if (!chain)
-        return { id: generateId(), type: "text", text: "[!] Set a network first (network <name|id>)." };
-      const contract = chatContractAddress(chain.id);
-      if (!contract)
-        return { id: generateId(), type: "text", text: `[!] No chat contract on ${chain.name}.` };
-      try {
-        const pair = await getChatKeyPair();
-        // register on-chain so peers can find this key by address
-        await writeContractAsync({
-          address: contract as Address,
-          abi: chatAbi,
-          functionName: "setPublicKey",
-          args: [bytesToHex(pair.publicKey)]
-        });
-        return {
-          id: generateId(),
-          type: "text",
-          text:
-            `Chat public key (${address}):\n` +
-            `${bytesToHex(pair.publicKey)}\n` +
-            `Registered on-chain — peers can message you using just your address.`
-        };
-      } catch (err: any) {
-        return {
-          id: generateId(),
-          type: "text",
-          text: `[!] key failed: ${err.message || err}`
         };
       }
     },
