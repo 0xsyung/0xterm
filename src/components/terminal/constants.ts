@@ -16,7 +16,7 @@ import {
   polygonAmoy,
   optimismSepolia
 } from 'viem/chains'
-import { parseAbi, type Address, type Chain } from 'viem'
+import { namehash, parseAbi, type Address, type Chain } from 'viem'
 import type { DexProtocol, ThemeConfig, ThemeMode } from './types'
 
 export const THEMES: Record<ThemeMode, ThemeConfig> = {
@@ -264,6 +264,21 @@ export const COMMON_TOKENS: Record<number, Record<string, { address: Address; de
 export const CHAT_CONTRACT: Record<number, Address> = {
   11155111: '0x694eA7938238037731bD0F3a3aE9F6FD2C2097ce',
 }
+
+// 0xterm's own ENS registry + resolver (testnets only) — name ↔ address on
+// the ACTIVE chain. Mainnet keeps the canonical ENS (resolved via viem's v1
+// universal resolver). Fill with the deployed proxy address from
+// contracts/script/EnsDeploy.md.
+export const ENS_CONTRACT: Record<number, Address> = {
+  11155111: '0x1C9104434DecEDCCa8C02Ec2c324aaFdE5f5e06f',
+}
+
+export const ensRegistryAbi = parseAbi([
+  'function setRecord(bytes32 node, address who, string name)',
+  'function clearRecord(bytes32 node, address who)',
+  'function addr(bytes32 node) view returns (address)',
+  'function nameOfAddr(address who) view returns (string)',
+])
 
 export const chatAbi = parseAbi([
   'function sendMessage(address to, bytes12 iv, bytes calldata senderKey, bytes calldata ciphertext) payable returns (bytes32 id)',

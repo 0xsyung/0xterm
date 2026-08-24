@@ -136,8 +136,10 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
           <div>Print metadata of an ERC20 or ERC721/NFT token contract</div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-x-4">
-          <div className={`font-bold ${theme.primary}`}>ens &lt;name.eth | address&gt;</div>
-          <div>Resolve an ENS name to an address, or an address to its ENS name</div>
+          <div className={`font-bold ${theme.primary}`}>
+            ens &lt;name.eth | address&gt; | set &lt;name.eth&gt; | clear
+          </div>
+          <div>Resolve a name/address, or register/clear your record (one name per address, on the active network)</div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-x-4">
           <div className={`font-bold ${theme.primary}`}>
