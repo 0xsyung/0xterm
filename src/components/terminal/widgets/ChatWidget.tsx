@@ -46,10 +46,8 @@ export default function ChatWidget({
       <div
         className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
       >
-        <span className="font-bold" title={peer}>
+        <span className="font-bold flex items-center gap-1.5" title={peer}>
           CHAT · from {shortPeer}
-        </span>
-        <span className="flex items-center gap-2">
           <button
             type="button"
             onClick={copyPeer}
@@ -58,8 +56,8 @@ export default function ChatWidget({
           >
             {copied ? "copied ✓" : "copy"}
           </button>
-          <span className="uppercase text-[10px]">encrypted on-chain</span>
         </span>
+        <span className="uppercase text-[10px]">encrypted on-chain</span>
       </div>
       {messages.length === 0 ? (
         <div className={`${theme.text}/50`}>
