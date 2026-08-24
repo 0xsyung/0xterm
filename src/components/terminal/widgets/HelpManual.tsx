@@ -141,7 +141,7 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-x-4">
           <div className={`font-bold ${theme.primary}`}>
-            chat &lt;address&gt; &lt;message&gt;
+            chat &lt;address | ens.eth&gt; &lt;message&gt;
           </div>
           <div>Send an encrypted 1:1 message (testnets only, tiny fee; your key auto-registers on first send)</div>
         </div>
