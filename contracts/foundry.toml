@@ -37,4 +37,20 @@ remappings = [
     "base64-sol/=lib/base64/",
 ]
 
+# Uniswap V2 fork deployment: v2-core pins solc =0.5.16 and v2-periphery pins
+# solc =0.6.6 (no single solc satisfies both), and both are far older than the
+# forge-std scripts need. So the V2 stack is split into two isolated scripts —
+# one per pinned solc — each with its own minimal Vm interface (no forge-std).
+# Scoping src away from src/ keeps the default OZ-v5 build untouched.
+[profile.univ2]
+src = "script-univ2"
+script = "script-univ2"
+out = "out-univ2"
+libs = ["lib"]
+remappings = [
+    "@uniswap/v2-core/=lib/v2-core/",
+    "@uniswap/v2-periphery/=lib/v2-periphery/",
+    "@uniswap/lib/=lib/solidity-lib/",
+]
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

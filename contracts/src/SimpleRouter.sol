@@ -13,7 +13,7 @@ contract SimpleRouter {
     event SwapExecution(address indexed user, uint256 amountIn, uint256 amountOut);
     event LiquidityAdded(address indexed user, uint256 amountTokenA, uint256 amountTokenB);
 
-    constructor(address _factory, address _WETH) {
+    constructor(address _factory, address _WETH) public {
         factory = _factory;
         WETH = _WETH;
     }
