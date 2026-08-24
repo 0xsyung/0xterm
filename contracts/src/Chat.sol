@@ -1,21 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /**
  * @title Chat
- * @dev Encrypted 1:1 messaging stored on-chain. The contract only ever holds
- *      opaque ciphertext (iv + encrypted bytes) — it can never read messages.
- *      Decryption happens in the browser via ECDH + AES-GCM.
+ * @dev Encrypted 1:1 messaging stored on-chain, behind a UUPS upgradeable proxy.
+ *      The contract only ever holds opaque ciphertext (iv + encrypted bytes) — it
+ *      can never read messages. Decryption happens in the browser via ECDH + AES-GCM.
+ *
+ *      The PROXY owns the storage, so chat history (`inbox` / `sendersOf`) and
+ *      the `messageCount` id-nonce survive logic upgrades. The implementation is
+ *      deployed separately and the proxy delegates to it; upgradeToAndCall()
+ *      swaps the implementation while keeping all history.
  *
  *      A tiny per-message fee (paid in the chain's native token) deters spam.
- *      Fees accumulate in the contract and are swept to the owner by
- *      withdraw(); ownership is transferable via Ownable so the fee sink can
- *      be moved, and setFee() lets the owner tune the spam threshold without
+ *      Fees accumulate in the contract and are swept to the owner by withdraw();
+ *      ownership is transferable via OwnableUpgradeable so the fee sink can be
+ *      moved, and setFee() lets the owner tune the spam threshold without
  *      redeploying.
  */
-contract Chat is Ownable {
+contract Chat is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     uint256 public fee;
 
     struct Message {
@@ -26,21 +33,33 @@ contract Chat is Ownable {
         bytes ciphertext; // encrypted content, opaque to the contract
     }
 
-    // per-recipient inbox; a conversation is the intersection of both inboxes
-    mapping(address => Message[]) public inbox;
+    // per-recipient, per-sender thread: inbox[to][from] is one conversation.
+    // sendersOf[to] tracks distinct senders so the recipient can enumerate all
+    // threads in one place (instead of scanning every address).
+    mapping(address => mapping(address => Message[])) public inbox;
+    mapping(address => address[]) public sendersOf;
     uint256 public messageCount;
 
     event MessageSent(
         address indexed from,
         address indexed to,
-        uint256 indexed id,
+        bytes32 indexed id,
         uint256 timestamp,
         uint256 len
     );
     event FeeChanged(uint256 newFee);
     event FeeWithdrawn(address indexed to, uint256 amount);
 
-    constructor(uint256 initialFee) Ownable(msg.sender) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        // The implementation is deployed directly (not through a proxy), so it
+        // must not be initializable — locks it forever to prevent a logic-level
+        // hijack. Only the proxy is initialized via initialize().
+        _disableInitializers();
+    }
+
+    function initialize(uint256 initialFee) public initializer {
+        __Ownable_init(msg.sender);
         fee = initialFee;
     }
 
@@ -57,13 +76,18 @@ contract Chat is Ownable {
         bytes12 iv,
         bytes calldata senderKey,
         bytes calldata ciphertext
-    ) external payable returns (uint256 id) {
+    ) external payable returns (bytes32 id) {
         require(msg.value >= fee, "Chat: fee too low");
         require(ciphertext.length > 0, "Chat: empty message");
         require(senderKey.length == 33, "Chat: invalid sender key");
 
-        id = messageCount++;
-        inbox[to].push(
+        // id = content-address (keccak of the message) mixed with the global
+        // send counter. The content part makes it tamper-evident and not
+        // guessable in advance; the counter (nonce) guarantees a UNIQUE id
+        // even for identical messages, and provides a chain-wide ordering/freshness
+        // signal for external indexers.
+        id = keccak256(abi.encodePacked(messageCount++, to, iv, senderKey, ciphertext));
+        inbox[to][msg.sender].push(
             Message({
                 from: msg.sender,
                 timestamp: block.timestamp,
@@ -72,30 +96,47 @@ contract Chat is Ownable {
                 ciphertext: ciphertext
             })
         );
+        _addSender(to, msg.sender);
 
         emit MessageSent(msg.sender, to, id, block.timestamp, ciphertext.length);
     }
 
+    /// record `from` in `to`'s sender list on first message (else no-op)
+    function _addSender(address to, address from) internal {
+        address[] storage senders = sendersOf[to];
+        for (uint256 i = 0; i < senders.length; i++) {
+            if (senders[i] == from) return;
+        }
+        senders.push(from);
+    }
+
     /**
-     * @notice Read a slice of `to`'s inbox (oldest first).
+     * @notice Read a slice of the `to` ↔ `from` thread (oldest first).
      */
-    function getMessages(
+    function getThread(
         address to,
+        address from,
         uint256 start,
         uint256 count
     ) external view returns (Message[] memory msgs) {
-        Message[] storage all = inbox[to];
-        if (start >= all.length) return new Message[](0);
+        Message[] storage thread = inbox[to][from];
+        if (start >= thread.length) return new Message[](0);
         uint256 end = start + count;
-        if (end > all.length) end = all.length;
+        if (end > thread.length) end = thread.length;
         msgs = new Message[](end - start);
         for (uint256 i = start; i < end; i++) {
-            msgs[i - start] = all[i];
+            msgs[i - start] = thread[i];
         }
     }
 
-    function inboxCount(address to) external view returns (uint256) {
-        return inbox[to].length;
+    /// total messages in the `to` ↔ `from` thread
+    function threadCount(address to, address from) external view returns (uint256) {
+        return inbox[to][from].length;
+    }
+
+    /// distinct senders who have messaged `to` (to enumerate conversations)
+    function getSenders(address to) external view returns (address[] memory) {
+        return sendersOf[to];
     }
 
     function setFee(uint256 newFee) external onlyOwner {
@@ -115,4 +156,11 @@ contract Chat is Ownable {
         require(ok, "Chat: withdraw failed");
         emit FeeWithdrawn(to, bal);
     }
+
+    /**
+     * @notice UUPS: only the owner may point the proxy at a new implementation.
+     *         History lives in the proxy's storage, so it is preserved across
+     *         upgrades.
+     */
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

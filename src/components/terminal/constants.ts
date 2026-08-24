@@ -266,9 +266,10 @@ export const CHAT_CONTRACT: Record<number, Address> = {
 }
 
 export const chatAbi = parseAbi([
-  'function sendMessage(address to, bytes12 iv, bytes calldata senderKey, bytes calldata ciphertext) payable returns (uint256 id)',
-  'function getMessages(address to, uint256 start, uint256 count) view returns ((address from, uint256 timestamp, bytes12 iv, bytes senderKey, bytes ciphertext)[] msgs)',
-  'function inboxCount(address to) view returns (uint256)',
+  'function sendMessage(address to, bytes12 iv, bytes calldata senderKey, bytes calldata ciphertext) payable returns (bytes32 id)',
+  'function getThread(address to, address from, uint256 start, uint256 count) view returns ((address from, uint256 timestamp, bytes12 iv, bytes senderKey, bytes ciphertext)[] msgs)',
+  'function threadCount(address to, address from) view returns (uint256)',
+  'function getSenders(address to) view returns (address[])',
   'function fee() view returns (uint256)',
   'function owner() view returns (address)',
   'function setFee(uint256 newFee)',

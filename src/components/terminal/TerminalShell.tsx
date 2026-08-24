@@ -80,6 +80,7 @@ import PortfolioWidget, {
 } from "./widgets/PortfolioWidget";
 import { trackEvent } from "../../lib/analytics";
 import DeployWidget from "./widgets/DeployWidget";
+import type { ChatMessage } from "./widgets/ChatWidget";
 
 const MAX_LOGS = 100;
 
@@ -3360,66 +3361,81 @@ export default function TerminalShell({
           text: `[!] No chat contract deployed on ${chain.name}. Testnets only.`
         };
 
-      // Read YOUR inbox by default; pass an address to read a peer's outbox→your
-      // view. In practice reading your own inbox is the main path.
+      // Read YOUR inbox by default; pass an address to read a peer's view of
+      // their own threads. In practice reading your own inbox is the main path.
       const target = args[1] && isAddress(args[1]) ? getAddress(args[1]) : getAddress(address);
 
       try {
-        const count = await getClient(chain).readContract({
+        // Enumerate all distinct senders (threads) for the target recipient.
+        const senders = (await getClient(chain).readContract({
           address: contract as Address,
           abi: chatAbi,
-          functionName: "inboxCount",
+          functionName: "getSenders",
           args: [target as Address]
-        });
-        if (Number(count) === 0)
+        })) as readonly Address[];
+
+        if (senders.length === 0)
           return {
             id: generateId(),
             type: "text",
             text: `[✗] No messages for ${target}.`
           };
 
-        const msgs = await getClient(chain).readContract({
-          address: contract as Address,
-          abi: chatAbi,
-          functionName: "getMessages",
-          args: [target as Address, 0n, count]
-        });
-
-        // Derive own key and decrypt each message with the sender's stored
-        // public key. A message only decrypts if it was sent to us (ECDH
-        // shared secret matches our key + their senderKey).
+        // Fetch every thread (per-sender), decrypt with our key, and render
+        // each sender as its own chat widget. A message only decrypts if it was
+        // sent to us (ECDH matches our key + their senderKey).
         const myPair = await getChatKeyPair();
-        const decrypted = [];
-        for (const m of msgs) {
-          try {
-            const iv = hexToBytes(m.iv as string);
-            const ct = hexToBytes(m.ciphertext as string);
-            const senderPub = hexToBytes(m.senderKey as string);
-            const aesKey = await deriveAesKey(myPair.privateKey, senderPub);
-            const text = await decryptMessage(aesKey, { iv, ciphertext: ct });
-            decrypted.push({
-              from: m.from as string,
-              timestamp: Number(m.timestamp),
-              iv: m.iv as string,
-              ciphertext: m.ciphertext as string,
-              decrypted: text
-            });
-          } catch {
-            decrypted.push({
-              from: m.from as string,
-              timestamp: Number(m.timestamp),
-              iv: m.iv as string,
-              ciphertext: m.ciphertext as string,
-              decryptFailed: true
-            });
+        const threads: LogEntry[] = [];
+        for (const sender of senders) {
+          const count = await getClient(chain).readContract({
+            address: contract as Address,
+            abi: chatAbi,
+            functionName: "threadCount",
+            args: [target as Address, sender]
+          });
+          const msgs = await getClient(chain).readContract({
+            address: contract as Address,
+            abi: chatAbi,
+            functionName: "getThread",
+            args: [target as Address, sender, 0n, count]
+          });
+          const messages: ChatMessage[] = [];
+          for (const m of msgs) {
+            try {
+              const iv = hexToBytes(m.iv as string);
+              const ct = hexToBytes(m.ciphertext as string);
+              const senderPub = hexToBytes(m.senderKey as string);
+              const aesKey = await deriveAesKey(myPair.privateKey, senderPub);
+              const text = await decryptMessage(aesKey, { iv, ciphertext: ct });
+              messages.push({
+                from: m.from as string,
+                timestamp: Number(m.timestamp),
+                iv: m.iv as string,
+                ciphertext: m.ciphertext as string,
+                decrypted: text
+              });
+            } catch {
+              messages.push({
+                from: m.from as string,
+                timestamp: Number(m.timestamp),
+                iv: m.iv as string,
+                ciphertext: m.ciphertext as string,
+                decryptFailed: true
+              });
+            }
           }
+          threads.push({
+            id: generateId(),
+            type: "chat",
+            payload: { messages, peer: sender, self: address }
+          });
         }
-
-        return {
-          id: generateId(),
-          type: "chat",
-          payload: { messages: decrypted, peer: target, self: address }
-        };
+        // render oldest thread first (by its first message)
+        threads.sort(
+          (a, b) =>
+            a.payload.messages[0].timestamp - b.payload.messages[0].timestamp
+        );
+        return threads;
       } catch (err: any) {
         return {
           id: generateId(),
