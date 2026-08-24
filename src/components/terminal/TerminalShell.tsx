@@ -3269,19 +3269,15 @@ export default function TerminalShell({
     chat: async (args) => {
       if (!isConnected || !address)
         return { id: generateId(), type: "text", text: "[!] Connect a wallet to send chat messages." };
-      if (args.length < 4)
+      if (args.length < 3)
         return {
           id: generateId(),
           type: "text",
-          text:
-            'Usage: chat <recipientAddress> <peerPublicKeyHex> "<message...>"\n' +
-            "The recipient's public key comes from their wallet (they run \"key\")." +
-            " Share keys out-of-band once, then message freely."
+          text: 'Usage: chat <recipientAddress> "<message...>"'
         };
 
       const recipient = args[1];
-      const peerPubHex = args[2];
-      const message = args.slice(3).join(" ");
+      const message = args.slice(2).join(" ");
       if (!isAddress(recipient))
         return { id: generateId(), type: "text", text: `[!] "${recipient}" is not a valid address.` };
 
@@ -3296,18 +3292,36 @@ export default function TerminalShell({
           text: `[!] No chat contract deployed on ${chain.name}. Testnets only — see contracts/script/ChatDeploy.md.`
         };
 
-      let peerPub: Uint8Array;
-      try {
-        peerPub = hexToBytes(peerPubHex);
-      } catch {
-        return { id: generateId(), type: "text", text: "[!] Invalid peer public key hex." };
-      }
-
       try {
         const myPair = await getChatKeyPair();
-        const aesKey = await deriveAesKey(myPair.privateKey, peerPub);
+        const client = getClient(chain);
+
+        // register my own key so the recipient can reply via address lookup
+        await writeContractAsync({
+          address: contract as Address,
+          abi: chatAbi,
+          functionName: "setPublicKey",
+          args: [bytesToHex(myPair.publicKey)]
+        });
+
+        // the recipient's key comes from the on-chain registry — no out-of-band
+        // exchange. They must have registered once (e.g. by running chat/key).
+        const peerKey = (await client.readContract({
+          address: contract as Address,
+          abi: chatAbi,
+          functionName: "getPublicKey",
+          args: [recipient as Address]
+        })) as `0x${string}`;
+        if (!peerKey || peerKey === "0x" || peerKey === "0x0")
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] ${recipient} hasn't registered a chat key yet. Ask them to use the app once (run "key" or send a message), then retry.`
+          };
+
+        const aesKey = await deriveAesKey(myPair.privateKey, hexToBytes(peerKey));
         const { iv, ciphertext } = await encryptMessage(aesKey, message);
-        const fee = await getClient(chain).readContract({
+        const fee = await client.readContract({
           address: contract as Address,
           abi: chatAbi,
           functionName: "fee"
@@ -3447,15 +3461,28 @@ export default function TerminalShell({
     key: async () => {
       if (!isConnected || !address)
         return { id: generateId(), type: "text", text: "[!] Connect a wallet to derive your chat key." };
+      const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!chain)
+        return { id: generateId(), type: "text", text: "[!] Set a network first (network <name|id>)." };
+      const contract = chatContractAddress(chain.id);
+      if (!contract)
+        return { id: generateId(), type: "text", text: `[!] No chat contract on ${chain.name}.` };
       try {
         const pair = await getChatKeyPair();
+        // register on-chain so peers can find this key by address
+        await writeContractAsync({
+          address: contract as Address,
+          abi: chatAbi,
+          functionName: "setPublicKey",
+          args: [bytesToHex(pair.publicKey)]
+        });
         return {
           id: generateId(),
           type: "text",
           text:
             `Chat public key (${address}):\n` +
             `${bytesToHex(pair.publicKey)}\n` +
-            `Share this with peers so they can send you encrypted messages.`
+            `Registered on-chain — peers can message you using just your address.`
         };
       } catch (err: any) {
         return {

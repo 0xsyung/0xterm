@@ -92,11 +92,11 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
         <div className={`font-bold ${theme.primary}`}>ens &lt;name.eth | address&gt;</div>
         <div>Resolve an ENS name to an address, or an address to its ENS name</div>
         <div className={`font-bold ${theme.primary}`}>key</div>
-        <div>Show your chat public key (share it so peers can message you)</div>
+        <div>Show your chat public key (registered on-chain for you)</div>
         <div className={`font-bold ${theme.primary}`}>
-          chat &lt;address&gt; &lt;peerKeyHex&gt; &lt;message&gt;
+          chat &lt;address&gt; &lt;message&gt;
         </div>
-        <div>Send an encrypted 1:1 message (testnets only, tiny fee)</div>
+        <div>Send an encrypted 1:1 message (testnets only, tiny fee; peer key from on-chain registry)</div>
         <div className={`font-bold ${theme.primary}`}>inbox [&lt;address&gt;]</div>
         <div>Read &amp; decrypt your chat threads (one per sender)</div>
         <div className={`font-bold ${theme.primary}`}>chatfee</div>

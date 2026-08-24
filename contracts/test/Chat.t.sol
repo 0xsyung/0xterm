@@ -24,6 +24,7 @@ contract ChatTest is Test {
 
     /// 33-byte compressed secp256k1 public key placeholder (valid length only)
     bytes constant SENDER_KEY = hex"020000000000000000000000000000000000000000000000000000000000000000";
+    bytes constant SENDER_KEY2 = hex"030000000000000000000000000000000000000000000000000000000000000000";
 
     /// fund `sender` then prank-send `fee` wei on their behalf
     function sendAs(address sender, address to, bytes12 iv, bytes memory ct, uint256 fee) internal {
@@ -98,6 +99,55 @@ contract ChatTest is Test {
         vm.prank(alice);
         vm.expectRevert("Chat: invalid sender key");
         chat.sendMessage{value: FEE}(bob, IV, hex"02", CT); // 1 byte, not 33
+    }
+
+    /// registry: registering a key makes it readable via getPublicKey
+    function test_SetPublicKey_StoredAndReadable() public {
+        vm.prank(alice);
+        chat.setPublicKey(SENDER_KEY);
+
+        assertEq(chat.getPublicKey(alice), SENDER_KEY);
+        assertEq(chat.getPublicKey(bob).length, 0); // bob hasn't registered
+    }
+
+    /// registry: only the owner of the key can register it
+    function test_SetPublicKey_IsPerCaller() public {
+        vm.prank(alice);
+        chat.setPublicKey(SENDER_KEY);
+        assertEq(chat.getPublicKey(alice), SENDER_KEY);
+        assertEq(chat.getPublicKey(bob).length, 0);
+    }
+
+    /// registry: a registered key can be rotated
+    function test_SetPublicKey_Overwrites() public {
+        vm.prank(alice);
+        chat.setPublicKey(SENDER_KEY);
+        vm.prank(alice);
+        chat.setPublicKey(SENDER_KEY2);
+
+        assertEq(chat.getPublicKey(alice), SENDER_KEY2);
+    }
+
+    /// registry: invalid key length reverts
+    function test_SetPublicKey_InvalidLength_Reverts() public {
+        vm.prank(alice);
+        vm.expectRevert("Chat: invalid public key");
+        chat.setPublicKey(hex"02"); // 1 byte, not 33
+    }
+
+    /// registry + messaging: a stranger can send to an address whose key is
+    /// registered, and the message stores the sender's registered key
+    function test_SendMessage_WithRegisteredPeerKey() public {
+        vm.prank(bob);
+        chat.setPublicKey(SENDER_KEY);
+
+        sendAs(alice, bob, IV, CT, FEE);
+
+        assertEq(chat.getPublicKey(bob), SENDER_KEY);
+        assertEq(chat.threadCount(bob, alice), 1);
+        Chat.Message memory m = chat.getThread(bob, alice, 0, 10)[0];
+        assertEq(m.senderKey, SENDER_KEY);
+        assertEq(m.from, alice);
     }
 
     function test_SendMessage_IdenticalCiphertexts_GetDistinctIds() public {

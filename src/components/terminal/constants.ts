@@ -270,6 +270,8 @@ export const chatAbi = parseAbi([
   'function getThread(address to, address from, uint256 start, uint256 count) view returns ((address from, uint256 timestamp, bytes12 iv, bytes senderKey, bytes ciphertext)[] msgs)',
   'function threadCount(address to, address from) view returns (uint256)',
   'function getSenders(address to) view returns (address[])',
+  'function setPublicKey(bytes key)',
+  'function getPublicKey(address who) view returns (bytes)',
   'function fee() view returns (uint256)',
   'function owner() view returns (address)',
   'function setFee(uint256 newFee)',

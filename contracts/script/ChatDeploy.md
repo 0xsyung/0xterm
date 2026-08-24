@@ -10,6 +10,13 @@ conversation per `(recipient, sender)` pair, so reading a thread is a single
 the distinct senders so the UI can enumerate all conversations. Every message
 also emits `MessageSent(from, to, id, ts, len)`.
 
+**Public-key registry.** `keys[address]` stores each user's 33-byte compressed
+chat public key (`setPublicKey` / `getPublicKey`). A sender can encrypt to a
+stranger knowing only their **address** — the recipient's key comes from the
+on-chain registry, no out-of-band key exchange. Registration is one
+`setPublicKey` tx, triggered automatically the first time a user runs `chat`
+or `key`.
+
 **Upgradeable (UUPS proxy).** `Chat` runs behind an `ERC1967Proxy`. The proxy
 owns the storage (all chat history); the logic lives in a separate
 implementation contract. Upgrading later only swaps the implementation via
@@ -115,7 +122,7 @@ gas. Only the proxy owner (the `--sender` that deployed) may run this.
 
 > **IMPORTANT — storage layout.** The new implementation must keep the same
 > storage slots for all existing state (`fee`, `inbox`, `sendersOf`,
-> `messageCount`): keep those fields first, in the same order, and only
+> `messageCount`, `keys`): keep those fields first, in the same order, and only
 > *append* new state at the end. Reordering or renaming existing fields
 > silently corrupts history.
 
