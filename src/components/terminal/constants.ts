@@ -280,6 +280,20 @@ export const ensRegistryAbi = parseAbi([
   'function nameOfAddr(address who) view returns (string)',
 ])
 
+// Public notice board (testnets only) — anyone posts plaintext, anyone reads
+// all posts. Fill with the deployed proxy address from
+// contracts/script/BillboardDeploy.md.
+export const BILLBOARD_CONTRACT: Record<number, Address> = {
+  11155111: '0xe5128c8E5FA33a5d1dd4E230EAF017a313c34701',
+}
+
+export const billboardAbi = parseAbi([
+  'function post(string content) payable returns (uint256 id)',
+  'function getLatest(uint256 count, uint256 offset) view returns ((address author, uint256 timestamp, string content)[] posts)',
+  'function postCount() view returns (uint256)',
+  'function fee() view returns (uint256)',
+])
+
 export const chatAbi = parseAbi([
   'function sendMessage(address to, bytes12 iv, bytes calldata senderKey, bytes calldata ciphertext) payable returns (bytes32 id)',
   'function getThread(address to, address from, uint256 start, uint256 count) view returns ((address from, uint256 timestamp, bytes12 iv, bytes senderKey, bytes ciphertext)[] msgs)',
