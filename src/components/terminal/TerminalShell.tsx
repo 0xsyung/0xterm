@@ -65,7 +65,9 @@ import {
   CHAT_CONTRACT,
   chatAbi,
   ENS_CONTRACT,
-  ensRegistryAbi
+  ensRegistryAbi,
+  BILLBOARD_CONTRACT,
+  billboardAbi
 } from "./constants";
 import {
   deriveKeysFromSignature,
@@ -84,6 +86,7 @@ import PortfolioWidget, {
 import { trackEvent } from "../../lib/analytics";
 import DeployWidget from "./widgets/DeployWidget";
 import type { ChatMessage } from "./widgets/ChatWidget";
+import type { BillboardPost } from "./widgets/BillboardWidget";
 
 const MAX_LOGS = 100;
 
@@ -3740,6 +3743,143 @@ export default function TerminalShell({
         };
       }
     },
+    board: async (args) => {
+      const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!chain)
+        return { id: generateId(), type: "text", text: "[!] Set a network first (network <name|id>)." };
+      const contract = BILLBOARD_CONTRACT[chain.id];
+      if (!contract)
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] No billboard deployed on ${chain.name}. Testnets only — see contracts/script/BillboardDeploy.md.`
+        };
+      if (chain.id === 1)
+        return {
+          id: generateId(),
+          type: "text",
+          text: "[!] The 0xterm billboard is testnet-only; mainnet has no board contract."
+        };
+
+      const sub = args[1]?.toLowerCase();
+
+      if (sub === "post") {
+        if (!isConnected || !address)
+          return { id: generateId(), type: "text", text: "[!] Connect a wallet to post to the board." };
+        const content = args.slice(2).join(" ").trim();
+        if (!content)
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Usage: board post <content>"
+          };
+        try {
+          const fee = await getClient(chain).readContract({
+            address: contract as Address,
+            abi: billboardAbi,
+            functionName: "fee"
+          });
+          const hash = await writeContractAsync({
+            address: contract as Address,
+            abi: billboardAbi,
+            functionName: "post",
+            args: [content],
+            value: fee
+          });
+          return [
+            {
+              id: generateId(),
+              type: "text",
+              text: `[✓] Posted to the ${chain.name} board (fee ${formatEther(fee)} ${chain.nativeCurrency.symbol})`
+            },
+            { id: generateId(), type: "text", text: `   tx: ${hash}` }
+          ];
+        } catch (err: any) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] board post failed: ${err.message || err}`
+          };
+        }
+      }
+
+      // board / board list [count] — render latest posts as a widget
+      const countStr = sub === "list" ? args[2] : args[1];
+      let count = 5n;
+      if (countStr && !isNaN(Number(countStr)) && Number(countStr) > 0)
+        count = BigInt(Math.min(Math.floor(Number(countStr)), 50));
+
+      try {
+        const posts = (await getClient(chain).readContract({
+          address: contract as Address,
+          abi: billboardAbi,
+          functionName: "getLatest",
+          args: [count, 0n]
+        })) as unknown as BillboardPost[];
+
+        const total = (await getClient(chain).readContract({
+          address: contract as Address,
+          abi: billboardAbi,
+          functionName: "postCount"
+        })) as bigint;
+
+        const postTotal = Number(total);
+        if (postTotal === 0)
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[✗] No posts on the ${chain.name} board yet. Post with: board post <content>`
+          };
+
+        const onLoadPage = async (offset: number): Promise<BillboardPost[]> => {
+          const page = (await getClient(chain).readContract({
+            address: contract as Address,
+            abi: billboardAbi,
+            functionName: "getLatest",
+            args: [count, BigInt(Math.max(0, offset))]
+          })) as unknown as BillboardPost[];
+          return page;
+        };
+
+        return {
+          id: generateId(),
+          type: "billboard",
+          payload: { posts, total: postTotal, pageSize: Number(count), onLoadPage }
+        };
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] board failed: ${err.message || err}`
+        };
+      }
+    },
+    boardfee: async () => {
+      const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!chain)
+        return { id: generateId(), type: "text", text: "[!] Set a network first." };
+      const contract = BILLBOARD_CONTRACT[chain.id];
+      if (!contract)
+        return { id: generateId(), type: "text", text: `[!] No billboard contract on ${chain.name}.` };
+      try {
+        const fee = await getClient(chain).readContract({
+          address: contract as Address,
+          abi: billboardAbi,
+          functionName: "fee"
+        });
+        return {
+          id: generateId(),
+          type: "text",
+          text: `Board fee on ${chain.name}: ${formatEther(fee)} ${chain.nativeCurrency.symbol}`
+        };
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] boardfee failed: ${err.message || err}`
+        };
+      }
+    },
     connect: () => {
       if (!isConnected) {
         open();
@@ -3956,6 +4096,10 @@ export default function TerminalShell({
           // 4b. ENS subcommands
         } else if (command === "ens" && currentArgIdx === 1) {
           candidates = ["set", "clear"];
+
+          // 4c. Board subcommands
+        } else if (command === "board" && currentArgIdx === 1) {
+          candidates = ["post", "list"];
 
           // 5. Register Command (Allows for optional symbol argument)
         } else if (

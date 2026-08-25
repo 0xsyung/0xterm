@@ -155,6 +155,22 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
           <div className={`font-bold ${theme.primary}`}>chatfee</div>
           <div>Show current message fee on the active network</div>
         </div>
+        <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-x-4">
+          <div className={`font-bold ${theme.primary}`}>
+            board post &lt;content&gt;
+          </div>
+          <div>Post public content to the on-chain billboard (tiny fee)</div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-x-4">
+          <div className={`font-bold ${theme.primary}`}>
+            board [list] [count]
+          </div>
+          <div>List the latest public posts (default 5, max 50)</div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-x-4">
+          <div className={`font-bold ${theme.primary}`}>boardfee</div>
+          <div>Show current post fee on the active network</div>
+        </div>
       </div>
       <div
         className={`border-t ${theme.border} pt-2 mt-1 text-[10px] opacity-60`}

@@ -11,7 +11,7 @@ export type ThemeMode = 'matrix' | 'mac' | 'bloomberg' | 'whatsapp'
 
 export type LogEntry = {
   id: string
-  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'chat' | 'component'
+  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'chat' | 'billboard' | 'component'
   text?: string
   payload?: any
   component?: React.ReactNode

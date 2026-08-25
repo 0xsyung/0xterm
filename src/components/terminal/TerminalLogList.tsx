@@ -13,6 +13,7 @@ import AddLiquidityWidget from "./widgets/AddLiquidityWidget";
 import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
 import ChatWidget from "./widgets/ChatWidget";
+import BillboardWidget from "./widgets/BillboardWidget";
 import { DEX_REGISTRY } from "./constants";
 import type { LogEntry, DexProtocol } from "./types";
 
@@ -84,6 +85,8 @@ export default function TerminalLogList({
           return <PortfolioWidget key={log.id} {...log.payload} theme={theme} />;
         if (log.type === "chat")
           return <ChatWidget key={log.id} {...log.payload} theme={theme} />;
+        if (log.type === "billboard")
+          return <BillboardWidget key={log.id} {...log.payload} theme={theme} />;
 
         return (
           <div key={log.id} className={`${theme.text}/90`}>
