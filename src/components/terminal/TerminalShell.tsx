@@ -3810,12 +3810,15 @@ export default function TerminalShell({
         count = BigInt(Math.min(Math.floor(Number(countStr)), 50));
 
       try {
-        const posts = (await getClient(chain).readContract({
+        const posts = ((await getClient(chain).readContract({
           address: contract as Address,
           abi: billboardAbi,
           functionName: "getLatest",
           args: [count, 0n]
-        })) as unknown as BillboardPost[];
+        })) as unknown as BillboardPost[]).map((p) => ({
+          ...p,
+          timestamp: Number(p.timestamp)
+        }));
 
         const total = (await getClient(chain).readContract({
           address: contract as Address,
@@ -3838,7 +3841,7 @@ export default function TerminalShell({
             functionName: "getLatest",
             args: [count, BigInt(Math.max(0, offset))]
           })) as unknown as BillboardPost[];
-          return page;
+          return page.map((p) => ({ ...p, timestamp: Number(p.timestamp) }));
         };
 
         return {
