@@ -161,6 +161,7 @@ export default function HelpManual({ theme }: { theme: ThemeConfig }) {
       >
         © 2026 0xTERM. All rights reserved. Proprietary and confidential.
         Unauthorized copying or distribution is strictly prohibited.
+        Contact: 0xsam@0xterm.xyz
       </div>
     </div>
   );
