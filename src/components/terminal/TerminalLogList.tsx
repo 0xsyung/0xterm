@@ -16,6 +16,7 @@ import ChatWidget from "./widgets/ChatWidget";
 import BillboardWidget from "./widgets/BillboardWidget";
 import { DEX_REGISTRY } from "./constants";
 import PinButton from "./widgets/PinButton";
+import PriceCard from "./widgets/PriceCard";
 import type { LogEntry, DexProtocol } from "./types";
 
 export default function TerminalLogList({
@@ -99,16 +100,20 @@ function renderLog(
   if (log.type === "billboard")
     return <BillboardWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
 
-  // Plain text / component logs. Only real widgets (log.component, e.g. the
-  // price widget) get a pin — bare text lines (banners, tx hashes, errors)
-  // have nothing to pin.
+  // Plain text / component logs. Only real widgets (log.component / price
+  // data, e.g. the price widget) get a pin — bare text lines (banners, tx
+  // hashes, errors) have nothing to pin.
   return (
     <div className="relative group">
       <div className={`${theme.text}/90`}>
         {log.text}
-        {log.component}
+        {log.componentData?.kind === "price" ? (
+          <PriceCard data={log.componentData} theme={theme} />
+        ) : (
+          log.component
+        )}
       </div>
-      {log.component && !isPinned && (
+      {(log.component || log.componentData) && !isPinned && (
         <PinButton
           onPin={() => onPin(log)}
           theme={theme}

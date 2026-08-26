@@ -14,6 +14,7 @@ import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
 import ChatWidget from "./widgets/ChatWidget";
 import BillboardWidget from "./widgets/BillboardWidget";
+import PriceCard from "./widgets/PriceCard";
 import type { PinnedManifest } from "./types";
 
 const REFRESH_INTERVAL = 60;
@@ -105,6 +106,10 @@ export default function PinnedPanel({
 
 function renderPinned(p: PinnedManifest, theme: any) {
   if (p.kind === "component") {
+    // Re-render from stored data when available so the pinned widget follows
+    // theme switches; fall back to the original element otherwise.
+    if (p.componentData?.kind === "price")
+      return <PriceCard data={p.componentData} theme={theme} />;
     return p.component || <div className={`${theme.text}/50`}>widget unavailable</div>;
   }
   const payload = p.payload || {};
