@@ -20,13 +20,17 @@ export default function ChatWidget({
   peer,
   self,
   theme,
-  peerLabel
+  peerLabel,
+  onPin,
+  pinned
 }: {
   messages: ChatMessage[];
   peer: string;
   self?: string;
   theme: any;
   peerLabel?: string;
+  onPin?: () => void;
+  pinned?: boolean;
 }) {
   const shortPeer = `${peer.slice(0, 6)}…${peer.slice(-4)}`;
   const label = peerLabel || shortPeer;
@@ -60,7 +64,17 @@ export default function ChatWidget({
             {copied ? "copied ✓" : "copy"}
           </button>
         </span>
-        <span className="uppercase text-[10px]">encrypted on-chain</span>
+        <span className="flex items-center gap-2">
+          <span className="uppercase text-[10px]">encrypted on-chain</span>
+          <button
+            type="button"
+            onClick={onPin}
+            title={pinned ? "Unpin" : "Pin to right panel"}
+            className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
+          >
+            {pinned ? "✕" : "📌"}
+          </button>
+        </span>
       </div>
       {messages.length === 0 ? (
         <div className={`${theme.text}/50`}>

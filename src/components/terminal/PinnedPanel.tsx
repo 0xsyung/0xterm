@@ -16,51 +16,76 @@ import ChatWidget from "./widgets/ChatWidget";
 import BillboardWidget from "./widgets/BillboardWidget";
 import type { PinnedManifest } from "./types";
 
+const REFRESH_INTERVAL = 60;
+
 export default function PinnedPanel({
   pinned,
   theme,
   refreshing,
+  countdowns,
+  onRefresh,
   onUnpin
 }: {
   pinned: PinnedManifest[];
   theme: any;
   refreshing?: string | null;
+  countdowns?: Record<string, number>;
+  onRefresh: (id: string) => void;
   onUnpin: (id: string) => void;
 }) {
   if (pinned.length === 0) return null;
 
   return (
     <div className="absolute top-14 right-2 bottom-14 w-80 overflow-y-auto z-30 space-y-3 pointer-events-none">
-      {pinned.map((p) => (
-        <div
-          key={p.id}
-          className={`pointer-events-auto border ${theme.border} ${theme.cardBg} ${theme.rounded} p-2 text-xs ${theme.text}`}
-        >
+      {pinned.map((p) => {
+        const hasRefresh = countdowns && countdowns[p.id] !== undefined;
+        const secs =
+          countdowns && countdowns[p.id] !== undefined
+            ? countdowns[p.id]
+            : REFRESH_INTERVAL;
+        const isRefreshing = refreshing === p.id;
+        return (
           <div
-            className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1 mb-2`}
+            key={p.id}
+            className={`pointer-events-auto border ${theme.border} ${theme.cardBg} ${theme.rounded} p-2 text-xs ${theme.text}`}
           >
-            <span className="font-bold flex items-center gap-1.5">
-              <span>{p.title}</span>
-              {p.payload && (
-                <span
-                  className={`uppercase text-[9px] ${refreshing === p.id ? "opacity-70" : "opacity-50"}`}
-                >
-                  {refreshing === p.id ? "live…" : "live · 60s"}
-                </span>
-              )}
-            </span>
-            <button
-              type="button"
-              onClick={() => onUnpin(p.id)}
-              title="Unpin"
-              className={`uppercase text-[10px] underline cursor-pointer ${theme.primary}`}
+            <div
+              className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1 mb-2`}
             >
-              unpin ✕
-            </button>
+              <span className="font-bold flex items-center gap-1.5">
+                <span>{p.title}</span>
+                {hasRefresh && (
+                  <button
+                    type="button"
+                    onClick={() => onRefresh(p.id)}
+                    title="Refresh now (resets countdown)"
+                    disabled={isRefreshing}
+                    className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${isRefreshing ? "opacity-40 cursor-default" : ""}`}
+                  >
+                    {isRefreshing ? "…" : "↻"}
+                  </button>
+                )}
+                {hasRefresh && (
+                  <span
+                    className={`uppercase text-[9px] ${isRefreshing ? "opacity-70" : "opacity-50"}`}
+                  >
+                    {isRefreshing ? "refresh…" : `next ${secs}s`}
+                  </span>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => onUnpin(p.id)}
+                title="Unpin"
+                className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
+              >
+                ✕
+              </button>
+            </div>
+            {renderPinned(p, theme)}
           </div>
-          {renderPinned(p, theme)}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

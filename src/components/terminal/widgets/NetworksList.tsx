@@ -7,7 +7,15 @@
 import { SUPPORTED_CHAINS } from "../constants";
 import type { ThemeConfig } from "../types";
 
-export default function NetworksList({ theme }: { theme: ThemeConfig }) {
+export default function NetworksList({
+  theme,
+  onPin,
+  pinned
+}: {
+  theme: ThemeConfig;
+  onPin?: () => void;
+  pinned?: boolean;
+}) {
   return (
     <div
       className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-3`}
@@ -18,8 +26,20 @@ export default function NetworksList({ theme }: { theme: ThemeConfig }) {
         <span className={`font-bold ${theme.primary}`}>
           AVAILABLE NETWORKS REGISTRY
         </span>
-        <span className={`${theme.text}/70`}>
-          TOTAL: {SUPPORTED_CHAINS.length}
+        <span className="flex items-center gap-2">
+          <span className={`${theme.text}/70`}>
+            TOTAL: {SUPPORTED_CHAINS.length}
+          </span>
+          {onPin && (
+            <button
+              type="button"
+              onClick={onPin}
+              title={pinned ? "Unpin" : "Pin to right panel"}
+              className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
+            >
+              {pinned ? "✕" : "📌"}
+            </button>
+          )}
         </span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">

@@ -27,7 +27,9 @@ export default function AddLiquidityWidget({
   amountAWei,
   amountBWei,
   fee,
-  theme
+  theme,
+  onPin,
+  pinned
 }: any) {
   const { writeContractAsync } = useWriteContract();
   const [step, setStep] = useState<
@@ -230,7 +232,19 @@ export default function AddLiquidityWidget({
         <span className={`font-bold ${theme.primary}`}>
           PROVIDE LIQUIDITY WIDGET
         </span>
-        <span className={`${theme.text}/70`}>{activeDex.name}</span>
+        <span className="flex items-center gap-2">
+          <span className={`${theme.text}/70`}>{activeDex.name}</span>
+          {onPin && (
+            <button
+              type="button"
+              onClick={onPin}
+              title={pinned ? "Unpin" : "Pin to right panel"}
+              className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
+            >
+              {pinned ? "✕" : "📌"}
+            </button>
+          )}
+        </span>
       </div>
 
       <div className={`grid grid-cols-2 gap-2 ${theme.text}`}>

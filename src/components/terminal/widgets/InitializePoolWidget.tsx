@@ -15,7 +15,9 @@ export default function InitializePoolWidget({
   poolAddress,
   tokenA,
   tokenB,
-  theme
+  theme,
+  onPin,
+  pinned
 }: any) {
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient({ chainId: targetChain.id });
@@ -68,8 +70,20 @@ export default function InitializePoolWidget({
         <span className={`font-bold ${theme.primary}`}>
           INITIALIZE V3 PRICE CURVE
         </span>
-        <span className={`${theme.text}/70`}>
-          {tokenA.symbol} / {tokenB.symbol}
+        <span className="flex items-center gap-2">
+          <span className={`${theme.text}/70`}>
+            {tokenA.symbol} / {tokenB.symbol}
+          </span>
+          {onPin && (
+            <button
+              type="button"
+              onClick={onPin}
+              title={pinned ? "Unpin" : "Pin to right panel"}
+              className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
+            >
+              {pinned ? "✕" : "📌"}
+            </button>
+          )}
         </span>
       </div>
 

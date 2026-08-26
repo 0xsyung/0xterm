@@ -17,13 +17,17 @@ export default function BillboardWidget({
   total,
   pageSize = 5,
   onLoadPage,
-  theme
+  theme,
+  onPin,
+  pinned
 }: {
   posts: BillboardPost[];
   total: number;
   pageSize?: number;
   onLoadPage?: (offset: number) => Promise<BillboardPost[]> | BillboardPost[];
   theme: any;
+  onPin?: () => void;
+  pinned?: boolean;
 }) {
   const [items, setItems] = useState<BillboardPost[]>(posts);
   const [offset, setOffset] = useState(0); // skip-newest offset of the shown page
@@ -58,7 +62,17 @@ export default function BillboardWidget({
         className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
       >
         <span className="font-bold">BILLBOARD · public on-chain</span>
-        <span className="uppercase text-[10px]">no encryption</span>
+        <span className="flex items-center gap-2">
+          <span className="uppercase text-[10px]">no encryption</span>
+          <button
+            type="button"
+            onClick={onPin}
+            title={pinned ? "Unpin" : "Pin to right panel"}
+            className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
+          >
+            {pinned ? "✕" : "📌"}
+          </button>
+        </span>
       </div>
 
       {items.length === 0 ? (
