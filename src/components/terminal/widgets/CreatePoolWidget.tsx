@@ -53,14 +53,14 @@ export default function CreatePoolWidget({ targetChain, activeDex, tokenA, token
         <span className={`font-bold ${theme.primary}`}>DEPLOY POOL CONTRACT [FACTORY]</span>
         <span className="flex items-center gap-2">
           <span className={`${theme.text}/70`}>{activeDex.name} ({activeDex.type})</span>
-          {onPin && (
+          {onPin && !pinned && (
             <button
               type="button"
               onClick={onPin}
-              title={pinned ? "Unpin" : "Pin to right panel"}
-              className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
+              title="Pin to right panel"
+              className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
             >
-              {pinned ? "✕" : "📌"}
+              📌
             </button>
           )}
         </span>

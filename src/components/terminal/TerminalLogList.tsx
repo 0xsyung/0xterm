@@ -98,21 +98,24 @@ function renderLog(
   if (log.type === "billboard")
     return <BillboardWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
 
-  // Plain text / component logs: a subtle pin toggle on hover, top-right.
+  // Plain text / component logs: a subtle pin button on hover, top-right.
+  // Hidden once pinned — unpinning happens from the right panel's ✕.
   return (
     <div className="relative group">
       <div className={`${theme.text}/90`}>
         {log.text}
         {log.component}
       </div>
-      <button
-        type="button"
-        onClick={() => onPin(log)}
-        title={isPinned ? "Unpin" : "Pin to right panel"}
-        className={`absolute -top-1 -right-1 z-10 uppercase text-[9px] px-1 py-0.5 border ${theme.border} ${theme.cardBg} ${theme.primary} opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer`}
-      >
-        {isPinned ? "✕" : "📌"}
-      </button>
+      {!isPinned && (
+        <button
+          type="button"
+          onClick={() => onPin(log)}
+          title="Pin to right panel"
+          className={`absolute -top-1 -right-1 z-10 uppercase text-[9px] px-1 py-0.5 border ${theme.border} ${theme.cardBg} ${theme.primary} opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer`}
+        >
+          📌
+        </button>
+      )}
     </div>
   );
 }

@@ -30,14 +30,14 @@ export default function NetworksList({
           <span className={`${theme.text}/70`}>
             TOTAL: {SUPPORTED_CHAINS.length}
           </span>
-          {onPin && (
+          {onPin && !pinned && (
             <button
               type="button"
               onClick={onPin}
-              title={pinned ? "Unpin" : "Pin to right panel"}
-              className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
+              title="Pin to right panel"
+              className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
             >
-              {pinned ? "✕" : "📌"}
+              📌
             </button>
           )}
         </span>
