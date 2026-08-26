@@ -5,6 +5,7 @@
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 import React, { useState } from "react";
+import PinButton from "./PinButton";
 
 export type ChatMessage = {
   from: string;
@@ -66,16 +67,7 @@ export default function ChatWidget({
         </span>
         <span className="flex items-center gap-2">
           <span className="uppercase text-[10px]">encrypted on-chain</span>
-          {onPin && !pinned && (
-            <button
-              type="button"
-              onClick={onPin}
-              title="Pin to right panel"
-              className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
-            >
-              📌
-            </button>
-          )}
+          {!pinned && <PinButton onPin={onPin} theme={theme} />}
         </span>
       </div>
       {messages.length === 0 ? (

@@ -15,6 +15,7 @@ import PortfolioWidget from "./widgets/PortfolioWidget";
 import ChatWidget from "./widgets/ChatWidget";
 import BillboardWidget from "./widgets/BillboardWidget";
 import { DEX_REGISTRY } from "./constants";
+import PinButton from "./widgets/PinButton";
 import type { LogEntry, DexProtocol } from "./types";
 
 export default function TerminalLogList({
@@ -107,14 +108,11 @@ function renderLog(
         {log.component}
       </div>
       {!isPinned && (
-        <button
-          type="button"
-          onClick={() => onPin(log)}
-          title="Pin to right panel"
-          className={`absolute -top-1 -right-1 z-10 uppercase text-[9px] px-1 py-0.5 border ${theme.border} ${theme.cardBg} ${theme.primary} opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer`}
-        >
-          📌
-        </button>
+        <PinButton
+          onPin={() => onPin(log)}
+          theme={theme}
+          className="absolute -top-1 -right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+        />
       )}
     </div>
   );

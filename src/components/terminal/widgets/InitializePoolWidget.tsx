@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { useWriteContract, usePublicClient } from "wagmi";
 import { uniV3PoolAbi } from "../constants";
+import PinButton from "./PinButton";
 
 export default function InitializePoolWidget({
   targetChain,
@@ -74,16 +75,7 @@ export default function InitializePoolWidget({
           <span className={`${theme.text}/70`}>
             {tokenA.symbol} / {tokenB.symbol}
           </span>
-          {onPin && !pinned && (
-            <button
-              type="button"
-              onClick={onPin}
-              title="Pin to right panel"
-              className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
-            >
-              📌
-            </button>
-          )}
+          {!pinned && <PinButton onPin={onPin} theme={theme} />}
         </span>
       </div>
 

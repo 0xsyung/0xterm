@@ -17,6 +17,7 @@ import {
   nonfungiblePositionManagerAbi,
   NATIVE_TOKEN_ADDRESS
 } from "../constants";
+import PinButton from "./PinButton";
 
 export default function AddLiquidityWidget({
   userAddress,
@@ -234,16 +235,7 @@ export default function AddLiquidityWidget({
         </span>
         <span className="flex items-center gap-2">
           <span className={`${theme.text}/70`}>{activeDex.name}</span>
-          {onPin && !pinned && (
-            <button
-              type="button"
-              onClick={onPin}
-              title="Pin to right panel"
-              className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
-            >
-              📌
-            </button>
-          )}
+          {!pinned && <PinButton onPin={onPin} theme={theme} />}
         </span>
       </div>
 

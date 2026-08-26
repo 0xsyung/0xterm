@@ -5,6 +5,7 @@
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 import type { ThemeConfig } from "../types";
+import PinButton from "./PinButton";
 
 export default function HelpManual({
   theme,
@@ -23,16 +24,7 @@ export default function HelpManual({
         className={`flex justify-between items-center border-b ${theme.border} pb-1 font-bold ${theme.primary} tracking-wider`}
       >
         <span>SYSTEM COMMAND MANUAL</span>
-        {onPin && !pinned && (
-          <button
-            type="button"
-            onClick={onPin}
-            title="Pin to right panel"
-            className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
-          >
-            📌
-          </button>
-        )}
+        {!pinned && <PinButton onPin={onPin} theme={theme} />}
       </div>
       <div className="grid grid-cols-1 gap-y-2 pt-1">
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-x-4">
