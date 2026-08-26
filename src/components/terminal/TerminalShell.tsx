@@ -553,12 +553,14 @@ export default function TerminalShell({
     const base: PinnedManifest = {
       id: log.id,
       kind: log.type,
-      title: log.type.toUpperCase(),
+      title: log.title || log.type.toUpperCase(),
       payload: log.payload || (log.text ? { text: log.text } : {}),
       // component-kind logs (price/swap/pool/deploy/export) render a React
       // element rather than a payload — carry it so the pinned panel can
       // render it. Stripped before persist/export.
-      component: log.type === "component" ? log.component : undefined
+      component: log.type === "component" ? log.component : undefined,
+      // render data for re-theming a pinned component widget
+      componentData: log.componentData
     };
     const p = log.payload || {};
 
@@ -1886,7 +1888,12 @@ export default function TerminalShell({
         />
       );
 
-      return { id: generateId(), type: "component", component: deployWidget };
+      return {
+        id: generateId(),
+        type: "component",
+        component: deployWidget,
+        title: `DEPLOY ${name.toUpperCase()}`
+      };
     },
     help: () => ({ id: generateId(), type: "help" }),
     "?": () => ({ id: generateId(), type: "help" }),
@@ -2727,7 +2734,7 @@ export default function TerminalShell({
       const exportWidget = (
         <ExportWidget exportData={exportData} theme={theme} address={address} />
       );
-      return { id: generateId(), type: "component", component: exportWidget };
+      return { id: generateId(), type: "component", component: exportWidget, title: "EXPORT" };
     },
     import: (args, rawInput) => {
       if (!isConnected || !address)
@@ -3037,7 +3044,18 @@ export default function TerminalShell({
           return {
             id: generateId(),
             type: "component",
-            component: priceWidget
+            component: priceWidget,
+            title: `PRICE ${tokenA.symbol}/${tokenB.symbol}`,
+            componentData: {
+              kind: "price",
+              mode: "onchain",
+              pairAddress,
+              symbolA: tokenA.symbol,
+              symbolB: tokenB.symbol,
+              rate: priceRatio,
+              dexName: activeDex.name,
+              chainName: targetChain!.name
+            }
           };
         } catch (err: any) {
           return {
@@ -3174,7 +3192,23 @@ export default function TerminalShell({
           </div>
         );
 
-        return { id: generateId(), type: "component", component: priceWidget };
+        return {
+          id: generateId(),
+          type: "component",
+          component: priceWidget,
+          title: `PRICE ${queryA.toUpperCase()}${queryB ? `/${queryB.toUpperCase()}` : ""}`,
+          componentData: {
+            kind: "price",
+            mode: "api",
+            priceUsd,
+            priceNative,
+            tokenSymbol,
+            quoteSymbol,
+            dex,
+            chain,
+            h24
+          }
+        };
       }
     },
     createpool: async (args) => {
@@ -3332,7 +3366,12 @@ export default function TerminalShell({
         activeDex,
         args[3]
       );
-      return { id: generateId(), type: "component", component: poolWidget };
+      return {
+        id: generateId(),
+        type: "component",
+        component: poolWidget,
+        title: `POOL ${args[1].toUpperCase()}/${args[2].toUpperCase()}`
+      };
     },
     addliq: async (args) => {
       if (!isConnected || !address)
@@ -3626,7 +3665,7 @@ export default function TerminalShell({
         />
       );
 
-      return { id: generateId(), type: "component", component: swapWidget };
+      return { id: generateId(), type: "component", component: swapWidget, title: `SWAP ${args[1]} ${fromToken.symbol}→${toToken.symbol}` };
     },
     balance: async (args) => {
       if (!isConnected || !address)
@@ -3804,7 +3843,7 @@ export default function TerminalShell({
 
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
       const poolWidget = await fetchOnChainLiquidity(args[1], targetChain);
-      return { id: generateId(), type: "component", component: poolWidget };
+      return { id: generateId(), type: "component", component: poolWidget, title: `POOL ${args[1]}` };
     },
     ens: async (args) => {
       const sub = args[1]?.toLowerCase();
