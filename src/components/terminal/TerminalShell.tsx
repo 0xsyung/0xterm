@@ -259,34 +259,88 @@ export default function TerminalShell({
 
   // Pinned widgets (floating right column). `refresh` is a live-data loader
   // re-run every 60s; manifests are what get persisted / exported / imported.
+  const REFRESH_INTERVAL = 60; // seconds
   const [pinned, setPinned] = useState<PinnedManifest[]>([]);
   const [pinnedRefresh, setPinnedRefresh] = useState<
     Record<string, () => Promise<any>>
   >({});
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  // countdown in seconds until the next auto-refresh (per pinned widget).
+  // A fresh pin starts at REFRESH_INTERVAL; ticks down each second and resets
+  // to REFRESH_INTERVAL on refresh. Stored as a Map via state object so
+  // PinnedPanel can render per-widget countdowns.
+  const [countdowns, setCountdowns] = useState<Record<string, number>>({});
+  // pinnedRefresh is needed inside the tick interval; keep it in a ref so the
+  // per-second interval doesn't re-subscribe (and re-reset countdowns) every
+  // time a refresh closure is registered.
+  const pinnedRefreshRef = useRef(pinnedRefresh);
+  pinnedRefreshRef.current = pinnedRefresh;
 
-  // 60s tick — bump to trigger refresh of all pinned widgets
+  // Run one refresh for a single pinned entry (auto-tick or manual button).
+  const refreshPinned = (id: string) => {
+    const fn = pinnedRefreshRef.current[id];
+    if (!fn) return;
+    setRefreshingId(id);
+    fn()
+      .then((payload) => {
+        setPinned((prev) =>
+          prev.map((p) => (p.id === id && payload ? { ...p, payload } : p))
+        );
+      })
+      .catch(() => {})
+      .finally(() => {
+        setRefreshingId((cur) => (cur === id ? null : cur));
+        // a completed refresh (auto or manual) restarts the countdown for the
+        // refreshed widget, even if it was mid-flight / rehydrated without one
+        setCountdowns((c) => ({ ...c, [id]: REFRESH_INTERVAL }));
+      });
+  };
+
+  // Manual refresh button: refresh now and reset the countdown.
+  const onRefreshPinned = (id: string) => {
+    setCountdowns((c) => ({ ...c, [id]: REFRESH_INTERVAL }));
+    refreshPinned(id);
+  };
+
+  // One-second tick: decrement each pinned countdown; refresh + reset at 0.
+  // Covers ALL pinned widgets that have a refresh closure (board/balance/
+  // portfolio/chat) — the countdown UI shows for every pinned card.
   useEffect(() => {
     const id = setInterval(() => {
-      setPinnedRefresh((refs) => {
-        Object.entries(refs).forEach(([pid, fn]) => {
-          setRefreshingId(pid);
-          fn()
-            .then((payload) => {
-              setPinned((prev) =>
-                prev.map((p) =>
-                  p.id === pid && payload ? { ...p, payload } : p
-                )
-              );
-            })
-            .catch(() => {})
-            .finally(() => setRefreshingId((cur) => (cur === pid ? null : cur)));
-        });
-        return refs;
+      setCountdowns((prev) => {
+        const next: Record<string, number> = {};
+        for (const [pid, secs] of Object.entries(prev)) {
+          if (secs <= 1) {
+            refreshPinned(pid);
+            next[pid] = REFRESH_INTERVAL;
+          } else {
+            next[pid] = secs - 1;
+          }
+        }
+        return next;
       });
-    }, 60000);
+    }, 1000);
     return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Start a countdown for a pinned entry once it has a refresh closure (fresh
+  // pins get one via buildPinManifest; rehydrated pins via rehydratePinRefresh).
+  useEffect(() => {
+    const ids = Object.keys(pinnedRefresh);
+    if (ids.length === 0) return;
+    setCountdowns((c) => {
+      const next = { ...c };
+      let changed = false;
+      for (const id of ids) {
+        if (next[id] === undefined) {
+          next[id] = REFRESH_INTERVAL;
+          changed = true;
+        }
+      }
+      return changed ? next : c;
+    });
+  }, [pinnedRefresh]);
 
   // Autocomplete State
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -335,6 +389,11 @@ export default function TerminalShell({
           delete r[log.id];
           return r;
         });
+        setCountdowns((c) => {
+          const n = { ...c };
+          delete n[log.id];
+          return n;
+        });
         return next;
       }
       const manifest: PinnedManifest = buildPinManifest(log);
@@ -348,6 +407,11 @@ export default function TerminalShell({
       const r = { ...refs };
       delete r[id];
       return r;
+    });
+    setCountdowns((c) => {
+      const n = { ...c };
+      delete n[id];
+      return n;
     });
   };
 
@@ -414,6 +478,62 @@ export default function TerminalShell({
             m.filterType
           )
         });
+      } else if (m.kind === "chat" && m.contract && m.peer) {
+        const contract = m.contract as Address;
+        const peer = m.peer as Address;
+        const self = getAddress(address);
+        refs[m.id] = async () => {
+          const client = getClient(chain);
+          const count = (await client.readContract({
+            address: contract,
+            abi: chatAbi,
+            functionName: "threadCount",
+            args: [self, peer]
+          })) as bigint;
+          const msgs = (await client.readContract({
+            address: contract,
+            abi: chatAbi,
+            functionName: "getThread",
+            args: [self, peer, 0n, count]
+          })) as readonly {
+            from: string;
+            timestamp: bigint;
+            iv: string;
+            ciphertext: string;
+            senderKey: string;
+          }[];
+          const myPair = await getChatKeyPair();
+          const messages: ChatMessage[] = [];
+          for (const mm of msgs) {
+            try {
+              const aesKey = await deriveAesKey(
+                myPair.privateKey,
+                hexToBytes(mm.senderKey)
+              );
+              const text = await decryptMessage(aesKey, {
+                iv: hexToBytes(mm.iv),
+                ciphertext: hexToBytes(mm.ciphertext)
+              });
+              messages.push({
+                from: mm.from,
+                timestamp: Number(mm.timestamp),
+                iv: mm.iv,
+                ciphertext: mm.ciphertext,
+                decrypted: text
+              });
+            } catch {
+              messages.push({
+                from: mm.from,
+                timestamp: Number(mm.timestamp),
+                iv: mm.iv,
+                ciphertext: mm.ciphertext,
+                decryptFailed: true
+              });
+            }
+          }
+          const peerLabel = (await ensNameFor(peer)) || undefined;
+          return { messages, peer, self, peerLabel };
+        };
       }
     }
     setPinnedRefresh(refs);
@@ -505,6 +625,61 @@ export default function TerminalShell({
       base.chainId = activeChainId || undefined;
       base.contract = (CHAT_CONTRACT[activeChainId || 0] as string) || undefined;
       base.peer = p.peer;
+      if (address && base.chainId && base.contract && base.peer) {
+        const chain = SUPPORTED_CHAINS.find((c) => c.id === base.chainId)!;
+        const contract = base.contract as Address;
+        const peer = base.peer;
+        const self = getAddress(address);
+        registerPinRefresh(log.id, async () => {
+          const client = getClient(chain);
+          const count = (await client.readContract({
+            address: contract,
+            abi: chatAbi,
+            functionName: "threadCount",
+            args: [self, peer as Address]
+          })) as bigint;
+          const msgs = (await client.readContract({
+            address: contract,
+            abi: chatAbi,
+            functionName: "getThread",
+            args: [self, peer as Address, 0n, count]
+          })) as readonly {
+            from: string;
+            timestamp: bigint;
+            iv: string;
+            ciphertext: string;
+            senderKey: string;
+          }[];
+          const myPair = await getChatKeyPair();
+          const messages: ChatMessage[] = [];
+          for (const m of msgs) {
+            try {
+              const iv = hexToBytes(m.iv);
+              const ct = hexToBytes(m.ciphertext);
+              const senderPub = hexToBytes(m.senderKey);
+              const aesKey = await deriveAesKey(myPair.privateKey, senderPub);
+              const text = await decryptMessage(aesKey, { iv, ciphertext: ct });
+              messages.push({
+                from: m.from,
+                timestamp: Number(m.timestamp),
+                iv: m.iv,
+                ciphertext: m.ciphertext,
+                decrypted: text
+              });
+            } catch {
+              messages.push({
+                from: m.from,
+                timestamp: Number(m.timestamp),
+                iv: m.iv,
+                ciphertext: m.ciphertext,
+                decryptFailed: true
+              });
+            }
+          }
+          const peerLabel = (await ensNameFor(peer)) || undefined;
+          return { messages, peer, self, peerLabel };
+        });
+      }
     }
 
     return base;
@@ -4561,6 +4736,8 @@ export default function TerminalShell({
           pinned={pinned}
           theme={theme}
           refreshing={refreshingId}
+          countdowns={countdowns}
+          onRefresh={onRefreshPinned}
           onUnpin={onUnpin}
         />
 

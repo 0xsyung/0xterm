@@ -6,15 +6,33 @@
  */
 import type { ThemeConfig } from "../types";
 
-export default function HelpManual({ theme }: { theme: ThemeConfig }) {
+export default function HelpManual({
+  theme,
+  onPin,
+  pinned
+}: {
+  theme: ThemeConfig;
+  onPin?: () => void;
+  pinned?: boolean;
+}) {
   return (
     <div
       className={`text-xs space-y-2 my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.text} max-w-2xl`}
     >
       <div
-        className={`border-b ${theme.border} pb-1 font-bold ${theme.primary} tracking-wider`}
+        className={`flex justify-between items-center border-b ${theme.border} pb-1 font-bold ${theme.primary} tracking-wider`}
       >
-        SYSTEM COMMAND MANUAL
+        <span>SYSTEM COMMAND MANUAL</span>
+        {onPin && (
+          <button
+            type="button"
+            onClick={onPin}
+            title={pinned ? "Unpin" : "Pin to right panel"}
+            className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
+          >
+            {pinned ? "✕" : "📌"}
+          </button>
+        )}
       </div>
       <div className="grid grid-cols-1 gap-y-2 pt-1">
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-x-4">

@@ -10,7 +10,7 @@ import { useState } from 'react'
 import { useWriteContract, usePublicClient } from 'wagmi'
 import { uniV2FactoryAbi, uniV3FactoryAbi } from '../constants'
 
-export default function CreatePoolWidget({ targetChain, activeDex, tokenA, tokenB, addrA, addrB, fee, theme }: any) {
+export default function CreatePoolWidget({ targetChain, activeDex, tokenA, tokenB, addrA, addrB, fee, theme, onPin, pinned }: any) {
   const { writeContractAsync } = useWriteContract()
   const publicClient = usePublicClient({ chainId: targetChain.id })
   const [status, setStatus] = useState<'ready' | 'signing' | 'waiting_confirmation' | 'success' | 'error'>('ready')
@@ -51,7 +51,19 @@ export default function CreatePoolWidget({ targetChain, activeDex, tokenA, token
     <div className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} ${theme.font} text-xs space-y-3`}>
       <div className={`flex justify-between items-center border-b ${theme.border} pb-2`}>
         <span className={`font-bold ${theme.primary}`}>DEPLOY POOL CONTRACT [FACTORY]</span>
-        <span className={`${theme.text}/70`}>{activeDex.name} ({activeDex.type})</span>
+        <span className="flex items-center gap-2">
+          <span className={`${theme.text}/70`}>{activeDex.name} ({activeDex.type})</span>
+          {onPin && (
+            <button
+              type="button"
+              onClick={onPin}
+              title={pinned ? "Unpin" : "Pin to right panel"}
+              className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
+            >
+              {pinned ? "✕" : "📌"}
+            </button>
+          )}
+        </span>
       </div>
 
       <div className={`grid grid-cols-2 gap-2 ${theme.text}`}>

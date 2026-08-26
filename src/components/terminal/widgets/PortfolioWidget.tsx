@@ -30,7 +30,9 @@ export default function PortfolioWidget({
   snapshotLabel,
   snapshotTime,
   theme,
-  fetching
+  fetching,
+  onPin,
+  pinned
 }: {
   holdings: PortfolioHolding[];
   snapshot?: Record<string, SnapshotHolding>;
@@ -38,6 +40,8 @@ export default function PortfolioWidget({
   snapshotTime?: number;
   theme: any;
   fetching?: boolean;
+  onPin?: () => void;
+  pinned?: boolean;
 }) {
   const hasSnapshot = !!snapshot && Object.keys(snapshot).length > 0;
 
@@ -157,8 +161,20 @@ export default function PortfolioWidget({
     <div className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2 max-w-full overflow-x-auto`}>
       <div className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}>
         <span className="font-bold">PORTFOLIO</span>
-        <span className="uppercase">
-          {hasSnapshot ? `SNAPSHOT: ${snapshotLabel || "untitled"} · ${snapshotTime ? new Date(snapshotTime).toLocaleString() : ""}` : "NO SNAPSHOT — run 'snapshot' to track P/L"}
+        <span className="flex items-center gap-2">
+          <span className="uppercase">
+            {hasSnapshot ? `SNAPSHOT: ${snapshotLabel || "untitled"} · ${snapshotTime ? new Date(snapshotTime).toLocaleString() : ""}` : "NO SNAPSHOT — run 'snapshot' to track P/L"}
+          </span>
+          {onPin && (
+            <button
+              type="button"
+              onClick={onPin}
+              title={pinned ? "Unpin" : "Pin to right panel"}
+              className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
+            >
+              {pinned ? "✕" : "📌"}
+            </button>
+          )}
         </span>
       </div>
 

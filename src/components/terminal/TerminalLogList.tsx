@@ -33,20 +33,10 @@ export default function TerminalLogList({
   return (
     <>
       {logs.map((log) => {
-        const pinnable = log.type !== "input";
+        const isPinned = pinnedIds.has(log.id);
         return (
-          <div key={log.id} className={`relative group ${log.type === "input" ? "" : ""}`}>
-            {pinnable && (
-              <button
-                type="button"
-                onClick={() => onPin(log)}
-                title={pinnedIds.has(log.id) ? "Unpin" : "Pin to right panel"}
-                className={`absolute -top-1 -right-1 z-10 uppercase text-[9px] px-1 py-0.5 border ${theme.border} ${theme.cardBg} ${theme.primary} opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer`}
-              >
-                {pinnedIds.has(log.id) ? "✕ unpin" : "📌 pin"}
-              </button>
-            )}
-            {renderLog(log, theme, activeChainId)}
+          <div key={log.id}>
+            {renderLog(log, theme, activeChainId, onPin, isPinned)}
           </div>
         );
       })}
@@ -54,7 +44,13 @@ export default function TerminalLogList({
   );
 }
 
-function renderLog(log: LogEntry, theme: any, activeChainId: number | null) {
+function renderLog(
+  log: LogEntry,
+  theme: any,
+  activeChainId: number | null,
+  onPin: (log: LogEntry) => void,
+  isPinned: boolean
+) {
   if (log.type === "input") {
     return (
       <div className={`${theme.primary} font-bold ${theme.glow}`}>
@@ -63,7 +59,7 @@ function renderLog(log: LogEntry, theme: any, activeChainId: number | null) {
     );
   }
   if (log.type === "help") {
-    return <HelpManual theme={theme} />;
+    return <HelpManual theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   }
   if (log.type === "dexes") {
     const dexList = DEX_REGISTRY[activeChainId!] || [];
@@ -86,26 +82,37 @@ function renderLog(log: LogEntry, theme: any, activeChainId: number | null) {
     );
   }
   if (log.type === "networks")
-    return <NetworksList theme={theme} />;
+    return <NetworksList theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   if (log.type === "createpool")
-    return <CreatePoolWidget {...log.payload} theme={theme} />;
+    return <CreatePoolWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   if (log.type === "initialize")
-    return <InitializePoolWidget {...log.payload} theme={theme} />;
+    return <InitializePoolWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   if (log.type === "addliq")
-    return <AddLiquidityWidget {...log.payload} theme={theme} />;
+    return <AddLiquidityWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   if (log.type === "balance")
-    return <BalanceWidget {...log.payload} theme={theme} />;
+    return <BalanceWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   if (log.type === "portfolio")
-    return <PortfolioWidget {...log.payload} theme={theme} />;
+    return <PortfolioWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   if (log.type === "chat")
-    return <ChatWidget {...log.payload} theme={theme} />;
+    return <ChatWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   if (log.type === "billboard")
-    return <BillboardWidget {...log.payload} theme={theme} />;
+    return <BillboardWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
 
+  // Plain text / component logs: a subtle pin toggle on hover, top-right.
   return (
-    <div className={`${theme.text}/90`}>
-      {log.text}
-      {log.component}
+    <div className="relative group">
+      <div className={`${theme.text}/90`}>
+        {log.text}
+        {log.component}
+      </div>
+      <button
+        type="button"
+        onClick={() => onPin(log)}
+        title={isPinned ? "Unpin" : "Pin to right panel"}
+        className={`absolute -top-1 -right-1 z-10 uppercase text-[9px] px-1 py-0.5 border ${theme.border} ${theme.cardBg} ${theme.primary} opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer`}
+      >
+        {isPinned ? "✕" : "📌"}
+      </button>
     </div>
   );
 }
