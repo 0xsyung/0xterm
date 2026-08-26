@@ -396,6 +396,8 @@ export default function TerminalShell({
         });
         return next;
       }
+      // one pinned widget per kind — can't pin a second inbox/price/board, etc.
+      if (prev.some((p) => p.kind === log.type)) return prev;
       const manifest: PinnedManifest = buildPinManifest(log);
       return [...prev, manifest];
     });
@@ -413,6 +415,12 @@ export default function TerminalShell({
       delete n[id];
       return n;
     });
+  };
+
+  const onMinimize = (id: string) => {
+    setPinned((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, minimized: !p.minimized } : p))
+    );
   };
 
   // register a live-data refresh closure for a pinned entry id
@@ -546,7 +554,11 @@ export default function TerminalShell({
       id: log.id,
       kind: log.type,
       title: log.type.toUpperCase(),
-      payload: log.payload || (log.text ? { text: log.text } : {})
+      payload: log.payload || (log.text ? { text: log.text } : {}),
+      // component-kind logs (price/swap/pool/deploy/export) render a React
+      // element rather than a payload — carry it so the pinned panel can
+      // render it. Stripped before persist/export.
+      component: log.type === "component" ? log.component : undefined
     };
     const p = log.payload || {};
 
@@ -701,7 +713,7 @@ export default function TerminalShell({
   // Persist pin manifests whenever they change (so they survive reload + export)
   useEffect(() => {
     if (!isConnected || !address) return;
-    const serializable = pinned.map(({ payload, ...rest }) => rest);
+    const serializable = pinned.map(({ payload, component, ...rest }) => rest);
     savePreference("pinned", serializable);
   }, [pinned, isConnected, address]);
 
@@ -2709,7 +2721,7 @@ export default function TerminalShell({
         wallet: address,
         preferences: prefs,
         customTokens: tokens,
-        pinned: pinned.map(({ payload, ...rest }) => rest)
+        pinned: pinned.map(({ payload, component, ...rest }) => rest)
       };
 
       const exportWidget = (
@@ -4738,6 +4750,7 @@ export default function TerminalShell({
           refreshing={refreshingId}
           countdowns={countdowns}
           onRefresh={onRefreshPinned}
+          onMinimize={onMinimize}
           onUnpin={onUnpin}
         />
 

@@ -37,6 +37,10 @@ export type PinnedManifest = {
   peer?: string;
   count?: number;
   payload?: any;
+  minimized?: boolean;
+  // transient: the live React element for component-kind pins (price/swap/
+  // pool/deploy/export). Not serialized — stripped before persist/export.
+  component?: React.ReactNode;
 }
 
 export type ThemeConfig = {

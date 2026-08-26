@@ -24,6 +24,7 @@ export default function PinnedPanel({
   refreshing,
   countdowns,
   onRefresh,
+  onMinimize,
   onUnpin
 }: {
   pinned: PinnedManifest[];
@@ -31,6 +32,7 @@ export default function PinnedPanel({
   refreshing?: string | null;
   countdowns?: Record<string, number>;
   onRefresh: (id: string) => void;
+  onMinimize: (id: string) => void;
   onUnpin: (id: string) => void;
 }) {
   if (pinned.length === 0) return null;
@@ -44,17 +46,18 @@ export default function PinnedPanel({
             ? countdowns[p.id]
             : REFRESH_INTERVAL;
         const isRefreshing = refreshing === p.id;
+        const minimized = !!p.minimized;
         return (
           <div
             key={p.id}
             className={`pointer-events-auto border ${theme.border} ${theme.cardBg} ${theme.rounded} p-2 text-xs ${theme.text}`}
           >
             <div
-              className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1 mb-2`}
+              className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1 ${minimized ? "" : "mb-2"}`}
             >
               <span className="font-bold flex items-center gap-1.5">
                 <span>{p.title}</span>
-                {hasRefresh && (
+                {!minimized && hasRefresh && (
                   <button
                     type="button"
                     onClick={() => onRefresh(p.id)}
@@ -65,7 +68,7 @@ export default function PinnedPanel({
                     {isRefreshing ? "…" : "↻"}
                   </button>
                 )}
-                {hasRefresh && (
+                {!minimized && hasRefresh && (
                   <span
                     className={`uppercase text-[9px] ${isRefreshing ? "opacity-70" : "opacity-50"}`}
                   >
@@ -73,16 +76,26 @@ export default function PinnedPanel({
                   </span>
                 )}
               </span>
-              <button
-                type="button"
-                onClick={() => onUnpin(p.id)}
-                title="Unpin"
-                className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
-              >
-                ✕
-              </button>
+              <span className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onMinimize(p.id)}
+                  title={minimized ? "Expand" : "Minimize"}
+                  className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
+                >
+                  {minimized ? "+" : "-"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUnpin(p.id)}
+                  title="Unpin"
+                  className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
+                >
+                  ✕
+                </button>
+              </span>
             </div>
-            {renderPinned(p, theme)}
+            {!minimized && renderPinned(p, theme)}
           </div>
         );
       })}
@@ -91,6 +104,9 @@ export default function PinnedPanel({
 }
 
 function renderPinned(p: PinnedManifest, theme: any) {
+  if (p.kind === "component") {
+    return p.component || <div className={`${theme.text}/50`}>widget unavailable</div>;
+  }
   const payload = p.payload || {};
   switch (p.kind) {
     case "help":
