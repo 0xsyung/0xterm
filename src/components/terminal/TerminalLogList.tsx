@@ -99,15 +99,16 @@ function renderLog(
   if (log.type === "billboard")
     return <BillboardWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
 
-  // Plain text / component logs: a subtle pin button on hover, top-right.
-  // Hidden once pinned — unpinning happens from the right panel's ✕.
+  // Plain text / component logs. Only real widgets (log.component, e.g. the
+  // price widget) get a pin — bare text lines (banners, tx hashes, errors)
+  // have nothing to pin.
   return (
     <div className="relative group">
       <div className={`${theme.text}/90`}>
         {log.text}
         {log.component}
       </div>
-      {!isPinned && (
+      {log.component && !isPinned && (
         <PinButton
           onPin={() => onPin(log)}
           theme={theme}
