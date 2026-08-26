@@ -78,13 +78,14 @@ import {
   bytesToHex,
   KEY_MESSAGE
 } from "../../lib/chatCrypto";
-import type { LogEntry, ThemeMode, DexProtocol } from "./types";
+import type { LogEntry, ThemeMode, DexProtocol, PinnedManifest } from "./types";
 import PortfolioWidget, {
   type PortfolioHolding,
   type SnapshotHolding
 } from "./widgets/PortfolioWidget";
 import { trackEvent } from "../../lib/analytics";
 import DeployWidget from "./widgets/DeployWidget";
+import PinnedPanel from "./PinnedPanel";
 import type { ChatMessage } from "./widgets/ChatWidget";
 import type { BillboardPost } from "./widgets/BillboardWidget";
 
@@ -256,6 +257,37 @@ export default function TerminalShell({
   const [history, setHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
 
+  // Pinned widgets (floating right column). `refresh` is a live-data loader
+  // re-run every 60s; manifests are what get persisted / exported / imported.
+  const [pinned, setPinned] = useState<PinnedManifest[]>([]);
+  const [pinnedRefresh, setPinnedRefresh] = useState<
+    Record<string, () => Promise<any>>
+  >({});
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+
+  // 60s tick — bump to trigger refresh of all pinned widgets
+  useEffect(() => {
+    const id = setInterval(() => {
+      setPinnedRefresh((refs) => {
+        Object.entries(refs).forEach(([pid, fn]) => {
+          setRefreshingId(pid);
+          fn()
+            .then((payload) => {
+              setPinned((prev) =>
+                prev.map((p) =>
+                  p.id === pid && payload ? { ...p, payload } : p
+                )
+              );
+            })
+            .catch(() => {})
+            .finally(() => setRefreshingId((cur) => (cur === pid ? null : cur)));
+        });
+        return refs;
+      });
+    }, 60000);
+    return () => clearInterval(id);
+  }, []);
+
   // Autocomplete State
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionIdx, setSuggestionIdx] = useState(-1);
@@ -291,6 +323,193 @@ export default function TerminalShell({
 
   const generateId = () => Math.random().toString(36).substring(2, 9);
 
+  // --- Pin / unpin (floating right column) --------------------------------
+  // Toggle a log entry between the main feed and the pinned column. `refresh`
+  // is the live-data loader (only set for widgets with a live source).
+  const onPin = (log: LogEntry) => {
+    setPinned((prev) => {
+      if (prev.some((p) => p.id === log.id)) {
+        const next = prev.filter((p) => p.id !== log.id);
+        setPinnedRefresh((refs) => {
+          const r = { ...refs };
+          delete r[log.id];
+          return r;
+        });
+        return next;
+      }
+      const manifest: PinnedManifest = buildPinManifest(log);
+      return [...prev, manifest];
+    });
+  };
+
+  const onUnpin = (id: string) => {
+    setPinned((prev) => prev.filter((p) => p.id !== id));
+    setPinnedRefresh((refs) => {
+      const r = { ...refs };
+      delete r[id];
+      return r;
+    });
+  };
+
+  // register a live-data refresh closure for a pinned entry id
+  const registerPinRefresh = (id: string, fn: () => Promise<any>) => {
+    setPinnedRefresh((refs) => ({ ...refs, [id]: fn }));
+  };
+
+  // Rebuild refresh closures from persisted pin manifests (called on connect /
+  // import). `kind` tells us which loader to wire; missing params → no refresh
+  // (renders the snapshot payload as a static card).
+  const rehydratePinRefresh = (manifests: PinnedManifest[]) => {
+    const refs: Record<string, () => Promise<any>> = {};
+    for (const m of manifests) {
+      if (!m.chainId || !address) continue;
+      const chain = SUPPORTED_CHAINS.find((c) => c.id === m.chainId);
+      if (!chain) continue;
+      if (m.kind === "billboard" && m.contract) {
+        const c = m.contract as Address;
+        const count = m.count || 5;
+        refs[m.id] = async () => {
+          const client = getClient(chain);
+          const total = (await client.readContract({
+            address: c,
+            abi: billboardAbi,
+            functionName: "postCount"
+          })) as bigint;
+          const posts = ((await client.readContract({
+            address: c,
+            abi: billboardAbi,
+            functionName: "getLatest",
+            args: [BigInt(count), 0n]
+          })) as unknown as BillboardPost[]).map((x) => ({
+            ...x,
+            timestamp: Number(x.timestamp)
+          }));
+          return {
+            posts,
+            total: Number(total),
+            pageSize: count,
+            onLoadPage: (offset: number) =>
+              client
+                .readContract({
+                  address: c,
+                  abi: billboardAbi,
+                  functionName: "getLatest",
+                  args: [BigInt(count), BigInt(Math.max(0, offset))]
+                })
+                .then((r) =>
+                  (r as unknown as BillboardPost[]).map((x) => ({
+                    ...x,
+                    timestamp: Number(x.timestamp)
+                  }))
+                )
+          };
+        };
+      } else if (m.kind === "balance") {
+        refs[m.id] = async () =>
+          fetchTokenBalanceData(address as Address, chain, m.token);
+      } else if (m.kind === "portfolio") {
+        refs[m.id] = async () => ({
+          holdings: await fetchPortfolioHoldings(
+            address as Address,
+            m.filterType
+          )
+        });
+      }
+    }
+    setPinnedRefresh(refs);
+  };
+
+  // Convert a log entry into a serializable pin manifest + (where possible) a
+  // live refresh closure. `refresh` is what the 60s tick re-runs.
+  const buildPinManifest = (log: LogEntry): PinnedManifest => {
+    const base: PinnedManifest = {
+      id: log.id,
+      kind: log.type,
+      title: log.type.toUpperCase(),
+      payload: log.payload || (log.text ? { text: log.text } : {})
+    };
+    const p = log.payload || {};
+
+    if (log.type === "billboard") {
+      base.title = "BOARD";
+      base.chainId = activeChainId || undefined;
+      base.contract = (BILLBOARD_CONTRACT[activeChainId || 0] as string) || undefined;
+      base.count = Number(p.pageSize) || 5;
+      if (base.chainId && base.contract) {
+        registerPinRefresh(log.id, async () => {
+          const chain = SUPPORTED_CHAINS.find((c) => c.id === base.chainId)!;
+          const client = getClient(chain);
+          const total = (await client.readContract({
+            address: base.contract as Address,
+            abi: billboardAbi,
+            functionName: "postCount"
+          })) as bigint;
+          const posts = ((await client.readContract({
+            address: base.contract as Address,
+            abi: billboardAbi,
+            functionName: "getLatest",
+            args: [BigInt(base.count || 5), 0n]
+          })) as unknown as BillboardPost[]).map((x) => ({
+            ...x,
+            timestamp: Number(x.timestamp)
+          }));
+          return {
+            posts,
+            total: Number(total),
+            pageSize: base.count || 5,
+            onLoadPage: (offset: number) =>
+              client
+                .readContract({
+                  address: base.contract as Address,
+                  abi: billboardAbi,
+                  functionName: "getLatest",
+                  args: [BigInt(base.count || 5), BigInt(Math.max(0, offset))]
+                })
+                .then((r) =>
+                  (r as unknown as BillboardPost[]).map((x) => ({
+                    ...x,
+                    timestamp: Number(x.timestamp)
+                  }))
+                )
+          };
+        });
+      }
+    } else if (log.type === "balance") {
+      base.title = `BALANCE${p.symbol ? ` ${p.symbol}` : ""}`;
+      base.chainId = activeChainId || undefined;
+      // balance payload = { balance, symbol }; store the symbol as the token
+      // query (native is implied by symbol matching chain native)
+      base.token = p.symbol as string | undefined;
+      if (address && base.chainId) {
+        const chain = SUPPORTED_CHAINS.find((c) => c.id === base.chainId)!;
+        const queryToken = base.token;
+        registerPinRefresh(log.id, async () => {
+          return fetchTokenBalanceData(address as Address, chain, queryToken);
+        });
+      }
+    } else if (log.type === "portfolio") {
+      base.title = "PORTFOLIO";
+      base.chainId = activeChainId || undefined;
+      base.filterType = p.filterType;
+      if (address) {
+        registerPinRefresh(log.id, async () => {
+          const holdings = await fetchPortfolioHoldings(
+            address as Address,
+            base.filterType
+          );
+          return { holdings };
+        });
+      }
+    } else if (log.type === "chat") {
+      base.title = "CHAT";
+      base.chainId = activeChainId || undefined;
+      base.contract = (CHAT_CONTRACT[activeChainId || 0] as string) || undefined;
+      base.peer = p.peer;
+    }
+
+    return base;
+  };
+
   const savePreference = (key: string, value: any) => {
     if (!isConnected || !address) return;
     const storageKey = `0xterm_user_${address.toLowerCase()}`;
@@ -303,6 +522,13 @@ export default function TerminalShell({
       console.error("Failed to save preference", e);
     }
   };
+
+  // Persist pin manifests whenever they change (so they survive reload + export)
+  useEffect(() => {
+    if (!isConnected || !address) return;
+    const serializable = pinned.map(({ payload, ...rest }) => rest);
+    savePreference("pinned", serializable);
+  }, [pinned, isConnected, address]);
 
   const saveCustomTokenToStorage = (updatedTokens: typeof customTokens) => {
     if (!isConnected || !address) return;
@@ -348,6 +574,11 @@ export default function TerminalShell({
           if (prefs.rpcProviders) setRpcProviders(prefs.rpcProviders);
           if (prefs.activeRpcProviders)
             setActiveRpcProviders(prefs.activeRpcProviders);
+
+          if (Array.isArray(prefs.pinned) && prefs.pinned.length > 0) {
+            setPinned(prefs.pinned);
+            rehydratePinRefresh(prefs.pinned);
+          }
 
           if (prefs.chainId) {
             const chainObj = SUPPORTED_CHAINS.find(
@@ -1081,6 +1312,90 @@ export default function TerminalShell({
       balance: formatUnits(bal as bigint, token.decimals),
       symbol: token.symbol
     };
+  };
+
+  // Reusable holdings builder for `portfolio` (and pinned-portfolio refresh).
+  // Reads native + registered (COMMON_TOKENS + custom) token balances across
+  // all chains, pricing via getTokenPriceUsd.
+  const fetchPortfolioHoldings = async (
+    userAddress: Address,
+    filterType?: string
+  ): Promise<PortfolioHolding[]> => {
+    const holdings: PortfolioHolding[] = [];
+
+    for (const chain of SUPPORTED_CHAINS) {
+      const client = getClient(chain);
+      let nativeBal = 0n;
+      try {
+        nativeBal = await client.getBalance({ address: userAddress });
+      } catch {
+        nativeBal = 0n;
+      }
+
+      const nativePrice = await getTokenPriceUsd(
+        chain,
+        chain.nativeCurrency.symbol,
+        (WRAPPED_NATIVE[chain.id] || NATIVE_TOKEN_ADDRESS) as Address,
+        true
+      );
+      const nativeBalance = formatEther(nativeBal);
+      const nativeValue =
+        nativePrice !== null ? nativePrice * parseFloat(nativeBalance) : null;
+
+      if (filterType !== "erc20") {
+        holdings.push({
+          chainName: chain.name,
+          chainId: chain.id,
+          symbol: chain.nativeCurrency.symbol,
+          type: "native",
+          balance: nativeBalance,
+          priceUsd: nativePrice,
+          valueUsd: nativeValue,
+          change24h: null,
+          priceSource: nativePrice !== null ? "api" : "—",
+          isTestnet: !!chain.testnet
+        });
+      }
+
+      const registered = {
+        ...(COMMON_TOKENS[chain.id] || {}),
+        ...(customTokens[chain.id] || {})
+      };
+      for (const [symbol, info] of Object.entries(registered)) {
+        if (filterType === "native") continue;
+        if (info.address === NATIVE_TOKEN_ADDRESS) continue;
+        const addr = info.address as Address;
+        try {
+          const bal = (await client.readContract({
+            address: addr,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [userAddress]
+          })) as bigint;
+          const decimals = info.decimals ?? 18;
+          const formatted = formatUnits(bal, decimals);
+          if (parseFloat(formatted) === 0) continue;
+
+          const price = await getTokenPriceUsd(chain, symbol, addr, false);
+          holdings.push({
+            chainName: chain.name,
+            chainId: chain.id,
+            symbol,
+            type: "erc20",
+            balance: formatted,
+            priceUsd: price,
+            valueUsd: price !== null ? price * parseFloat(formatted) : null,
+            change24h: null,
+            priceSource: price !== null ? "api" : "—",
+            isTestnet: !!chain.testnet
+          });
+        } catch {
+          // skip tokens that fail to read (e.g. non-ERC20 or wrong chain)
+        }
+      }
+    }
+
+    return holdings;
   };
 
   // Price a token in USD: DexScreener first, then on-chain V3 pool, then
@@ -2218,7 +2533,8 @@ export default function TerminalShell({
         version: "1.0",
         wallet: address,
         preferences: prefs,
-        customTokens: tokens
+        customTokens: tokens,
+        pinned: pinned.map(({ payload, ...rest }) => rest)
       };
 
       const exportWidget = (
@@ -2281,6 +2597,13 @@ export default function TerminalShell({
         if (data.customTokens) {
           localStorage.setItem(tokensKey, JSON.stringify(data.customTokens));
           setCustomTokens(data.customTokens);
+        }
+
+        if (Array.isArray(data.pinned)) {
+          const cleaned = data.pinned.filter((p: any) => p && p.id && p.kind);
+          setPinned(cleaned);
+          rehydratePinRefresh(cleaned);
+          savePreference("pinned", cleaned);
         }
 
         return {
@@ -3161,81 +3484,10 @@ export default function TerminalShell({
             ).portfolioSnapshot
           : null) || null;
 
-      const holdings: PortfolioHolding[] = [];
-
-      for (const chain of SUPPORTED_CHAINS) {
-        const client = getClient(chain);
-        let nativeBal = 0n;
-        try {
-          nativeBal = await client.getBalance({ address: address as Address });
-        } catch {
-          nativeBal = 0n;
-        }
-
-        // Native token
-        const nativePrice = await getTokenPriceUsd(
-          chain,
-          chain.nativeCurrency.symbol,
-          WRAPPED_NATIVE[chain.id] || NATIVE_TOKEN_ADDRESS as Address,
-          true
-        );
-        const nativeBalance = formatEther(nativeBal);
-        const nativeValue =
-          nativePrice !== null ? nativePrice * parseFloat(nativeBalance) : null;
-
-        if (filterType !== "erc20") {
-          holdings.push({
-            chainName: chain.name,
-            chainId: chain.id,
-            symbol: chain.nativeCurrency.symbol,
-            type: "native",
-            balance: nativeBalance,
-            priceUsd: nativePrice,
-            valueUsd: nativeValue,
-            change24h: null,
-            priceSource: nativePrice !== null ? "api" : "—",
-            isTestnet: !!chain.testnet
-          });
-        }
-
-        // Registered tokens (COMMON_TOKENS + customTokens)
-        const registered = {
-          ...(COMMON_TOKENS[chain.id] || {}),
-          ...(customTokens[chain.id] || {})
-        };
-        for (const [symbol, info] of Object.entries(registered)) {
-          if (filterType === "native") continue;
-          if (info.address === NATIVE_TOKEN_ADDRESS) continue;
-          const addr = info.address as Address;
-          try {
-            const bal = (await client.readContract({
-              address: addr,
-              abi: erc20Abi,
-              functionName: "balanceOf",
-              args: [address as Address]
-            })) as bigint;
-            const decimals = info.decimals ?? 18;
-            const formatted = formatUnits(bal, decimals);
-            if (parseFloat(formatted) === 0) continue; // skip zero balances
-
-            const price = await getTokenPriceUsd(chain, symbol, addr, false);
-            holdings.push({
-              chainName: chain.name,
-              chainId: chain.id,
-              symbol,
-              type: "erc20",
-              balance: formatted,
-              priceUsd: price,
-              valueUsd: price !== null ? price * parseFloat(formatted) : null,
-              change24h: null,
-              priceSource: price !== null ? "api" : "—",
-              isTestnet: !!chain.testnet
-            });
-          } catch {
-            // skip tokens that fail to read (e.g. non-ERC20 or wrong chain)
-          }
-        }
-      }
+      const holdings = await fetchPortfolioHoldings(
+        address as Address,
+        filterType
+      );
 
       // Build snapshot-holding map for the widget (from saved snapshot prices)
       const snapMap: Record<string, SnapshotHolding> = {};
@@ -3253,7 +3505,8 @@ export default function TerminalShell({
           holdings,
           snapshot: snapMap,
           snapshotLabel: snapshot?.label,
-          snapshotTime: snapshot?.timestamp
+          snapshotTime: snapshot?.timestamp,
+          filterType
         }
       };
     },
@@ -4298,8 +4551,18 @@ export default function TerminalShell({
             logs={logs}
             theme={theme}
             activeChainId={activeChainId}
+            onPin={onPin}
+            pinnedIds={new Set(pinned.map((p) => p.id))}
           />
         </div>
+
+        {/* FLOATING PINNED WIDGET COLUMN (right) */}
+        <PinnedPanel
+          pinned={pinned}
+          theme={theme}
+          refreshing={refreshingId}
+          onUnpin={onUnpin}
+        />
 
         {/* TWO-LINE PROMPT LAYOUT */}
         <TerminalPrompt

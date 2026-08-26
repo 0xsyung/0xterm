@@ -26,6 +26,19 @@ export type DexProtocol = {
   type: 'V2' | 'V3'
 }
 
+export type PinnedManifest = {
+  id: string;
+  kind: string; // log.type
+  title: string;
+  chainId?: number;
+  contract?: string;
+  token?: string;
+  filterType?: string;
+  peer?: string;
+  count?: number;
+  payload?: any;
+}
+
 export type ThemeConfig = {
   name: string
   bg: string
