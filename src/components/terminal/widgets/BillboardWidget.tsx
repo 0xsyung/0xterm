@@ -64,14 +64,16 @@ export default function BillboardWidget({
         <span className="font-bold">BILLBOARD · public on-chain</span>
         <span className="flex items-center gap-2">
           <span className="uppercase text-[10px]">no encryption</span>
-          <button
-            type="button"
-            onClick={onPin}
-            title={pinned ? "Unpin" : "Pin to right panel"}
-            className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
-          >
-            {pinned ? "✕" : "📌"}
-          </button>
+          {onPin && !pinned && (
+            <button
+              type="button"
+              onClick={onPin}
+              title="Pin to right panel"
+              className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
+            >
+              📌
+            </button>
+          )}
         </span>
       </div>
 

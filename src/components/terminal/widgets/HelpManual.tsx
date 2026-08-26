@@ -23,14 +23,14 @@ export default function HelpManual({
         className={`flex justify-between items-center border-b ${theme.border} pb-1 font-bold ${theme.primary} tracking-wider`}
       >
         <span>SYSTEM COMMAND MANUAL</span>
-        {onPin && (
+        {onPin && !pinned && (
           <button
             type="button"
             onClick={onPin}
-            title={pinned ? "Unpin" : "Pin to right panel"}
-            className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
+            title="Pin to right panel"
+            className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
           >
-            {pinned ? "✕" : "📌"}
+            📌
           </button>
         )}
       </div>

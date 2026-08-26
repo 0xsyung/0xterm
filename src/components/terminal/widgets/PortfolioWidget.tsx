@@ -165,14 +165,14 @@ export default function PortfolioWidget({
           <span className="uppercase">
             {hasSnapshot ? `SNAPSHOT: ${snapshotLabel || "untitled"} · ${snapshotTime ? new Date(snapshotTime).toLocaleString() : ""}` : "NO SNAPSHOT — run 'snapshot' to track P/L"}
           </span>
-          {onPin && (
+          {onPin && !pinned && (
             <button
               type="button"
               onClick={onPin}
-              title={pinned ? "Unpin" : "Pin to right panel"}
-              className={`uppercase text-[10px] cursor-pointer ${theme.primary} ${pinned ? "opacity-60" : "opacity-100"}`}
+              title="Pin to right panel"
+              className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
             >
-              {pinned ? "✕" : "📌"}
+              📌
             </button>
           )}
         </span>
