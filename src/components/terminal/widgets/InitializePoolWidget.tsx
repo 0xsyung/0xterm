@@ -63,19 +63,23 @@ export default function InitializePoolWidget({
 
   return (
     <div
-      className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} ${theme.font} text-xs space-y-3`}
+      className={`relative group my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} ${theme.font} text-xs space-y-3`}
     >
+      {!pinned && (
+        <PinButton
+          onPin={onPin}
+          theme={theme}
+          className="absolute -top-1 -right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+        />
+      )}
       <div
         className={`flex justify-between items-center border-b ${theme.border} pb-2`}
       >
         <span className={`font-bold ${theme.primary}`}>
           INITIALIZE V3 PRICE CURVE
         </span>
-        <span className="flex items-center gap-2">
-          <span className={`${theme.text}/70`}>
-            {tokenA.symbol} / {tokenB.symbol}
-          </span>
-          {!pinned && <PinButton onPin={onPin} theme={theme} />}
+        <span className={`${theme.text}/70`}>
+          {tokenA.symbol} / {tokenB.symbol}
         </span>
       </div>
 
