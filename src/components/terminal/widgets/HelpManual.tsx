@@ -18,13 +18,19 @@ export default function HelpManual({
 }) {
   return (
     <div
-      className={`text-xs space-y-2 my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.text} max-w-2xl`}
+      className={`relative group text-xs space-y-2 my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.text} max-w-2xl`}
     >
+      {!pinned && (
+        <PinButton
+          onPin={onPin}
+          theme={theme}
+          className="absolute -top-1 -right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+        />
+      )}
       <div
-        className={`flex justify-between items-center border-b ${theme.border} pb-1 font-bold ${theme.primary} tracking-wider`}
+        className={`border-b ${theme.border} pb-1 font-bold ${theme.primary} tracking-wider`}
       >
-        <span>SYSTEM COMMAND MANUAL</span>
-        {!pinned && <PinButton onPin={onPin} theme={theme} />}
+        SYSTEM COMMAND MANUAL
       </div>
       <div className="grid grid-cols-1 gap-y-2 pt-1">
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-x-4">

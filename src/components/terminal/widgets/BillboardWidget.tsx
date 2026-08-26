@@ -57,16 +57,20 @@ export default function BillboardWidget({
 
   return (
     <div
-      className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} text-xs space-y-2 max-w-2xl`}
+      className={`relative group my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} text-xs space-y-2 max-w-2xl`}
     >
+      {!pinned && (
+        <PinButton
+          onPin={onPin}
+          theme={theme}
+          className="absolute -top-1 -right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+        />
+      )}
       <div
         className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
       >
         <span className="font-bold">BILLBOARD · public on-chain</span>
-        <span className="flex items-center gap-2">
-          <span className="uppercase text-[10px]">no encryption</span>
-          {!pinned && <PinButton onPin={onPin} theme={theme} />}
-        </span>
+        <span className="uppercase text-[10px]">no encryption</span>
       </div>
 
       {items.length === 0 ? (
