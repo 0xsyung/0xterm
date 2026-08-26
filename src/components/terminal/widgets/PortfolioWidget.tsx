@@ -5,6 +5,7 @@
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 import React from "react";
+import PinButton from "./PinButton";
 
 export type PortfolioHolding = {
   chainName: string;
@@ -165,16 +166,7 @@ export default function PortfolioWidget({
           <span className="uppercase">
             {hasSnapshot ? `SNAPSHOT: ${snapshotLabel || "untitled"} · ${snapshotTime ? new Date(snapshotTime).toLocaleString() : ""}` : "NO SNAPSHOT — run 'snapshot' to track P/L"}
           </span>
-          {onPin && !pinned && (
-            <button
-              type="button"
-              onClick={onPin}
-              title="Pin to right panel"
-              className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
-            >
-              📌
-            </button>
-          )}
+          {!pinned && <PinButton onPin={onPin} theme={theme} />}
         </span>
       </div>
 

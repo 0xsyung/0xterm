@@ -9,6 +9,7 @@
 import { useState } from 'react'
 import { useWriteContract, usePublicClient } from 'wagmi'
 import { uniV2FactoryAbi, uniV3FactoryAbi } from '../constants'
+import PinButton from './PinButton'
 
 export default function CreatePoolWidget({ targetChain, activeDex, tokenA, tokenB, addrA, addrB, fee, theme, onPin, pinned }: any) {
   const { writeContractAsync } = useWriteContract()
@@ -53,16 +54,7 @@ export default function CreatePoolWidget({ targetChain, activeDex, tokenA, token
         <span className={`font-bold ${theme.primary}`}>DEPLOY POOL CONTRACT [FACTORY]</span>
         <span className="flex items-center gap-2">
           <span className={`${theme.text}/70`}>{activeDex.name} ({activeDex.type})</span>
-          {onPin && !pinned && (
-            <button
-              type="button"
-              onClick={onPin}
-              title="Pin to right panel"
-              className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
-            >
-              📌
-            </button>
-          )}
+          {!pinned && <PinButton onPin={onPin} theme={theme} />}
         </span>
       </div>
 

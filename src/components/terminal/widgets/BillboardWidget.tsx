@@ -5,6 +5,7 @@
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 import React, { useState } from "react";
+import PinButton from "./PinButton";
 
 export type BillboardPost = {
   author: string;
@@ -64,16 +65,7 @@ export default function BillboardWidget({
         <span className="font-bold">BILLBOARD · public on-chain</span>
         <span className="flex items-center gap-2">
           <span className="uppercase text-[10px]">no encryption</span>
-          {onPin && !pinned && (
-            <button
-              type="button"
-              onClick={onPin}
-              title="Pin to right panel"
-              className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
-            >
-              📌
-            </button>
-          )}
+          {!pinned && <PinButton onPin={onPin} theme={theme} />}
         </span>
       </div>
 

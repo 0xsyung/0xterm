@@ -6,6 +6,7 @@
  */
 import { SUPPORTED_CHAINS } from "../constants";
 import type { ThemeConfig } from "../types";
+import PinButton from "./PinButton";
 
 export default function NetworksList({
   theme,
@@ -30,16 +31,7 @@ export default function NetworksList({
           <span className={`${theme.text}/70`}>
             TOTAL: {SUPPORTED_CHAINS.length}
           </span>
-          {onPin && !pinned && (
-            <button
-              type="button"
-              onClick={onPin}
-              title="Pin to right panel"
-              className={`uppercase text-[10px] cursor-pointer ${theme.primary}`}
-            >
-              📌
-            </button>
-          )}
+          {!pinned && <PinButton onPin={onPin} theme={theme} />}
         </span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
