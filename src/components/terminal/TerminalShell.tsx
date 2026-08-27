@@ -2312,7 +2312,10 @@ export default function TerminalShell({
         };
       }
 
-      const targetThemeKey = args[1].toLowerCase() as ThemeMode;
+      const input = args[1].toLowerCase();
+      const targetThemeKey =
+        (themeKeys.find((k) => k.toLowerCase() === input) as ThemeMode) ||
+        (input as ThemeMode);
       if (!THEMES[targetThemeKey]) {
         return {
           id: generateId(),

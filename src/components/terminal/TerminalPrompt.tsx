@@ -98,7 +98,7 @@ export default function TerminalPrompt({
 
       {/* LINE 3: Inline Suggestion Choices */}
       {suggestions.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto text-xs pb-0.5">
+        <div className="flex items-center gap-1.5 flex-wrap text-xs pb-0.5">
           <span className="text-[9px] opacity-40 font-mono shrink-0">
             CHOICES [← →]:
           </span>
