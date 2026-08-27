@@ -284,7 +284,16 @@ export default function TerminalShell({
     fn()
       .then((payload) => {
         setPinned((prev) =>
-          prev.map((p) => (p.id === id && payload ? { ...p, payload } : p))
+          prev.map((p) => {
+            if (p.id !== id || !payload) return p;
+            // component pins (e.g. price) re-render from componentData, so a
+            // refresh may return data for either slot.
+            const hasComponentData =
+              payload && typeof payload === "object" && "componentData" in payload;
+            return hasComponentData
+              ? { ...p, componentData: payload.componentData }
+              : { ...p, payload };
+          })
         );
       })
       .catch(() => {})
@@ -434,6 +443,131 @@ export default function TerminalShell({
   const rehydratePinRefresh = (manifests: PinnedManifest[]) => {
     const refs: Record<string, () => Promise<any>> = {};
     for (const m of manifests) {
+      // price component pins rebuild their refresh from componentData (which
+      // persists); api mode doesn't need a chain.
+      if (m.kind === "component" && m.componentData?.kind === "price") {
+        const cd = m.componentData;
+        if (cd.mode === "onchain" && m.chainId && m.dexId && cd.pairAddress) {
+          const chain = SUPPORTED_CHAINS.find((c) => c.id === m.chainId);
+          const dex = chain
+            ? DEX_REGISTRY[m.chainId!]?.find((d) => d.id === m.dexId)
+            : undefined;
+          if (chain && dex) {
+            const pairAddr = cd.pairAddress as Address;
+            refs[m.id] = async () => {
+              const client = getClient(chain);
+              let priceRatio = 0;
+              if (dex.type === "V2") {
+                const [token0, reserves] = await Promise.all([
+                  client.readContract({
+                    address: pairAddr,
+                    abi: uniV2PairAbi,
+                    functionName: "token0"
+                  }),
+                  client.readContract({
+                    address: pairAddr,
+                    abi: uniV2PairAbi,
+                    functionName: "getReserves"
+                  })
+                ]);
+                const a = (
+                  await resolveTokenDetails(cd.symbolA as string, chain)
+                ).address;
+                const reserveA =
+                  (token0 as string).toLowerCase() === a.toLowerCase()
+                    ? reserves[0]
+                    : reserves[1];
+                const reserveB =
+                  (token0 as string).toLowerCase() === a.toLowerCase()
+                    ? reserves[1]
+                    : reserves[0];
+                const [decA, decB] = await Promise.all([
+                  resolveTokenDetails(cd.symbolA as string, chain).then(
+                    (t) => t.decimals
+                  ),
+                  resolveTokenDetails(cd.symbolB as string, chain).then(
+                    (t) => t.decimals
+                  )
+                ]);
+                const formattedA = parseFloat(formatUnits(reserveA, decA));
+                const formattedB = parseFloat(formatUnits(reserveB, decB));
+                if (formattedA === 0)
+                  throw new Error("Pool reserve for token A is zero.");
+                priceRatio = formattedB / formattedA;
+              } else {
+                const [token0, slot0] = await Promise.all([
+                  client.readContract({
+                    address: pairAddr,
+                    abi: parseAbi(["function token0() view returns (address)"]),
+                    functionName: "token0"
+                  }),
+                  client.readContract({
+                    address: pairAddr,
+                    abi: uniV3PoolAbi,
+                    functionName: "slot0"
+                  })
+                ]);
+                const a = (
+                  await resolveTokenDetails(cd.symbolA as string, chain)
+                ).address;
+                const isTokenA0 =
+                  (token0 as string).toLowerCase() === a.toLowerCase();
+                const sqrtPriceFloat = Number(slot0[0]) / 2 ** 96;
+                const pRaw = Math.pow(sqrtPriceFloat, 2);
+                const [decA, decB] = await Promise.all([
+                  resolveTokenDetails(cd.symbolA as string, chain).then(
+                    (t) => t.decimals
+                  ),
+                  resolveTokenDetails(cd.symbolB as string, chain).then(
+                    (t) => t.decimals
+                  )
+                ]);
+                const dec0 = isTokenA0 ? decA : decB;
+                const dec1 = isTokenA0 ? decB : decA;
+                const pToken0InToken1 = pRaw * Math.pow(10, dec0 - dec1);
+                priceRatio = isTokenA0
+                  ? pToken0InToken1
+                  : 1 / pToken0InToken1;
+              }
+              return { componentData: { ...cd, rate: priceRatio } };
+            };
+          }
+        } else if (cd.mode === "api" && cd.tokenSymbol) {
+          refs[m.id] = async () => {
+            const q = `${cd.tokenSymbol} ${cd.quoteSymbol || ""}`;
+            const res = await fetch(
+              `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`
+            );
+            if (!res.ok) throw new Error(`DexScreener returned ${res.status}`);
+            const data = await res.json();
+            const pairs: any[] = data.pairs || [];
+            const chainSlug = m.chainId
+              ? DEXSCREENER_CHAIN[m.chainId]
+              : undefined;
+            const pair =
+              pairs.find(
+                (p: any) =>
+                  (!chainSlug || p.chainId.toLowerCase() === chainSlug) &&
+                  p.baseToken.symbol.toLowerCase() ===
+                    cd.tokenSymbol.toLowerCase() &&
+                  p.quoteToken.symbol.toLowerCase() ===
+                    cd.quoteSymbol.toLowerCase()
+              ) ||
+              pairs.find((p: any) => p.dexId === cd.dex) ||
+              pairs[0];
+            if (!pair) throw new Error("No fresh DexScreener data for this pair.");
+            return {
+              componentData: {
+                ...cd,
+                priceUsd: pair.priceUsd,
+                priceNative: pair.priceNative,
+                h24: pair.priceChange?.h24
+              }
+            };
+          };
+        }
+        continue;
+      }
       if (!m.chainId || !address) continue;
       const chain = SUPPORTED_CHAINS.find((c) => c.id === m.chainId);
       if (!chain) continue;
@@ -692,6 +826,137 @@ export default function TerminalShell({
           }
           const peerLabel = (await ensNameFor(peer)) || undefined;
           return { messages, peer, self, peerLabel };
+        });
+      }
+    } else if (
+      log.type === "component" &&
+      log.componentData?.kind === "price"
+    ) {
+      const cd = log.componentData;
+      base.source = cd.mode; // "pool" | "api"
+      if (cd.mode === "onchain") {
+        // re-run the on-chain pool price fetch
+        base.chainId = activeChainId || undefined;
+        base.dexId = activeDexId || undefined;
+        const pairAddr = cd.pairAddress as Address | undefined;
+        if (base.chainId && base.dexId && pairAddr) {
+          const chain = SUPPORTED_CHAINS.find((c) => c.id === base.chainId)!;
+          const dex = DEX_REGISTRY[base.chainId]?.find(
+            (d) => d.id === base.dexId
+          );
+          if (chain && dex) {
+            registerPinRefresh(log.id, async () => {
+              const client = getClient(chain);
+              let priceRatio = 0;
+              if (dex.type === "V2") {
+                const [token0, reserves] = await Promise.all([
+                  client.readContract({
+                    address: pairAddr,
+                    abi: uniV2PairAbi,
+                    functionName: "token0"
+                  }),
+                  client.readContract({
+                    address: pairAddr,
+                    abi: uniV2PairAbi,
+                    functionName: "getReserves"
+                  })
+                ]);
+                const symA = cd.symbolA as string;
+                const a = (await resolveTokenDetails(symA, chain)).address;
+                const reserveA =
+                  (token0 as string).toLowerCase() === a.toLowerCase()
+                    ? reserves[0]
+                    : reserves[1];
+                const reserveB =
+                  (token0 as string).toLowerCase() === a.toLowerCase()
+                    ? reserves[1]
+                    : reserves[0];
+                const [decA, decB] = await Promise.all([
+                  resolveTokenDetails(cd.symbolA as string, chain).then(
+                    (t) => t.decimals
+                  ),
+                  resolveTokenDetails(cd.symbolB as string, chain).then(
+                    (t) => t.decimals
+                  )
+                ]);
+                const formattedA = parseFloat(formatUnits(reserveA, decA));
+                const formattedB = parseFloat(formatUnits(reserveB, decB));
+                if (formattedA === 0) throw new Error("Pool reserve for token A is zero.");
+                priceRatio = formattedB / formattedA;
+              } else {
+                const [token0, slot0] = await Promise.all([
+                  client.readContract({
+                    address: pairAddr,
+                    abi: parseAbi(["function token0() view returns (address)"]),
+                    functionName: "token0"
+                  }),
+                  client.readContract({
+                    address: pairAddr,
+                    abi: uniV3PoolAbi,
+                    functionName: "slot0"
+                  })
+                ]);
+                const a = (await resolveTokenDetails(cd.symbolA as string, chain))
+                  .address;
+                const isTokenA0 =
+                  (token0 as string).toLowerCase() === a.toLowerCase();
+                const sqrtPriceFloat = Number(slot0[0]) / 2 ** 96;
+                const pRaw = Math.pow(sqrtPriceFloat, 2);
+                const [decA, decB] = await Promise.all([
+                  resolveTokenDetails(cd.symbolA as string, chain).then(
+                    (t) => t.decimals
+                  ),
+                  resolveTokenDetails(cd.symbolB as string, chain).then(
+                    (t) => t.decimals
+                  )
+                ]);
+                const dec0 = isTokenA0 ? decA : decB;
+                const dec1 = isTokenA0 ? decB : decA;
+                const pToken0InToken1 = pRaw * Math.pow(10, dec0 - dec1);
+                priceRatio = isTokenA0
+                  ? pToken0InToken1
+                  : 1 / pToken0InToken1;
+              }
+              return {
+                componentData: {
+                  ...cd,
+                  rate: priceRatio
+                }
+              };
+            });
+          }
+        }
+      } else {
+        // api mode: re-fetch DexScreener for the same pair query
+        registerPinRefresh(log.id, async () => {
+          const q = `${cd.tokenSymbol} ${cd.quoteSymbol}`;
+          const res = await fetch(
+            `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`
+          );
+          if (!res.ok) throw new Error(`DexScreener returned ${res.status}`);
+          const data = await res.json();
+          const pairs: any[] = data.pairs || [];
+          const chainSlug = DEXSCREENER_CHAIN[activeChainId || 0];
+          const pair =
+            pairs.find(
+              (p: any) =>
+                (!chainSlug || p.chainId.toLowerCase() === chainSlug) &&
+                p.baseToken.symbol.toLowerCase() ===
+                  cd.tokenSymbol.toLowerCase() &&
+                p.quoteToken.symbol.toLowerCase() ===
+                  cd.quoteSymbol.toLowerCase()
+            ) ||
+            pairs.find((p: any) => p.dexId === cd.dex) ||
+            pairs[0];
+          if (!pair) throw new Error("No fresh DexScreener data for this pair.");
+          return {
+            componentData: {
+              ...cd,
+              priceUsd: pair.priceUsd,
+              priceNative: pair.priceNative,
+              h24: pair.priceChange?.h24
+            }
+          };
         });
       }
     }
