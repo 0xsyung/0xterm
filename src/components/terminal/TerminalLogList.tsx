@@ -61,7 +61,7 @@ function renderLog(
     );
   }
   if (log.type === "help") {
-    return <HelpManual theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
+    return <HelpManual theme={theme} />;
   }
   if (log.type === "dexes") {
     const dexList = DEX_REGISTRY[activeChainId!] || [];
