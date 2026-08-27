@@ -984,6 +984,22 @@ export default function TerminalShell({
     savePreference("pinned", serializable);
   }, [pinned, isConnected, address]);
 
+  // True once prefs have been loaded on connect. Persisting logs/history before
+  // that would clobber saved scrollback with the default banner lines.
+  const prefsLoaded = useRef(false);
+
+  // Persist the terminal scrollback (logs) and up/down command history so the
+  // screen looks the same after a refresh. `component`/`componentData` React
+  // elements aren't serializable, so strip them; text/input logs survive as-is.
+  useEffect(() => {
+    if (!isConnected || !address || !prefsLoaded.current) return;
+    const serializableLogs = logs.map(({ component, componentData, ...rest }) =>
+      rest
+    );
+    savePreference("logs", serializableLogs.slice(-MAX_LOGS));
+    savePreference("history", history.slice(-100));
+  }, [logs, history, isConnected, address]);
+
   const saveCustomTokenToStorage = (updatedTokens: typeof customTokens) => {
     if (!isConnected || !address) return;
     const storageKey = `0xterm_custom_tokens_${address.toLowerCase()}`;
@@ -1034,6 +1050,13 @@ export default function TerminalShell({
             rehydratePinRefresh(prefs.pinned);
           }
 
+          if (Array.isArray(prefs.logs)) {
+            setLogs((prev) => [...prefs.logs].slice(-MAX_LOGS));
+          }
+          if (Array.isArray(prefs.history)) {
+            setHistory((prev) => [...prev, ...prefs.history].slice(-100));
+          }
+
           if (prefs.chainId) {
             const chainObj = SUPPORTED_CHAINS.find(
               (c) => c.id === prefs.chainId
@@ -1065,6 +1088,8 @@ export default function TerminalShell({
         }
       } catch (e) {
         console.error("Failed to load user preferences", e);
+      } finally {
+        prefsLoaded.current = true;
       }
     }
   }, [isConnected, address]);
@@ -3066,6 +3091,16 @@ export default function TerminalShell({
           setPinned(cleaned);
           rehydratePinRefresh(cleaned);
           savePreference("pinned", cleaned);
+        }
+
+        if (Array.isArray(data.preferences?.logs)) {
+          setLogs((prev) => [...data.preferences.logs].slice(-MAX_LOGS));
+        }
+        if (Array.isArray(data.preferences?.history)) {
+          setHistory((prev) => [
+            ...prev,
+            ...data.preferences.history
+          ].slice(-100));
         }
 
         return {
