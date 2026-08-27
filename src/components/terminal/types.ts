@@ -7,7 +7,23 @@
 import type React from 'react'
 import type { Address, Chain } from 'viem'
 
-export type ThemeMode = 'matrix' | 'mac' | 'bloomberg' | 'whatsapp'
+export type ThemeMode =
+  | 'matrix'
+  | 'mac'
+  | 'bloomberg'
+  | 'whatsapp'
+  | 'oneDark'
+  | 'dracula'
+  | 'monokai'
+  | 'githubDark'
+  | 'tokyoNight'
+  | 'catppuccin'
+  | 'nord'
+  | 'gruvbox'
+  | 'ristretto'
+  | 'rosePine'
+  | 'kanagawa'
+  | 'vantablack'
 
 export type LogEntry = {
   id: string
