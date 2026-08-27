@@ -40,6 +40,9 @@ export type PinnedManifest = {
   filterType?: string;
   peer?: string;
   count?: number;
+  // price-pin params (re-run on refresh / rehydrate)
+  source?: string; // "pool" | "api"
+  dexId?: string;
   payload?: any;
   minimized?: boolean;
   // transient: the live React element for component-kind pins (price/swap/
