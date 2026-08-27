@@ -5,28 +5,16 @@
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 import type { ThemeConfig } from "../types";
-import PinButton from "./PinButton";
 
 export default function HelpManual({
-  theme,
-  onPin,
-  pinned
+  theme
 }: {
   theme: ThemeConfig;
-  onPin?: () => void;
-  pinned?: boolean;
 }) {
   return (
     <div
       className={`relative group text-xs space-y-2 my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.text} max-w-2xl`}
     >
-      {!pinned && (
-        <PinButton
-          onPin={onPin}
-          theme={theme}
-          className="absolute -top-1 -right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
-        />
-      )}
       <div
         className={`border-b ${theme.border} pb-1 font-bold ${theme.primary} tracking-wider`}
       >
