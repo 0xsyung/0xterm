@@ -5260,24 +5260,21 @@ export default function TerminalShell({
           if (isTokenArg && activeChainId) {
             const commonMap = COMMON_TOKENS[activeChainId] || {};
             const customList = customTokens[activeChainId] || [];
-            const customAddrs = new Set(
-              customList.map((t) => t.address.toLowerCase())
-            );
 
-            // Count symbol occurrences (common entries shadowed by a same-address
-            // custom token are dropped; otherwise common counts toward ambiguity).
+            // Count symbol occurrences. A common entry is dropped when any
+            // custom entry has the same symbol: custom shadows hardcoded in
+            // resolveTokenDetails, so the symbol resolves unambiguously to the
+            // custom token (only same-address shadowing matters for portfolio,
+            // which merges by address — here it's symbol-level coverage).
             const symCounts = new Map<string, number>();
             const bump = (sym: string) =>
               symCounts.set(sym, (symCounts.get(sym) || 0) + 1);
-            for (const [sym, info] of Object.entries(commonMap)) {
-              if (
-                !customList.some(
-                  (t) =>
-                    t.symbol.toUpperCase() === sym.toUpperCase() &&
-                    t.address.toLowerCase() === info.address.toLowerCase()
-                )
-              )
-                bump(sym.toUpperCase());
+            const customSyms = new Set(
+              customList.map((t) => t.symbol.toUpperCase())
+            );
+            for (const sym of Object.keys(commonMap)) {
+              if (customSyms.has(sym.toUpperCase())) continue;
+              bump(sym.toUpperCase());
             }
             for (const t of customList) bump(t.symbol.toUpperCase());
 
