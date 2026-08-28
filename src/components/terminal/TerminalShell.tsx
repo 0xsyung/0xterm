@@ -5033,6 +5033,28 @@ export default function TerminalShell({
   };
 
   const applySuggestion = (suggestion: string) => {
+    // Refinement: a second Tab on a plain token symbol that resolves to custom
+    // token(s) on this chain appends the address-qualified SYM@0xaddr label so
+    // the user can pick the custom one (custom shadows hardcoded).
+    if (
+      !input.endsWith(" ") &&
+      activeChainId &&
+      !suggestion.includes("@")
+    ) {
+      const symUpper = suggestion.toUpperCase();
+      const matches = (customTokens[activeChainId] || []).filter(
+        (t) => t.symbol.toUpperCase() === symUpper
+      );
+      if (matches.length > 0) {
+        setInput(
+          input.replace(/\S+$/, matches[0].symbol + "@" + matches[0].address.slice(0, 6) + "…" + matches[0].address.slice(-4)) + " "
+        );
+        setSuggestions([]);
+        setSuggestionIdx(-1);
+        inputRef.current?.focus();
+        return;
+      }
+    }
     if (input.endsWith(" ")) {
       setInput(input + suggestion + " ");
     } else {
@@ -5261,34 +5283,29 @@ export default function TerminalShell({
             const commonMap = COMMON_TOKENS[activeChainId] || {};
             const customList = customTokens[activeChainId] || [];
 
-            // Count symbol occurrences. A common entry is dropped when any
-            // custom entry has the same symbol: custom shadows hardcoded in
-            // resolveTokenDetails, so the symbol resolves unambiguously to the
-            // custom token (only same-address shadowing matters for portfolio,
-            // which merges by address — here it's symbol-level coverage).
-            const symCounts = new Map<string, number>();
-            const bump = (sym: string) =>
-              symCounts.set(sym, (symCounts.get(sym) || 0) + 1);
-            const customSyms = new Set(
-              customList.map((t) => t.symbol.toUpperCase())
-            );
-            for (const sym of Object.keys(commonMap)) {
-              if (customSyms.has(sym.toUpperCase())) continue;
-              bump(sym.toUpperCase());
-            }
-            for (const t of customList) bump(t.symbol.toUpperCase());
-
+            // Candidate labels: a hardcoded common token always yields its plain
+            // symbol; a custom token yields its plain symbol only when it's the
+            // sole occurrence of that symbol (otherwise it would be ambiguous),
+            // and the address-qualified SYM@0xaddr form always (custom shadows
+            // hardcoded in resolveTokenDetails, but the plain common label
+            // remains the user's way to reach the hardcoded token).
             const labelSet = new Set<string>();
-            for (const sym of Object.keys(commonMap)) {
-              if (symCounts.get(sym.toUpperCase()) === 1)
-                labelSet.add(sym);
-            }
+            const symCounts = new Map<string, number>();
+            for (const t of customList)
+              symCounts.set(
+                t.symbol.toUpperCase(),
+                (symCounts.get(t.symbol.toUpperCase()) || 0) + 1
+              );
+            for (const sym of Object.keys(commonMap))
+              labelSet.add(sym);
             for (const t of customList) {
               const k = t.symbol.toUpperCase();
+              // Plain label only when this symbol is unique to a single custom
+              // token AND no common token shares it (plain common exists then).
+              if (symCounts.get(k) === 1 && !(k in commonMap))
+                labelSet.add(t.symbol);
               labelSet.add(
-                symCounts.get(k)! > 1
-                  ? `${t.symbol}@${t.address.slice(0, 6)}…${t.address.slice(-4)}`
-                  : t.symbol
+                `${t.symbol}@${t.address.slice(0, 6)}…${t.address.slice(-4)}`
               );
             }
 
