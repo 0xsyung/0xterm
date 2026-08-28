@@ -431,11 +431,91 @@ export const INTERFACE_ID_ERC20 = '0x36372b07' // XOR of the 6 ERC-20 core funct
 export const INTERFACE_ID_ERC721 = '0x80ac58cd' // XOR of the 9 ERC-721 function selectors
 
 export const COMMON_TOKENS: Record<number, Record<string, { address: Address; decimals: number; symbol: string; name: string }>> = {
-  11155111: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Sepolia Ethereum' } },
-  421614: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Arbitrum Sepolia Ether' } },
-  84532: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Base Sepolia Ether' } },
+  // Ethereum Mainnet
+  1: {
+    ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Ethereum' },
+    WETH: { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether' },
+    USDC: { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6, symbol: 'USDC', name: 'USD Coin' },
+    USDT: { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6, symbol: 'USDT', name: 'Tether USD' },
+    DAI: { address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', decimals: 18, symbol: 'DAI', name: 'Dai Stablecoin' },
+    LINK: { address: '0x514910771AF9Ca656af840dff83E8264EcF986CA', decimals: 18, symbol: 'LINK', name: 'Chainlink Token' },
+    cbBTC: { address: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf', decimals: 8, symbol: 'cbBTC', name: 'Coinbase Wrapped BTC' },
+    cbETH: { address: '0xBe9895146f7AF43049ca1c1AE358B0541Ea49704', decimals: 18, symbol: 'cbETH', name: 'Coinbase Wrapped Staked ETH' }
+  },
+
+  // Base
+  8453: {
+    ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Base Ether' },
+    WETH: { address: '0x4200000000000000000000000000000000000006', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether' },
+    USDC: { address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', decimals: 6, symbol: 'USDC', name: 'USD Coin' },
+    cbBTC: { address: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf', decimals: 8, symbol: 'cbBTC', name: 'Coinbase Wrapped BTC' },
+    cbETH: { address: '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22', decimals: 18, symbol: 'cbETH', name: 'Coinbase Wrapped Staked ETH' },
+    cbDOGE: { address: '0xcbD06E5A2B0C65597161de254AA074E489dEb510', decimals: 8, symbol: 'cbDOGE', name: 'Coinbase Wrapped DOGE' },
+    cbXRP: { address: '0xcb585250f852C6c6bf90434AB21A00f02833a4af', decimals: 6, symbol: 'cbXRP', name: 'Coinbase Wrapped XRP' },
+    cbLTC: { address: '0xcb17C9Db87B595717C857a08468793f5bAb6445F', decimals: 8, symbol: 'cbLTC', name: 'Coinbase Wrapped LTC' },
+    cbADA: { address: '0xcbADA732173e39521CDBE8bf59a6Dc85A9fc7b8c', decimals: 6, symbol: 'cbADA', name: 'Coinbase Wrapped ADA' },
+    cbMEGA: { address: '0xcb111E6A2a3bde90856D299d61341ac302167D23', decimals: 18, symbol: 'cbMEGA', name: 'Coinbase Wrapped MEGA' }
+  },
+
+  // Arbitrum One
+  42161: {
+    ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Arbitrum Ether' },
+    WETH: { address: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether' },
+    USDC: { address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', decimals: 6, symbol: 'USDC', name: 'USD Coin' },
+    'USDC.E': { address: '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8', decimals: 6, symbol: 'USDC.E', name: 'Bridged USDC' },
+    cbBTC: { address: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf', decimals: 8, symbol: 'cbBTC', name: 'Coinbase Wrapped BTC' },
+    cbETH: { address: '0x1DEBd73E752bEaf79865fd6446b0c970eAe7732f', decimals: 18, symbol: 'cbETH', name: 'Coinbase Wrapped Staked ETH' }
+  },
+
+  // Polygon PoS
+  137: {
+    POL: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'POL', name: 'Polygon POL' },
+    WETH: { address: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether' },
+    USDC: { address: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', decimals: 6, symbol: 'USDC', name: 'USD Coin' },
+    'USDC.E': { address: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', decimals: 6, symbol: 'USDC.E', name: 'Bridged USDC' },
+    cbETH: { address: '0x4b4327db1600B8b1440163f667e199ceF35385F5', decimals: 18, symbol: 'cbETH', name: 'Coinbase Wrapped Staked ETH (FX)' }
+  },
+
+  // Optimism
+  10: {
+    ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Optimism Ether' },
+    WETH: { address: '0x4200000000000000000000000000000000000006', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether' },
+    USDC: { address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', decimals: 6, symbol: 'USDC', name: 'USD Coin' },
+    cbETH: { address: '0xaddE742901a50bB9506b4c2114eE90bFA78aF2A9', decimals: 18, symbol: 'cbETH', name: 'Coinbase Wrapped Staked ETH' }
+  },
+
+  // Ethereum Sepolia
+  11155111: {
+    ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Sepolia Ethereum' },
+    WETH: { address: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether' },
+    USDC: { address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', decimals: 6, symbol: 'USDC', name: 'USD Coin' },
+    USDT: { address: '0x7169D38820dfd117C3fA1f22a697dBA58d90ba06', decimals: 6, symbol: 'USDT', name: 'Tether USD' },
+    DAI: { address: '0x776b6fC2eD15D6Bb5Fc32e0c89DE68683118c62A', decimals: 18, symbol: 'DAI', name: 'Dai Stablecoin' },
+    LINK: { address: '0x779877A7B0D9E8603169DdbD7836e478b4624789', decimals: 18, symbol: 'LINK', name: 'Chainlink Token' }
+  },
+
+  // Arbitrum Sepolia
+  421614: {
+    ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Arbitrum Sepolia Ether' },
+    USDC: { address: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', decimals: 6, symbol: 'USDC', name: 'USD Coin' }
+  },
+
+  // Base Sepolia
+  84532: {
+    ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Base Sepolia Ether' },
+    WETH: { address: '0x4200000000000000000000000000000000000006', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether' },
+    USDC: { address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', decimals: 6, symbol: 'USDC', name: 'USD Coin' },
+    USDT: { address: '0x4dbd49a3ae90aa5f13091ccd29a896cbb5b171eb', decimals: 18, symbol: 'USDT', name: 'Tether USD' }
+  },
+
+  // Polygon Amoy
   80002: { POL: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'POL', name: 'Polygon Amoy POL' } },
-  11155420: { ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Optimism Sepolia Ether' } }
+
+  // Optimism Sepolia
+  11155420: {
+    ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Optimism Sepolia Ether' },
+    USDC: { address: '0x5fd84259d66Cd46123540766Be93DFE6D43130D7', decimals: 6, symbol: 'USDC', name: 'USD Coin' }
+  }
 }
 
 // Chat — encrypted 1:1 messaging (testnets only). The contract stores
