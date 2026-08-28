@@ -13,6 +13,10 @@ export type PriceCardData = {
   pairAddress?: string;
   symbolA?: string;
   symbolB?: string;
+  // Persisted token addresses so a pinned price card re-resolves its tokens
+  // deterministically (no ambiguity picker) on 60s refresh / rehydrate.
+  symbolAAddress?: string;
+  symbolBAddress?: string;
   rate?: number;
   dexName?: string;
   chainName?: string;

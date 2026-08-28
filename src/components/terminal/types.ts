@@ -46,6 +46,21 @@ export type DexProtocol = {
   type: 'V2' | 'V3'
 }
 
+// User-registered token. Stored as a flat list per chain so multiple tokens can
+// share a symbol (e.g. several custom ERC20 "USDC" on a testnet). `id` is the
+// stable uniqueness key ("c_<lowercase address>"); address is unique per chain.
+export type CustomTokenEntry = {
+  id: string
+  address: Address
+  symbol: string
+  name: string
+  decimals?: number // ERC-20 only
+  tokenType?: 'erc20' | 'erc721'
+  isNative: boolean
+}
+
+export type CustomTokensMap = Record<number, CustomTokenEntry[]>
+
 export type PinnedManifest = {
   id: string;
   kind: string; // log.type
