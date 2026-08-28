@@ -1506,7 +1506,14 @@ export default function TerminalShell({
       if (byAddr) return asResolved(byAddr);
     }
 
-    // Custom-first: user-registered tokens shadow hardcoded COMMON_TOKENS.
+    // Plain symbol: the hardcoded COMMON token wins when present — the @-label
+    // is how the user explicitly targets a custom token (custom shadows
+    // hardcoded only via the @-qualified form or when no common token exists).
+    const common = COMMON_TOKENS[chain.id]?.[sym];
+    if (common) return { ...common, isNative: false };
+
+    // No hardcoded token: fall back to custom entries by symbol. A single match
+    // resolves directly; multiple matches need the CHOICES picker.
     const matches = customList.filter(
       (t) => t.symbol.toUpperCase() === sym
     );
@@ -1519,9 +1526,6 @@ export default function TerminalShell({
         );
       return asResolved(chosen);
     }
-
-    const common = COMMON_TOKENS[chain.id]?.[sym];
-    if (common) return { ...common, isNative: false };
 
     const client = getClient(chain);
     if (isAddress(queryToken)) {
