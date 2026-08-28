@@ -406,6 +406,10 @@ export default function TerminalShell({
     resolve: (token: CustomTokenEntry | null) => void;
   } | null>(null);
 
+  // Base input at the moment a pick opened; the picker's arrow-travel
+  // live-previews on top of this so repeated previews never pile up.
+  const pickBaseInputRef = useRef<string>("");
+
   const logContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -5032,29 +5036,23 @@ export default function TerminalShell({
     }
   };
 
-  const applySuggestion = (suggestion: string) => {
-    // Refinement: a second Tab on a plain token symbol that resolves to custom
-    // token(s) on this chain appends the address-qualified SYM@0xaddr label so
-    // the user can pick the custom one (custom shadows hardcoded).
-    if (
-      !input.endsWith(" ") &&
-      activeChainId &&
-      !suggestion.includes("@")
-    ) {
-      const symUpper = suggestion.toUpperCase();
-      const matches = (customTokens[activeChainId] || []).filter(
-        (t) => t.symbol.toUpperCase() === symUpper
-      );
-      if (matches.length > 0) {
-        setInput(
-          input.replace(/\S+$/, matches[0].symbol + "@" + matches[0].address.slice(0, 6) + "…" + matches[0].address.slice(-4)) + " "
-        );
-        setSuggestions([]);
-        setSuggestionIdx(-1);
-        inputRef.current?.focus();
-        return;
+  // Live-preview a highlighted suggestion into the input (replaces the last
+  // token, no trailing space) so arrow-travel shows the value without
+  // committing; Tab/Space/Enter then finalize via applySuggestion.
+  const previewSuggestion = (suggestion: string) => {
+    if (input.endsWith(" ")) {
+      setInput(input + suggestion);
+    } else {
+      const lastSpaceIdx = input.lastIndexOf(" ");
+      if (lastSpaceIdx === -1) {
+        setInput(suggestion);
+      } else {
+        setInput(input.substring(0, lastSpaceIdx + 1) + suggestion);
       }
     }
+  };
+
+  const applySuggestion = (suggestion: string) => {
     if (input.endsWith(" ")) {
       setInput(input + suggestion + " ");
     } else {
@@ -5082,9 +5080,11 @@ export default function TerminalShell({
         label: `${t.symbol}@${t.address.slice(0, 6)}…${t.address.slice(-4)}`,
         token: t
       }));
+      pickBaseInputRef.current = input;
       setPendingTokenPick({ choices, resolve });
       setSuggestions(choices.map((c) => c.label));
       setSuggestionIdx(0);
+      previewSuggestion(choices[0].label);
       setLogs((prev) =>
         [
           ...prev,
@@ -5102,21 +5102,31 @@ export default function TerminalShell({
     // autocomplete and normal Enter handling).
     if (pendingTokenPick) {
       const { choices, resolve } = pendingTokenPick;
-      if (e.key === "Enter" || e.key === "Tab") {
+      if (e.key === "Enter" || e.key === "Tab" || e.key === " ") {
         e.preventDefault();
         const idx = Math.max(0, suggestionIdx);
         const chosen = choices[idx]?.token ?? null;
         setPendingTokenPick(null);
         setSuggestions([]);
         setSuggestionIdx(-1);
-        setInput("");
+        // input holds the stale typed value; restore base + chosen label so the
+        // resumed command parses exactly what was picked.
+        setInput(pickBaseInputRef.current.replace(/\S+$/, "") + choices[idx]?.label + " ");
         resolve(chosen);
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        setSuggestionIdx((prev) => (prev + 1) % choices.length);
+        setSuggestionIdx((prev) => {
+          const next = (prev + 1) % choices.length;
+          previewSuggestion(choices[next].label);
+          return next;
+        });
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
-        setSuggestionIdx((prev) => (prev - 1 + choices.length) % choices.length);
+        setSuggestionIdx((prev) => {
+          const next = (prev - 1 + choices.length) % choices.length;
+          previewSuggestion(choices[next].label);
+          return next;
+        });
       } else if (e.key === "Escape") {
         e.preventDefault();
         setPendingTokenPick(null);
@@ -5339,13 +5349,19 @@ export default function TerminalShell({
     } else if (suggestions.length > 0) {
       if (e.key === "ArrowRight") {
         e.preventDefault();
-        setSuggestionIdx((prev) => (prev + 1) % suggestions.length);
+        setSuggestionIdx((prev) => {
+          const next = (prev + 1) % suggestions.length;
+          previewSuggestion(suggestions[next]);
+          return next;
+        });
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
-        setSuggestionIdx(
-          (prev) => (prev - 1 + suggestions.length) % suggestions.length
-        );
-      } else if (e.key === "Enter") {
+        setSuggestionIdx((prev) => {
+          const next = (prev - 1 + suggestions.length) % suggestions.length;
+          previewSuggestion(suggestions[next]);
+          return next;
+        });
+      } else if (e.key === "Enter" || e.key === "Tab" || e.key === " ") {
         e.preventDefault();
         applySuggestion(suggestions[suggestionIdx]);
       } else if (e.key === "Escape") {
