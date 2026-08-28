@@ -1474,14 +1474,21 @@ export default function TerminalShell({
       isNative: false
     });
 
-    // Picked autocomplete label: SYM@0xaddr — resolve the address part
-    // deterministically (never re-picks).
+    // Picked autocomplete label: SYM@0xaddr — resolve deterministically
+    // (never re-picks). The label's address part is truncated (0x7f83…0501), so
+    // match the symbol prefix first, then fall back to a full address if given.
     const atIdx = queryToken.indexOf("@");
     if (atIdx !== -1) {
+      const symPart = queryToken.slice(0, atIdx).toUpperCase();
       const addrPart = queryToken.slice(atIdx + 1).trim();
-      if (isAddress(addrPart)) {
+      if (addrPart.startsWith("0x") && isAddress(addrPart)) {
         const byLabel = customList.find(
           (t) => t.address.toLowerCase() === (addrPart as string).toLowerCase()
+        );
+        if (byLabel) return asResolved(byLabel);
+      } else {
+        const byLabel = customList.find(
+          (t) => t.symbol.toUpperCase() === symPart
         );
         if (byLabel) return asResolved(byLabel);
       }
