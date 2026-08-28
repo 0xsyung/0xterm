@@ -78,7 +78,14 @@ import {
   bytesToHex,
   KEY_MESSAGE
 } from "../../lib/chatCrypto";
-import type { LogEntry, ThemeMode, DexProtocol, PinnedManifest } from "./types";
+import type {
+  LogEntry,
+  ThemeMode,
+  DexProtocol,
+  PinnedManifest,
+  CustomTokenEntry,
+  CustomTokensMap
+} from "./types";
 import PortfolioWidget, {
   type PortfolioHolding,
   type SnapshotHolding
@@ -90,6 +97,49 @@ import type { ChatMessage } from "./widgets/ChatWidget";
 import type { BillboardPost } from "./widgets/BillboardWidget";
 
 const MAX_LOGS = 100;
+
+// Normalize a raw stored custom-token blob into the current list-per-chain
+// shape. Accepts both the new form (chain -> array) and the legacy form
+// (chain -> symbol-keyed object). Idempotent; malformed entries are dropped.
+const migrateCustomTokens = (raw: any): CustomTokensMap => {
+  const out: CustomTokensMap = {};
+  const toEntry = (t: any): CustomTokenEntry | null => {
+    if (!t || typeof t !== "object" || !t.address) return null;
+    const addr = t.address as string;
+    return {
+      id: typeof t.id === "string" ? t.id : `c_${addr.toLowerCase()}`,
+      address: addr as Address,
+      symbol: String(t.symbol ?? "?"),
+      name: String(t.name ?? ""),
+      decimals: typeof t.decimals === "number" ? t.decimals : undefined,
+      tokenType:
+        t.tokenType === "erc721"
+          ? "erc721"
+          : t.tokenType === "erc20"
+            ? "erc20"
+            : undefined,
+      isNative: !!t.isNative
+    };
+  };
+  for (const [chainIdStr, value] of Object.entries(raw ?? {})) {
+    const chainId = Number(chainIdStr);
+    const entries: CustomTokenEntry[] = [];
+    if (Array.isArray(value)) {
+      for (const t of value) {
+        const e = toEntry(t);
+        if (e) entries.push(e);
+      }
+    } else if (value && typeof value === "object") {
+      // legacy: symbol-keyed token map
+      for (const t of Object.values(value)) {
+        const e = toEntry(t);
+        if (e) entries.push(e);
+      }
+    }
+    if (entries.length > 0) out[chainId] = entries;
+  }
+  return out;
+};
 
 // Helper: Formats ugly Viem RPC errors into clean terminal output
 const formatViemError = (err: any): string => {
@@ -229,23 +279,9 @@ export default function TerminalShell({
     Record<number, string>
   >({});
 
-  // Custom User-Registered Tokens Map: ChainId -> { SYMBOL: TokenDetails }
-  const [customTokens, setCustomTokens] = useState<
-    Record<
-      number,
-      Record<
-        string,
-        {
-          address: Address;
-          symbol: string;
-          name: string;
-          decimals?: number; // ERC-20 only; ERC-721 has no decimals
-          tokenType?: "erc20" | "erc721";
-          isNative: boolean;
-        }
-      >
-    >
-  >({});
+  // Custom user-registered tokens, flat list per chain so multiple tokens can
+  // share a symbol. `id` is the stable uniqueness key.
+  const [customTokens, setCustomTokens] = useState<CustomTokensMap>({});
 
   const theme = THEMES[currentThemeKey];
 
@@ -362,6 +398,14 @@ export default function TerminalShell({
     onNo: () => void;
   } | null>(null);
 
+  // Pending token picker. When a symbol resolves to multiple custom tokens, the
+  // CHOICES bar opens and the awaiting command suspends until a choice (or
+  // cancel) resolves this Promise. resolve(null) = user cancelled.
+  const [pendingTokenPick, setPendingTokenPick] = useState<{
+    choices: Array<{ label: string; token: CustomTokenEntry }>;
+    resolve: (token: CustomTokenEntry | null) => void;
+  } | null>(null);
+
   const logContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -471,7 +515,11 @@ export default function TerminalShell({
                   })
                 ]);
                 const a = (
-                  await resolveTokenDetails(cd.symbolA as string, chain)
+                  await resolveWithPreferred(
+                    cd.symbolA as string,
+                    cd.symbolAAddress,
+                    chain
+                  )
                 ).address;
                 const reserveA =
                   (token0 as string).toLowerCase() === a.toLowerCase()
@@ -482,12 +530,16 @@ export default function TerminalShell({
                     ? reserves[1]
                     : reserves[0];
                 const [decA, decB] = await Promise.all([
-                  resolveTokenDetails(cd.symbolA as string, chain).then(
-                    (t) => t.decimals
-                  ),
-                  resolveTokenDetails(cd.symbolB as string, chain).then(
-                    (t) => t.decimals
-                  )
+                  resolveWithPreferredDecimals(
+                    cd.symbolA as string,
+                    cd.symbolAAddress,
+                    chain
+                  ).then((t) => t.decimals),
+                  resolveWithPreferredDecimals(
+                    cd.symbolB as string,
+                    cd.symbolBAddress,
+                    chain
+                  ).then((t) => t.decimals)
                 ]);
                 const formattedA = parseFloat(formatUnits(reserveA, decA));
                 const formattedB = parseFloat(formatUnits(reserveB, decB));
@@ -508,19 +560,27 @@ export default function TerminalShell({
                   })
                 ]);
                 const a = (
-                  await resolveTokenDetails(cd.symbolA as string, chain)
+                  await resolveWithPreferred(
+                    cd.symbolA as string,
+                    cd.symbolAAddress,
+                    chain
+                  )
                 ).address;
                 const isTokenA0 =
                   (token0 as string).toLowerCase() === a.toLowerCase();
                 const sqrtPriceFloat = Number(slot0[0]) / 2 ** 96;
                 const pRaw = Math.pow(sqrtPriceFloat, 2);
                 const [decA, decB] = await Promise.all([
-                  resolveTokenDetails(cd.symbolA as string, chain).then(
-                    (t) => t.decimals
-                  ),
-                  resolveTokenDetails(cd.symbolB as string, chain).then(
-                    (t) => t.decimals
-                  )
+                  resolveWithPreferredDecimals(
+                    cd.symbolA as string,
+                    cd.symbolAAddress,
+                    chain
+                  ).then((t) => t.decimals),
+                  resolveWithPreferredDecimals(
+                    cd.symbolB as string,
+                    cd.symbolBAddress,
+                    chain
+                  ).then((t) => t.decimals)
                 ]);
                 const dec0 = isTokenA0 ? decA : decB;
                 const dec1 = isTokenA0 ? decB : decA;
@@ -862,7 +922,9 @@ export default function TerminalShell({
                   })
                 ]);
                 const symA = cd.symbolA as string;
-                const a = (await resolveTokenDetails(symA, chain)).address;
+                const a = (
+                  await resolveWithPreferred(symA, cd.symbolAAddress, chain)
+                ).address;
                 const reserveA =
                   (token0 as string).toLowerCase() === a.toLowerCase()
                     ? reserves[0]
@@ -872,12 +934,16 @@ export default function TerminalShell({
                     ? reserves[1]
                     : reserves[0];
                 const [decA, decB] = await Promise.all([
-                  resolveTokenDetails(cd.symbolA as string, chain).then(
-                    (t) => t.decimals
-                  ),
-                  resolveTokenDetails(cd.symbolB as string, chain).then(
-                    (t) => t.decimals
-                  )
+                  resolveWithPreferredDecimals(
+                    cd.symbolA as string,
+                    cd.symbolAAddress,
+                    chain
+                  ).then((t) => t.decimals),
+                  resolveWithPreferredDecimals(
+                    cd.symbolB as string,
+                    cd.symbolBAddress,
+                    chain
+                  ).then((t) => t.decimals)
                 ]);
                 const formattedA = parseFloat(formatUnits(reserveA, decA));
                 const formattedB = parseFloat(formatUnits(reserveB, decB));
@@ -896,19 +962,28 @@ export default function TerminalShell({
                     functionName: "slot0"
                   })
                 ]);
-                const a = (await resolveTokenDetails(cd.symbolA as string, chain))
-                  .address;
+                const a = (
+                  await resolveWithPreferred(
+                    cd.symbolA as string,
+                    cd.symbolAAddress,
+                    chain
+                  )
+                ).address;
                 const isTokenA0 =
                   (token0 as string).toLowerCase() === a.toLowerCase();
                 const sqrtPriceFloat = Number(slot0[0]) / 2 ** 96;
                 const pRaw = Math.pow(sqrtPriceFloat, 2);
                 const [decA, decB] = await Promise.all([
-                  resolveTokenDetails(cd.symbolA as string, chain).then(
-                    (t) => t.decimals
-                  ),
-                  resolveTokenDetails(cd.symbolB as string, chain).then(
-                    (t) => t.decimals
-                  )
+                  resolveWithPreferredDecimals(
+                    cd.symbolA as string,
+                    cd.symbolAAddress,
+                    chain
+                  ).then((t) => t.decimals),
+                  resolveWithPreferredDecimals(
+                    cd.symbolB as string,
+                    cd.symbolBAddress,
+                    chain
+                  ).then((t) => t.decimals)
                 ]);
                 const dec0 = isTokenA0 ? decA : decB;
                 const dec1 = isTokenA0 ? decB : decA;
@@ -1026,7 +1101,7 @@ export default function TerminalShell({
       try {
         const savedTokens = localStorage.getItem(tokensKey);
         if (savedTokens) {
-          setCustomTokens(JSON.parse(savedTokens));
+          setCustomTokens(migrateCustomTokens(JSON.parse(savedTokens)));
         }
 
         const saved = localStorage.getItem(storageKey);
@@ -1387,9 +1462,55 @@ export default function TerminalShell({
         isNative: true
       };
 
-    const preset =
-      COMMON_TOKENS[chain.id]?.[sym] || customTokens[chain.id]?.[sym];
-    if (preset) return { ...preset, isNative: false };
+    const customList = customTokens[chain.id] || [];
+
+    // Normalize a custom entry to the fully-resolved shape callers expect
+    // (decimals is required there; default 18 like ERC-20 convention).
+    const asResolved = (t: CustomTokenEntry) => ({
+      address: t.address as Address,
+      symbol: t.symbol,
+      name: t.name,
+      decimals: t.decimals ?? 18,
+      isNative: false
+    });
+
+    // Picked autocomplete label: SYM@0xaddr — resolve the address part
+    // deterministically (never re-picks).
+    const atIdx = queryToken.indexOf("@");
+    if (atIdx !== -1) {
+      const addrPart = queryToken.slice(atIdx + 1).trim();
+      if (isAddress(addrPart)) {
+        const byLabel = customList.find(
+          (t) => t.address.toLowerCase() === (addrPart as string).toLowerCase()
+        );
+        if (byLabel) return asResolved(byLabel);
+      }
+    }
+
+    // Exact address match against registered custom tokens.
+    if (isAddress(queryToken)) {
+      const byAddr = customList.find(
+        (t) => t.address.toLowerCase() === (queryToken as string).toLowerCase()
+      );
+      if (byAddr) return asResolved(byAddr);
+    }
+
+    // Custom-first: user-registered tokens shadow hardcoded COMMON_TOKENS.
+    const matches = customList.filter(
+      (t) => t.symbol.toUpperCase() === sym
+    );
+    if (matches.length === 1) return asResolved(matches[0]);
+    if (matches.length > 1) {
+      const chosen = await openTokenPicker(matches, chain);
+      if (!chosen)
+        throw new Error(
+          `Token selection cancelled for symbol "${sym}" on ${chain.name}.`
+        );
+      return asResolved(chosen);
+    }
+
+    const common = COMMON_TOKENS[chain.id]?.[sym];
+    if (common) return { ...common, isNative: false };
 
     const client = getClient(chain);
     if (isAddress(queryToken)) {
@@ -1473,6 +1594,59 @@ export default function TerminalShell({
     throw new Error(
       `Unable to resolve token "${queryToken}" on ${chain.name}. Register it first using 'register <address>'.`
     );
+  };
+
+  // Pin-refresh resolution: prefer the persisted token address (deterministic,
+  // never opens the picker), falling back to symbol resolution for legacy pins.
+  const resolveWithPreferred = async (
+    symbol: string | undefined,
+    preferredAddr: string | undefined,
+    chain: Chain
+  ) => {
+    if (preferredAddr && isAddress(preferredAddr)) {
+      const byAddr = (customTokens[chain.id] || []).find(
+        (t) => t.address.toLowerCase() === preferredAddr.toLowerCase()
+      );
+      if (byAddr) return byAddr;
+      // not a custom token — read on-chain metadata directly (no picker)
+      try {
+        const client = getClient(chain);
+        const [decimals, name] = await Promise.all([
+          client.readContract({
+            address: preferredAddr as Address,
+            abi: erc20Abi,
+            functionName: "decimals"
+          }),
+          client.readContract({
+            address: preferredAddr as Address,
+            abi: erc20Abi,
+            functionName: "name"
+          })
+        ]);
+        return {
+          id: `c_${preferredAddr.toLowerCase()}`,
+          address: preferredAddr as Address,
+          symbol: symbol || "TOKEN",
+          name: String(name),
+          decimals: Number(decimals),
+          isNative: false
+        };
+      } catch {
+        // fall through to symbol resolution
+      }
+    }
+    return resolveTokenDetails(symbol || "", chain);
+  };
+
+  // Resolve with decimals normalized to a concrete number (callers like the
+  // pin-price refresh use decimals directly in arithmetic).
+  const resolveWithPreferredDecimals = async (
+    symbol: string | undefined,
+    preferredAddr: string | undefined,
+    chain: Chain
+  ) => {
+    const t = await resolveWithPreferred(symbol, preferredAddr, chain);
+    return { ...t, decimals: t.decimals ?? 18 };
   };
 
   const fetchPoolAddress = async (
@@ -1836,14 +2010,25 @@ export default function TerminalShell({
         });
       }
 
-      const registered = {
-        ...(COMMON_TOKENS[chain.id] || {}),
-        ...(customTokens[chain.id] || {})
-      };
-      for (const [symbol, info] of Object.entries(registered)) {
+      // Custom-first view merged by address: every custom entry (including
+      // duplicate symbols), plus COMMON_TOKENS entries not shadowed by a
+      // custom token at the same address.
+      const customList = customTokens[chain.id] || [];
+      const commonMap = COMMON_TOKENS[chain.id] || {};
+      const customAddrs = new Set(
+        customList.map((t) => t.address.toLowerCase())
+      );
+      const view = [
+        ...customList,
+        ...Object.values(commonMap).filter(
+          (c) => !customAddrs.has(c.address.toLowerCase())
+        )
+      ];
+      for (const info of view) {
         if (filterType === "native") continue;
         if (info.address === NATIVE_TOKEN_ADDRESS) continue;
         const addr = info.address as Address;
+        const symbol = info.symbol;
         try {
           const bal = (await client.readContract({
             address: addr,
@@ -1861,6 +2046,7 @@ export default function TerminalShell({
             chainId: chain.id,
             symbol,
             type: "erc20",
+            address: addr,
             balance: formatted,
             priceUsd: price,
             valueUsd: price !== null ? price * parseFloat(formatted) : null,
@@ -1901,7 +2087,9 @@ export default function TerminalShell({
               p.chainId.toLowerCase() === slug &&
               (isNative
                 ? true
-                : p.baseToken.symbol.toLowerCase() === symbol.toLowerCase())
+                : p.baseToken.symbol.toLowerCase() === symbol.toLowerCase() &&
+                  p.baseToken.address?.toLowerCase() ===
+                    address.toLowerCase())
           );
           if (pair && pair.priceUsd) {
             const usd = parseFloat(pair.priceUsd);
@@ -2207,7 +2395,6 @@ export default function TerminalShell({
       }
 
       const common = COMMON_TOKENS[activeChainId] || {};
-      const custom = customTokens[activeChainId] || {};
 
       const allTokens: Array<{
         symbol: string;
@@ -2225,9 +2412,9 @@ export default function TerminalShell({
         });
       }
 
-      for (const [symbol, info] of Object.entries(custom)) {
+      for (const info of customTokens[activeChainId] || []) {
         allTokens.push({
-          symbol,
+          symbol: info.symbol,
           address: info.address,
           type: info.tokenType || "erc20",
           isCustom: true
@@ -2636,26 +2823,46 @@ export default function TerminalShell({
       }) => {
         const symbolToUse = (symbolArg ? symbolArg : info.symbol).toUpperCase();
 
-        const existingCommon = COMMON_TOKENS[targetChain.id]?.[symbolToUse];
-        const existingCustom = customTokens[targetChain.id]?.[symbolToUse];
         const isNative =
           symbolToUse === targetChain.nativeCurrency.symbol.toUpperCase();
 
-        if (existingCommon || existingCustom || isNative) {
+        // Native symbol is reserved; an exact address can only be registered
+        // once per chain. Same SYMBOL on different addresses is allowed.
+        const addrDup = (customTokens[targetChain.id] || []).some(
+          (t) =>
+            t.address.toLowerCase() === tokenAddress.toLowerCase()
+        );
+
+        if (isNative) {
           setLogs((prev) =>
             [
               ...prev,
               {
                 id: generateId(),
                 type: "text",
-                text: `[!] Error: Symbol "${symbolToUse}" already exists on ${targetChain.name}. Please register with a unique symbol (e.g., 'register ${tokenAddress} UNIQUE_SYMBOL').`
+                text: `[!] Error: Symbol "${symbolToUse}" is reserved for the native token on ${targetChain.name}. Choose another symbol.`
               } as LogEntry
             ].slice(-MAX_LOGS)
           );
           return;
         }
 
-        const newToken = {
+        if (addrDup) {
+          setLogs((prev) =>
+            [
+              ...prev,
+              {
+                id: generateId(),
+                type: "text",
+                text: `[!] Error: ${tokenAddress} is already registered on ${targetChain.name}.`
+              } as LogEntry
+            ].slice(-MAX_LOGS)
+          );
+          return;
+        }
+
+        const newToken: CustomTokenEntry = {
+          id: `c_${tokenAddress.toLowerCase()}`,
           address: tokenAddress,
           symbol: symbolToUse,
           name: info.name,
@@ -2664,17 +2871,21 @@ export default function TerminalShell({
           isNative: false
         };
 
-        const updatedChainTokens = {
-          ...(customTokens[targetChain.id] || {}),
-          [symbolToUse]: newToken
-        };
-        const updatedAllTokens = {
+        const updatedAllTokens: CustomTokensMap = {
           ...customTokens,
-          [targetChain.id]: updatedChainTokens
+          [targetChain.id]: [
+            ...(customTokens[targetChain.id] || []),
+            newToken
+          ]
         };
 
         setCustomTokens(updatedAllTokens);
         saveCustomTokenToStorage(updatedAllTokens);
+
+        const sameSymbolCount =
+          (updatedAllTokens[targetChain.id] || []).filter(
+            (t) => t.symbol.toUpperCase() === symbolToUse
+          ).length;
 
         setLogs((prev) =>
           [
@@ -2682,7 +2893,7 @@ export default function TerminalShell({
             {
               id: generateId(),
               type: "text",
-              text: `[✓] Successfully registered ${info.tokenType === "erc721" ? "NFT" : "token"} "${symbolToUse}" (${info.name}${info.decimals !== undefined ? `, ${info.decimals} decimals` : ""}) at ${tokenAddress} on ${targetChain.name}.`
+              text: `[✓] Successfully registered ${info.tokenType === "erc721" ? "NFT" : "token"} "${symbolToUse}" (${info.name}${info.decimals !== undefined ? `, ${info.decimals} decimals` : ""}) at ${tokenAddress} on ${targetChain.name}. ${sameSymbolCount} token(s) now use symbol "${symbolToUse}".`
             } as LogEntry
           ].slice(-MAX_LOGS)
         );
@@ -3082,8 +3293,9 @@ export default function TerminalShell({
         }
 
         if (data.customTokens) {
-          localStorage.setItem(tokensKey, JSON.stringify(data.customTokens));
-          setCustomTokens(data.customTokens);
+          const migrated = migrateCustomTokens(data.customTokens);
+          localStorage.setItem(tokensKey, JSON.stringify(migrated));
+          setCustomTokens(migrated);
         }
 
         if (Array.isArray(data.pinned)) {
@@ -3355,6 +3567,8 @@ export default function TerminalShell({
               pairAddress,
               symbolA: tokenA.symbol,
               symbolB: tokenB.symbol,
+              symbolAAddress: tokenA.address,
+              symbolBAddress: tokenB.address,
               rate: priceRatio,
               dexName: activeDex.name,
               chainName: targetChain!.name
@@ -3879,10 +4093,12 @@ export default function TerminalShell({
             // a 0.1% pool fee and 0.5% user slippage applied for safety.
             const sqrtPrice = Number(slot0[0]) / 2 ** 96;
             const price = Math.pow(sqrtPrice, 2);
+            const fromDec = fromToken.decimals ?? 18;
+            const toDec = toToken.decimals ?? 18;
             const outInDecimals = inIsToken0
-              ? (Number(amountInWei) * price) / 10 ** fromToken.decimals
-              : (Number(amountInWei) / price) / 10 ** fromToken.decimals;
-            const outFloat = outInDecimals * 10 ** toToken.decimals;
+              ? (Number(amountInWei) * price) / 10 ** fromDec
+              : (Number(amountInWei) / price) / 10 ** fromDec;
+            const outFloat = outInDecimals * 10 ** toDec;
             expectedOutWei = BigInt(Math.floor(outFloat * 0.995));
           }
         }
@@ -4069,22 +4285,32 @@ export default function TerminalShell({
           balance: formatEther(nativeBal)
         };
 
-        const registered = {
-          ...(COMMON_TOKENS[chain.id] || {}),
-          ...(customTokens[chain.id] || {})
-        };
-        for (const [symbol, info] of Object.entries(registered)) {
+        const customList = customTokens[chain.id] || [];
+        const commonMap = COMMON_TOKENS[chain.id] || {};
+        const customAddrs = new Set(
+          customList.map((t) => t.address.toLowerCase())
+        );
+        const view = [
+          ...customList,
+          ...Object.values(commonMap).filter(
+            (c) => !customAddrs.has(c.address.toLowerCase())
+          )
+        ];
+        for (const info of view) {
           if (info.address === NATIVE_TOKEN_ADDRESS) continue;
+          const symbol = info.symbol;
+          const addr = info.address as Address;
           try {
             const bal = (await client.readContract({
-              address: info.address as Address,
+              address: addr,
               abi: erc20Abi,
               functionName: "balanceOf",
               args: [address as Address]
             })) as bigint;
             const decimals = info.decimals ?? 18;
-            holdings[`${chain.id}:${symbol}`] = {
-              price: await getTokenPriceUsd(chain, symbol, info.address as Address, false),
+            // address-keyed so duplicate symbols don't collide in the snapshot
+            holdings[`${chain.id}:${addr.toLowerCase()}`] = {
+              price: await getTokenPriceUsd(chain, symbol, addr, false),
               balance: formatUnits(bal, decimals)
             };
           } catch {
@@ -4815,7 +5041,64 @@ export default function TerminalShell({
     inputRef.current?.focus();
   };
 
+  // Opens the CHOICES picker for an ambiguous token symbol. Returns a Promise
+  // that resolves with the chosen entry, or null if the user cancels (Escape).
+  // The awaiting command (via resolveTokenDetails) suspends on this Promise.
+  const openTokenPicker = (
+    matches: CustomTokenEntry[],
+    chain: Chain
+  ): Promise<CustomTokenEntry | null> =>
+    new Promise((resolve) => {
+      const choices = matches.map((t) => ({
+        label: `${t.symbol}@${t.address.slice(0, 6)}…${t.address.slice(-4)}`,
+        token: t
+      }));
+      setPendingTokenPick({ choices, resolve });
+      setSuggestions(choices.map((c) => c.label));
+      setSuggestionIdx(0);
+      setLogs((prev) =>
+        [
+          ...prev,
+          {
+            id: generateId(),
+            type: "text",
+            text: `[?] Symbol "${matches[0].symbol}" is ambiguous on ${chain.name} — choose a token:`
+          } as LogEntry
+        ].slice(-MAX_LOGS)
+      );
+    });
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // While a token pick is open, route all keys to the picker (shadows Tab
+    // autocomplete and normal Enter handling).
+    if (pendingTokenPick) {
+      const { choices, resolve } = pendingTokenPick;
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const idx = Math.max(0, suggestionIdx);
+        const chosen = choices[idx]?.token ?? null;
+        setPendingTokenPick(null);
+        setSuggestions([]);
+        setSuggestionIdx(-1);
+        setInput("");
+        resolve(chosen);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setSuggestionIdx((prev) => (prev + 1) % choices.length);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setSuggestionIdx((prev) => (prev - 1 + choices.length) % choices.length);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setPendingTokenPick(null);
+        setSuggestions([]);
+        setSuggestionIdx(-1);
+        setInput("");
+        resolve(null);
+      }
+      return;
+    }
+
     if (e.key === "Tab") {
       e.preventDefault();
 
@@ -4968,17 +5251,52 @@ export default function TerminalShell({
             isTokenArg = true;
 
           if (isTokenArg && activeChainId) {
-            candidates = Object.keys(COMMON_TOKENS[activeChainId] || {});
-            const customForChain = Object.keys(
-              customTokens[activeChainId] || {}
+            const commonMap = COMMON_TOKENS[activeChainId] || {};
+            const customList = customTokens[activeChainId] || [];
+            const customAddrs = new Set(
+              customList.map((t) => t.address.toLowerCase())
             );
-            candidates.push(...customForChain);
+
+            // Count symbol occurrences (common entries shadowed by a same-address
+            // custom token are dropped; otherwise common counts toward ambiguity).
+            const symCounts = new Map<string, number>();
+            const bump = (sym: string) =>
+              symCounts.set(sym, (symCounts.get(sym) || 0) + 1);
+            for (const [sym, info] of Object.entries(commonMap)) {
+              if (
+                !customList.some(
+                  (t) =>
+                    t.symbol.toUpperCase() === sym.toUpperCase() &&
+                    t.address.toLowerCase() === info.address.toLowerCase()
+                )
+              )
+                bump(sym.toUpperCase());
+            }
+            for (const t of customList) bump(t.symbol.toUpperCase());
+
+            const labelSet = new Set<string>();
+            for (const sym of Object.keys(commonMap)) {
+              if (symCounts.get(sym.toUpperCase()) === 1)
+                labelSet.add(sym);
+            }
+            for (const t of customList) {
+              const k = t.symbol.toUpperCase();
+              labelSet.add(
+                symCounts.get(k)! > 1
+                  ? `${t.symbol}@${t.address.slice(0, 6)}…${t.address.slice(-4)}`
+                  : t.symbol
+              );
+            }
+
             const chainObj = SUPPORTED_CHAINS.find(
               (c) => c.id === activeChainId
             );
-            if (chainObj) candidates.push(chainObj.nativeCurrency.symbol);
-            if (command === "price") candidates.push("pool", "api");
-            candidates = Array.from(new Set(candidates));
+            if (chainObj) labelSet.add(chainObj.nativeCurrency.symbol);
+            if (command === "price") {
+              labelSet.add("pool");
+              labelSet.add("api");
+            }
+            candidates = Array.from(labelSet);
           } else if (command === "price" && currentArgIdx === 3) {
             candidates = ["pool", "api"];
           }
@@ -5105,6 +5423,9 @@ export default function TerminalShell({
             if (suggestions.length > 0) {
               setSuggestions([]);
               setSuggestionIdx(-1);
+            }
+            if (pendingTokenPick) {
+              setPendingTokenPick(null);
             }
           }}
           handleKeyDown={handleKeyDown}

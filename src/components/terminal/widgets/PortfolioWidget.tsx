@@ -12,6 +12,9 @@ export type PortfolioHolding = {
   chainId: number;
   symbol: string;
   type: "native" | "erc20";
+  // address present for erc20; used to key snapshot P/L uniquely so
+  // duplicate symbols on one chain don't collide.
+  address?: string;
   balance: string;
   priceUsd: number | null;
   valueUsd: number | null;
@@ -60,7 +63,9 @@ export default function PortfolioWidget({
       totalUsd += h.valueUsd;
       pricedCount++;
     }
-    const snapKey = `${h.chainId}:${h.symbol}`;
+    const snapKey = h.type === "erc20" && h.address
+      ? `${h.chainId}:${h.address.toLowerCase()}`
+      : `${h.chainId}:${h.symbol}`;
     const snap = snapshot?.[snapKey];
     if (snap && hasSnapshot) {
       if (h.valueUsd !== null && snap.price !== null) {
@@ -96,7 +101,9 @@ export default function PortfolioWidget({
       </thead>
       <tbody>
         {rows.map((h) => {
-          const snapKey = `${h.chainId}:${h.symbol}`;
+          const snapKey = h.type === "erc20" && h.address
+            ? `${h.chainId}:${h.address.toLowerCase()}`
+            : `${h.chainId}:${h.symbol}`;
           const snap = snapshot?.[snapKey];
           let pnlPrice: number | null = null;
           let pnlBalance: number | null = null;
@@ -109,7 +116,7 @@ export default function PortfolioWidget({
             }
           }
           return (
-            <tr key={`${h.chainId}-${h.symbol}`} className={`border-b ${theme.border}/50`}>
+            <tr key={h.type === "erc20" && h.address ? `${h.chainId}-${h.address.toLowerCase()}` : `${h.chainId}-${h.symbol}`} className={`border-b ${theme.border}/50`}>
               <td className="py-1 pr-2 whitespace-nowrap">{h.chainName}</td>
               <td className="py-1 pr-2 font-bold">{h.symbol}</td>
               <td className="py-1 pr-2 text-right whitespace-nowrap">{h.balance}</td>
