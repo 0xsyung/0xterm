@@ -18,7 +18,10 @@ contract SimpleRouter {
         WETH = _WETH;
     }
 
-    // Swap exact tokens for tokens
+    // Swap exact tokens for tokens.
+    // Quote every hop first, enforce amountOutMin, then pull path[0] directly
+    // to the first pair. Intermediate hops send output to the next pair;
+    // `to` is used only on the last hop (canonical Uniswap V2).
     function swapExactTokensForTokens(
         uint256 amountIn,
         uint256 amountOutMin,
@@ -28,30 +31,31 @@ contract SimpleRouter {
     ) external returns (uint256[] memory amounts) {
         require(deadline >= block.timestamp, "SimpleRouter: EXPIRED");
         require(path.length >= 2, "SimpleRouter: INVALID_PATH");
-        
+
         amounts = new uint256[](path.length);
         amounts[0] = amountIn;
-        
-        // Transfer input tokens from sender
-        TransferHelper.safeTransferFrom(path[0], msg.sender, address(this), amountIn);
-        
-        // Execute swaps
         for (uint i = 0; i < path.length - 1; i++) {
             (uint reserveIn, uint reserveOut) = getReserves(path[i], path[i + 1]);
             amounts[i + 1] = getAmountOut(amounts[i], reserveIn, reserveOut);
-            
+        }
+        require(amounts[amounts.length - 1] >= amountOutMin, "SimpleRouter: INSUFFICIENT_OUTPUT_AMOUNT");
+
+        address firstPair = IUniswapV2Factory(factory).getPair(path[0], path[1]);
+        TransferHelper.safeTransferFrom(path[0], msg.sender, firstPair, amounts[0]);
+
+        for (uint i = 0; i < path.length - 1; i++) {
             address pair = IUniswapV2Factory(factory).getPair(path[i], path[i + 1]);
-            TransferHelper.safeTransfer(path[i], pair, amounts[i]);
-            
+            address hopTo = i < path.length - 2
+                ? IUniswapV2Factory(factory).getPair(path[i + 1], path[i + 2])
+                : to;
             IUniswapV2Pair(pair).swap(
                 path[i] < path[i + 1] ? 0 : amounts[i + 1],
                 path[i] < path[i + 1] ? amounts[i + 1] : 0,
-                to,
+                hopTo,
                 ""
             );
         }
-        
-        require(amounts[amounts.length - 1] >= amountOutMin, "SimpleRouter: INSUFFICIENT_OUTPUT_AMOUNT");
+
         emit SwapExecution(msg.sender, amountIn, amounts[amounts.length - 1]);
     }
 
