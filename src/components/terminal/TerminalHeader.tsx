@@ -64,11 +64,13 @@ export default function TerminalHeader({
   theme,
   currentThemeKey,
   onThemeChange,
+  onCommand,
   chainName
 }: {
   theme: ThemeConfig;
   currentThemeKey: ThemeMode;
   onThemeChange: (mode: ThemeMode) => void;
+  onCommand?: (cmd: string) => void;
   chainName?: string;
 }) {
   const [clock, setClock] = useState(() => formatClock(new Date()));
@@ -102,12 +104,12 @@ export default function TerminalHeader({
   }
 
   if (theme.headerStyle === "bloomberg") {
-    const keys = [
-      { id: "F1", label: "HELP" },
-      { id: "F2", label: "NET" },
-      { id: "F3", label: "DEX" },
-      { id: "F4", label: "THEME" },
-      { id: "F5", label: "SWAP" }
+    const keys: { id: string; label: string; run: () => void }[] = [
+      { id: "F1", label: "HELP", run: () => onCommand?.("help") },
+      { id: "F2", label: "NET", run: () => onCommand?.("networks") },
+      { id: "F3", label: "DEX", run: () => onCommand?.("dexes") },
+      { id: "F4", label: "THEME", run: cycleTheme },
+      { id: "F5", label: "SWAP", run: () => onCommand?.("swap") }
     ];
     return (
       <div
@@ -119,23 +121,17 @@ export default function TerminalHeader({
           <span className="tabular-nums">{clock}</span>
         </div>
         <div className="flex items-center gap-3 uppercase text-[10px] tracking-widest">
-          {keys.map((k) =>
-            k.id === "F4" ? (
+          {keys.map((k) => (
               <button
                 key={k.id}
                 type="button"
-                onClick={cycleTheme}
+                onClick={k.run}
                 className="cursor-pointer bg-transparent border-0 p-0 uppercase text-[10px] tracking-widest"
-                title="Cycle theme"
+                title={k.label}
               >
                 {k.id} {k.label}
               </button>
-            ) : (
-              <span key={k.id}>
-                {k.id} {k.label}
-              </span>
-            )
-          )}
+          ))}
         </div>
       </div>
     );

@@ -57,8 +57,8 @@ export default function NetworksList({
                     {chain.name}
                   </span>
                   <span
-                    className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
-                      isTestnet ? theme.warn : theme.primary
+                    className={`text-[9px] px-1.5 py-0.5 rounded font-bold border ${
+                      isTestnet ? theme.warn : `${theme.border} ${theme.primary}`
                     }`}
                   >
                     {isTestnet ? "TESTNET" : "MAINNET"}

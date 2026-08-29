@@ -180,14 +180,14 @@ function CopyableAddress({
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       }}
-      className={`cursor-pointer font-mono transition-colors relative group inline-flex items-center gap-1 ${
+      className={`cursor-pointer transition-colors relative group inline-flex items-center gap-1 ${
         copied ? `${theme.primary} font-bold` : "hover:underline"
       } ${className}`}
       title="Click to copy address"
     >
       <span>{address}</span>
-      <span className="text-[10px] opacity-60 group-hover:opacity-100">
-        {copied ? "[COPIED!]" : "📋"}
+      <span className={`text-[10px] ${theme.primary} opacity-60 group-hover:opacity-100`}>
+        {copied ? "[COPIED]" : "▣"}
       </span>
     </span>
   );
@@ -5430,6 +5430,7 @@ export default function TerminalShell({
         theme={theme}
         currentThemeKey={currentThemeKey}
         onThemeChange={handleThemeSwitch}
+        onCommand={handleCommand}
         chainName={SUPPORTED_CHAINS.find((c) => c.id === activeChainId)?.name}
       />
 

@@ -15,19 +15,19 @@ body {
     0 0 20px color-mix(in srgb, var(--phosphor) 20%, transparent);
 }
 
-/* Authentic CRT: mix-blend-multiply at opacity ~0.15. Under log/prompt (z-10). */
+/* Phosphor-tinted glass lines under the log (z-0). No multiply — black×black is a no-op. */
 .crt-scanlines {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 0;
   background: linear-gradient(
-    rgba(18, 16, 16, 0) 50%,
-    rgb(0 0 0 / 0.25) 50%
+    transparent 50%,
+    color-mix(in srgb, var(--phosphor) calc(var(--scanline-alpha, 0.1) * 100%), transparent) 50%
   );
   background-size: 100% 4px;
-  mix-blend-mode: multiply;
-  opacity: 0.15;
+  mix-blend-mode: normal;
+  opacity: 1;
 }
 
 .term-grid {
