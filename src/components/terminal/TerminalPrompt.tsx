@@ -54,7 +54,7 @@ export default function TerminalPrompt({
               WALLET: {address.slice(0, 6)}...{address.slice(-4)}
             </span>
           ) : (
-            <span className="px-2 py-0.5 rounded border border-yellow-500/50 bg-yellow-500/10 text-yellow-400 font-mono">
+            <span className={`px-2 py-0.5 rounded border font-mono ${theme.warn}`}>
               WALLET: DISCONNECTED (Type `connect`)
             </span>
           )}
@@ -65,7 +65,7 @@ export default function TerminalPrompt({
               NET: {chainObj.name}
             </span>
           ) : (
-            <span className="px-2 py-0.5 rounded border border-orange-500/50 bg-orange-500/10 text-orange-400 font-mono">
+            <span className={`px-2 py-0.5 rounded border font-mono ${theme.warn}`}>
               NET: NOT SELECTED (Type `networks`)
             </span>
           )}
@@ -81,7 +81,13 @@ export default function TerminalPrompt({
 
       {/* LINE 2: Interactive Input Field */}
       <div className="flex items-center gap-2 relative">
-        <span className={`font-bold ${theme.primary} tracking-widest`}>$</span>
+        <span className={`font-bold ${theme.primary} tracking-widest`}>
+          {theme.promptSymbol === "■" ? (
+            <span className="inline-block text-[8px] leading-none">■</span>
+          ) : (
+            theme.promptSymbol
+          )}
+        </span>
         <input
           ref={inputRef}
           type="text"
@@ -89,7 +95,7 @@ export default function TerminalPrompt({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder='Type "help" to view available commands...'
-          className={`flex-1 bg-transparent outline-none font-mono text-xs ${theme.text} placeholder:opacity-40 placeholder:${theme.text}`}
+          className={`flex-1 bg-transparent outline-none font-mono text-xs ${theme.text} placeholder:opacity-40 ${theme.muted}`}
           autoFocus
           spellCheck={false}
           autoComplete="off"

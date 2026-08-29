@@ -21,7 +21,7 @@ export default function PinButton({
       title="Pin to right panel"
       className={`uppercase text-[9px] px-1 py-0.5 border ${theme.border} ${theme.cardBg} ${theme.primary} cursor-pointer ${className}`}
     >
-      📌
+      ▣
     </button>
   );
 }
