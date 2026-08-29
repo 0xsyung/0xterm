@@ -439,6 +439,23 @@ export default function TerminalShell({
   const generateId = () => Math.random().toString(36).substring(2, 9);
 
   // --- Pin / unpin (floating right column) --------------------------------
+  // Identity key for a price pin: the same network + dex + pair must not be
+  // pinned twice, but different price params may each get their own pin.
+  const pricePinKey = (cd: any, activeChain: number | null, activeDex: string | null): string | null => {
+    if (cd?.kind !== "price") return null;
+    if (cd.mode === "onchain") {
+      const addr = cd.pairAddress as string | undefined;
+      if (!activeChain || !activeDex || !addr) return null;
+      return `price:onchain:${activeChain}:${activeDex}:${addr.toLowerCase()}`;
+    }
+    // api mode — network slug + dex + pair tokens
+    const net = (cd.chain as string) || "";
+    const d = (cd.dex as string) || "";
+    const q = `${cd.tokenSymbol || ""}/${cd.quoteSymbol || ""}`.toLowerCase();
+    if (!net || !d || q === "/") return null;
+    return `price:api:${net}:${d}:${q}`;
+  };
+
   // Toggle a log entry between the main feed and the pinned column. `refresh`
   // is the live-data loader (only set for widgets with a live source).
   const onPin = (log: LogEntry) => {
@@ -457,8 +474,21 @@ export default function TerminalShell({
         });
         return next;
       }
-      // one pinned widget per kind — can't pin a second inbox/price/board, etc.
-      if (prev.some((p) => p.kind === log.type)) return prev;
+      // one pinned widget per kind — can't pin a second inbox/board, etc.
+      // (price is exempt so different price params can each be pinned).
+      if (prev.some((p) => p.kind === log.type) && log.type !== "component")
+        return prev;
+      if (log.type === "component") {
+        const cd = log.componentData;
+        const key = pricePinKey(cd, activeChainId, activeDexId);
+        if (key && prev.some((p) => p.kind === "component" && p.componentData?.kind === "price")) {
+          const dup = prev.find((p) => {
+            const k = pricePinKey(p.componentData, p.chainId ?? null, p.dexId ?? null);
+            return k === key;
+          });
+          if (dup) return prev;
+        }
+      }
       const manifest: PinnedManifest = buildPinManifest(log);
       return [...prev, manifest];
     });
@@ -4994,7 +5024,7 @@ export default function TerminalShell({
     const userLog: LogEntry = {
       id: generateId(),
       type: "input",
-      text: `$ ${trimmed}`
+      text: `${theme.promptSymbol || ">"} ${trimmed}`
     };
 
     setLogs((prev) => [...prev, userLog].slice(-MAX_LOGS));
