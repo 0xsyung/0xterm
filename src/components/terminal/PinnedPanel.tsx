@@ -16,6 +16,7 @@ import ChatWidget from "./widgets/ChatWidget";
 import BillboardWidget from "./widgets/BillboardWidget";
 import PriceCard from "./widgets/PriceCard";
 import type { PinnedManifest } from "./types";
+import { HEADER_TOP } from "./constants";
 
 const REFRESH_INTERVAL = 60;
 
@@ -39,7 +40,7 @@ export default function PinnedPanel({
   if (pinned.length === 0) return null;
 
   return (
-    <div className="absolute top-14 right-2 bottom-14 w-80 overflow-y-auto z-30 space-y-3 pointer-events-none">
+    <div className={`absolute ${HEADER_TOP[theme.headerStyle]} right-2 bottom-14 w-80 overflow-y-auto z-30 space-y-3 pointer-events-none`}>
       {pinned.map((p) => {
         const hasRefresh = countdowns && countdowns[p.id] !== undefined;
         const secs =

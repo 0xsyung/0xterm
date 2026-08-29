@@ -213,13 +213,13 @@ export default function DeployWidget({
       )}
 
       {status === "success" && proxyAddress ? (
-        <div className="p-3 bg-green-950/30 border border-green-900/50 rounded mt-2 space-y-1">
-          <div className="text-green-400 font-bold">DEPLOYMENT SUCCESSFUL!</div>
-          <div className="text-[10px] font-mono break-all text-green-300">
+        <div className={`p-3 border ${theme.border} ${theme.cardBg} ${theme.rounded} mt-2 space-y-1`}>
+          <div className={`font-bold ${theme.primary}`}>DEPLOYMENT SUCCESSFUL!</div>
+          <div className={`text-[10px] font-mono break-all ${theme.primary}`}>
             Address: {proxyAddress}
           </div>
           {implAddress && (
-            <div className="text-[10px] font-mono break-all text-green-300/70">
+            <div className={`text-[10px] font-mono break-all ${theme.muted}`}>
               Implementation: {implAddress}
             </div>
           )}

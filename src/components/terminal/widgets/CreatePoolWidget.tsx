@@ -86,7 +86,7 @@ export default function CreatePoolWidget({ targetChain, activeDex, tokenA, token
       )}
 
       {status === 'success' && txHash && (
-        <div className="p-2 border border-emerald-500/50 bg-emerald-950/40 text-emerald-400 rounded space-y-1">
+        <div className={`p-2 border ${theme.border} ${theme.cardBg} ${theme.primary} ${theme.rounded} space-y-1`}>
           <div className="font-bold">[✓] POOL CREATED — CONFIRMED ON-CHAIN!</div>
           <div className="text-[10px] truncate">TX HASH: {txHash}</div>
           {blockExplorer && (
@@ -104,10 +104,10 @@ export default function CreatePoolWidget({ targetChain, activeDex, tokenA, token
           </button>
         )}
         {status === 'signing' && (
-          <div className="text-yellow-400 font-bold animate-pulse">SIGN FACTORY DEPLOYMENT IN WALLET...</div>
+          <div className={`${theme.warn} font-bold animate-pulse`}>SIGN FACTORY DEPLOYMENT IN WALLET...</div>
         )}
         {status === 'waiting_confirmation' && (
-          <div className="text-yellow-400 font-bold animate-pulse">WAITING FOR ON-CHAIN CONFIRMATION...</div>
+          <div className={`${theme.warn} font-bold animate-pulse`}>WAITING FOR ON-CHAIN CONFIRMATION...</div>
         )}
       </div>
     </div>

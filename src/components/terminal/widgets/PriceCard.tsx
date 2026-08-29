@@ -123,7 +123,13 @@ export default function PriceCard({
         <div>
           <div className={`text-[10px] ${theme.text}/50`}>24H CHANGE</div>
           <div
-            className={`text-base font-bold ${h24 !== undefined && h24 >= 0 ? "text-green-400" : "text-red-400"}`}
+            className={`text-base font-bold ${
+              h24 === undefined
+                ? theme.muted
+                : h24 < 0
+                  ? "text-red-400"
+                  : theme.primary
+            }`}
           >
             {h24 !== undefined ? `${h24 > 0 ? "+" : ""}${h24}%` : "N/A"}
           </div>

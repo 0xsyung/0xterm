@@ -265,7 +265,7 @@ export default function AddLiquidityWidget({
       )}
 
       {step === "success" && txHash && (
-        <div className="p-2 border border-emerald-500/50 bg-emerald-950/40 text-emerald-400 rounded space-y-1">
+        <div className={`p-2 border ${theme.border} ${theme.cardBg} ${theme.primary} ${theme.rounded} space-y-1`}>
           <div className="font-bold">
             [✓] LIQUIDITY ADDED — CONFIRMED ON-CHAIN!
           </div>
@@ -293,17 +293,17 @@ export default function AddLiquidityWidget({
           </button>
         )}
         {step === "approving_a" && (
-          <div className="text-yellow-400 font-bold animate-pulse">
+          <div className={`${theme.warn} font-bold animate-pulse`}>
             APPROVING TOKEN A...
           </div>
         )}
         {step === "approving_b" && (
-          <div className="text-yellow-400 font-bold animate-pulse">
+          <div className={`${theme.warn} font-bold animate-pulse`}>
             APPROVING TOKEN B...
           </div>
         )}
         {step === "minting" && (
-          <div className="text-yellow-400 font-bold animate-pulse">
+          <div className={`${theme.warn} font-bold animate-pulse`}>
             SUBMITTING & WAITING FOR ON-CHAIN CONFIRMATION...
           </div>
         )}

@@ -123,16 +123,16 @@ export default function PortfolioWidget({
               <td className="py-1 pr-2 text-right whitespace-nowrap">
                 {h.valueUsd !== null ? `$${h.valueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
               </td>
-              <td className={`py-1 pr-2 text-right whitespace-nowrap ${h.change24h === null ? "" : h.change24h >= 0 ? "text-green-400" : "text-red-400"}`}>
+              <td className={`py-1 pr-2 text-right whitespace-nowrap ${h.change24h === null ? "" : h.change24h >= 0 ? theme.primary : "text-red-400"}`}>
                 {h.change24h !== null ? `${h.change24h > 0 ? "+" : ""}${h.change24h}%` : "—"}
               </td>
               {showPnl && hasSnapshot && (
-                <td className={`py-1 pr-2 text-right whitespace-nowrap ${pnlPrice === null ? "" : pnlPrice >= 0 ? "text-green-400" : "text-red-400"}`}>
+                <td className={`py-1 pr-2 text-right whitespace-nowrap ${pnlPrice === null ? "" : pnlPrice >= 0 ? theme.primary : "text-red-400"}`}>
                   {pnlPrice !== null ? `${pnlPrice >= 0 ? "+" : ""}$${pnlPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
                 </td>
               )}
               {showPnl && hasSnapshot && (
-                <td className={`py-1 pr-2 text-right whitespace-nowrap ${pnlBalance === null ? "" : pnlBalance >= 0 ? "text-green-400" : "text-red-400"}`}>
+                <td className={`py-1 pr-2 text-right whitespace-nowrap ${pnlBalance === null ? "" : pnlBalance >= 0 ? theme.primary : "text-red-400"}`}>
                   {pnlBalance !== null ? `${pnlBalance >= 0 ? "+" : ""}$${pnlBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
                 </td>
               )}
@@ -149,12 +149,12 @@ export default function PortfolioWidget({
             <td className="py-1 pr-2 pt-2 text-right whitespace-nowrap">${totalUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
             <td className="py-1 pr-2 pt-2 text-right">—</td>
             {hasSnapshot && (
-              <td className={`py-1 pr-2 pt-2 text-right whitespace-nowrap ${totalPnlPrice >= 0 ? "text-green-400" : "text-red-400"}`}>
+              <td className={`py-1 pr-2 pt-2 text-right whitespace-nowrap ${totalPnlPrice >= 0 ? theme.primary : "text-red-400"}`}>
                 {totalPnlPrice >= 0 ? "+" : ""}${totalPnlPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </td>
             )}
             {hasSnapshot && (
-              <td className={`py-1 pr-2 pt-2 text-right whitespace-nowrap ${totalPnlBalance >= 0 ? "text-green-400" : "text-red-400"}`}>
+              <td className={`py-1 pr-2 pt-2 text-right whitespace-nowrap ${totalPnlBalance >= 0 ? theme.primary : "text-red-400"}`}>
                 {totalPnlBalance >= 0 ? "+" : ""}${totalPnlBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </td>
             )}
@@ -182,7 +182,7 @@ export default function PortfolioWidget({
       </div>
 
       {fetching ? (
-        <div className={`text-yellow-400 py-2`}>Fetching balances across {holdings.length} chains…</div>
+        <div className={`${theme.warn} py-2`}>Fetching balances across {holdings.length} chains…</div>
       ) : (
         <div className="space-y-4">
           <div>
@@ -212,7 +212,7 @@ export default function PortfolioWidget({
         </div>
       )}
       {!fetching && pricedCount === 0 && (
-        <div className="text-yellow-400 pt-1">No mainnet USD prices available. Balances shown raw.</div>
+        <div className={`${theme.warn} pt-1`}>No mainnet USD prices available. Balances shown raw.</div>
       )}
     </div>
   );
