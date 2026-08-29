@@ -154,6 +154,15 @@ contract BillboardTest is Test {
         billboard.withdraw(bob);
     }
 
+    /// only the owner can upgrade
+    function test_Upgrade_OnlyOwner() public {
+        BillboardV2 implV2 = new BillboardV2();
+
+        vm.prank(alice);
+        vm.expectRevert();
+        billboard.upgradeToAndCall(address(implV2), "");
+    }
+
     function test_Upgrade_PreservesPosts() public {
         postAs(alice, "keep me");
 
