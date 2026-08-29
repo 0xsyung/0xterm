@@ -68,7 +68,7 @@ function renderLog(
     return (
       <div className={`text-xs space-y-1 my-2 ${theme.text}`}>
         {dexList.length === 0 ? (
-          <div className="text-yellow-400">
+          <div className={theme.warn}>
             No DEX available on this chain. swap / createpool / price pool
             require a DEX.
           </div>

@@ -9,24 +9,56 @@ body {
   overflow: hidden;
 }
 
-.matrix-glow {
+.term-glow {
   text-shadow:
-    0 0 8px rgba(0, 255, 102, 0.6),
-    0 0 20px rgba(0, 255, 102, 0.2);
+    0 0 8px color-mix(in srgb, var(--phosphor) 60%, transparent),
+    0 0 20px color-mix(in srgb, var(--phosphor) 20%, transparent);
 }
 
-.crt-overlay::before {
-  content: " ";
-  display: block;
+/* Phosphor-tinted glass lines under the log (z-0). No multiply — black×black is a no-op. */
+.crt-scanlines {
   position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%);
-  background-size: 100% 4px;
-  z-index: 20;
+  inset: 0;
   pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    transparent 50%,
+    color-mix(in srgb, var(--phosphor) calc(var(--scanline-alpha, 0.1) * 100%), transparent) 50%
+  );
+  background-size: 100% 4px;
+  mix-blend-mode: normal;
+  opacity: 1;
+}
+
+.term-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: radial-gradient(var(--grid-color) 1px, transparent 1px);
+  background-size: 16px 16px;
+  opacity: 0.12;
+}
+
+/* Teletype: ½ inch / 3 lines at 6 LPI, not 1-line zebra. */
+.term-grid-bars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #F3F0E6 0 48px,
+    #DCE7CF 48px 96px
+  );
+  opacity: 0.85;
+}
+
+.font-plex {
+  font-family: var(--font-plex), ui-monospace, "SF Mono", Menlo, monospace;
+}
+.font-mac {
+  font-family: ui-monospace, "SF Mono", Menlo, Monaco, "Courier New", monospace;
 }
 
 ::-webkit-scrollbar {
