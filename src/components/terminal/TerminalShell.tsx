@@ -5433,15 +5433,17 @@ export default function TerminalShell({
       >
         <div
           ref={logContainerRef}
-          className="flex-1 overflow-y-auto space-y-2.5 pt-2 pr-2 whitespace-pre-wrap"
+          className="flex-1 overflow-y-auto pt-2 pr-2 whitespace-pre-wrap"
         >
-          <TerminalLogList
-            logs={logs}
-            theme={theme}
-            activeChainId={activeChainId}
-            onPin={onPin}
-            pinnedIds={new Set(pinned.map((p) => p.id))}
-          />
+          <div className="min-h-full flex flex-col justify-end space-y-2.5">
+            <TerminalLogList
+              logs={logs}
+              theme={theme}
+              activeChainId={activeChainId}
+              onPin={onPin}
+              pinnedIds={new Set(pinned.map((p) => p.id))}
+            />
+          </div>
         </div>
 
         {/* FLOATING PINNED WIDGET COLUMN (right) */}

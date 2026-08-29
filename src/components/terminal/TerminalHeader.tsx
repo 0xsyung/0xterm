@@ -17,7 +17,7 @@ export default function TerminalHeader({
 }) {
   return (
     <div
-      className={`absolute top-0 left-0 right-0 h-14 px-6 flex items-center justify-between border-b ${theme.border} ${theme.cardBg} backdrop-blur-md z-30`}
+      className={`absolute top-0 left-0 right-0 h-14 px-6 flex items-center justify-between border-b uppercase ${theme.border} ${theme.cardBg} backdrop-blur-md z-30`}
     >
       <div className="flex items-center">
         <img

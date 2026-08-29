@@ -58,7 +58,7 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
     primary: 'text-[#ffb000]',
     border: 'border-[#ffb000]/60',
     glow: 'shadow-md shadow-[#ffb000]/20',
-    font: 'font-mono tracking-wider uppercase',
+    font: 'font-mono tracking-wider',
     rounded: 'rounded-none',
     promptSymbol: '>',
     headerStyle: 'bloomberg',
