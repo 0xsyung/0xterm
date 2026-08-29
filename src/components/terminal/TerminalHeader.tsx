@@ -77,17 +77,40 @@ export default function TerminalHeader({
   const [stamp] = useState(() => formatStamp(new Date()));
   const hClass = HEADER_H[theme.headerStyle];
 
+  const cycleTheme = () => {
+    const idx = THEME_ORDER.indexOf(currentThemeKey);
+    const next = THEME_ORDER[(idx + 1 + THEME_ORDER.length) % THEME_ORDER.length];
+    onThemeChange(next);
+  };
+
   useEffect(() => {
     if (theme.headerStyle !== "bloomberg") return;
     const id = setInterval(() => setClock(formatClock(new Date())), 1000);
     return () => clearInterval(id);
   }, [theme.headerStyle]);
 
-  const cycleTheme = () => {
-    const idx = THEME_ORDER.indexOf(currentThemeKey);
-    const next = THEME_ORDER[(idx + 1 + THEME_ORDER.length) % THEME_ORDER.length];
-    onThemeChange(next);
-  };
+  // Real F1–F5 match the header buttons. Capture so the prompt and the
+  // browser (F1 help) do not swallow them. Other themes leave F-keys alone.
+  useEffect(() => {
+    if (theme.headerStyle !== "bloomberg") return;
+    const run: Record<string, () => void> = {
+      F1: () => onCommand?.("help"),
+      F2: () => onCommand?.("networks"),
+      F3: () => onCommand?.("dexes"),
+      F4: cycleTheme,
+      F5: () => onCommand?.("swap")
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      const fn = run[e.key];
+      if (!fn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      fn();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [theme.headerStyle, currentThemeKey, onCommand, onThemeChange]);
 
   if (theme.headerStyle === "crt") {
     return (
