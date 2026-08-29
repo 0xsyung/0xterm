@@ -104,9 +104,9 @@ export default function TerminalHeader({
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       const fn = run[e.key];
       if (!fn) return;
-      if (e.repeat) return;
       e.preventDefault();
       e.stopPropagation();
+      if (e.repeat) return;
       fn();
     };
     window.addEventListener("keydown", onKey, true);
