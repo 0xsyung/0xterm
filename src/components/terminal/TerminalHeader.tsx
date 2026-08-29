@@ -104,6 +104,7 @@ export default function TerminalHeader({
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       const fn = run[e.key];
       if (!fn) return;
+      if (e.repeat) return;
       e.preventDefault();
       e.stopPropagation();
       fn();
