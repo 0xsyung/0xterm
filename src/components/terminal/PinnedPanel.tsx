@@ -15,7 +15,8 @@ import PortfolioWidget from "./widgets/PortfolioWidget";
 import ChatWidget from "./widgets/ChatWidget";
 import BillboardWidget from "./widgets/BillboardWidget";
 import PriceCard from "./widgets/PriceCard";
-import type { PinnedManifest } from "./types";
+import type { PinnedManifest, ThemeConfig } from "./types";
+import { HEADER_TOP } from "./constants";
 
 const REFRESH_INTERVAL = 60;
 
@@ -29,7 +30,7 @@ export default function PinnedPanel({
   onUnpin
 }: {
   pinned: PinnedManifest[];
-  theme: any;
+  theme: ThemeConfig;
   refreshing?: string | null;
   countdowns?: Record<string, number>;
   onRefresh: (id: string) => void;
@@ -39,7 +40,7 @@ export default function PinnedPanel({
   if (pinned.length === 0) return null;
 
   return (
-    <div className="absolute top-14 right-2 bottom-14 w-80 overflow-y-auto z-30 space-y-3 pointer-events-none">
+    <div className={`absolute ${HEADER_TOP[theme.headerStyle]} right-2 bottom-14 w-72 overflow-y-auto z-30 space-y-2 pointer-events-none`}>
       {pinned.map((p) => {
         const hasRefresh = countdowns && countdowns[p.id] !== undefined;
         const secs =
@@ -51,10 +52,10 @@ export default function PinnedPanel({
         return (
           <div
             key={p.id}
-            className={`pointer-events-auto border ${theme.border} ${theme.cardBg} ${theme.rounded} p-2 text-xs ${theme.text}`}
+            className={`pointer-events-auto border ${theme.border} ${theme.cardBg} ${theme.rounded} p-1.5 text-[10px] ${theme.text} backdrop-blur-md bg-black/40`}
           >
             <div
-              className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1 ${minimized ? "" : "mb-2"}`}
+              className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-0.5 ${minimized ? "" : "mb-1"}`}
             >
               <span className="font-bold flex items-center gap-1.5">
                 <span>{p.title}</span>
@@ -109,7 +110,7 @@ function renderPinned(p: PinnedManifest, theme: any) {
     // Re-render from stored data when available so the pinned widget follows
     // theme switches; fall back to the original element otherwise.
     if (p.componentData?.kind === "price")
-      return <PriceCard data={p.componentData} theme={theme} />;
+      return <PriceCard data={p.componentData} theme={theme} compact />;
     return p.component || <div className={`${theme.text}/50`}>widget unavailable</div>;
   }
   const payload = p.payload || {};

@@ -9,6 +9,7 @@
 // so the widget can re-render against the CURRENT theme on every theme switch
 // (both in the console and when pinned).
 export type PriceCardData = {
+  kind: "price";
   mode: "onchain" | "api";
   pairAddress?: string;
   symbolA?: string;
@@ -31,32 +32,39 @@ export type PriceCardData = {
 
 export default function PriceCard({
   data,
-  theme
+  theme,
+  compact = false
 }: {
   data: PriceCardData;
   theme: any;
+  compact?: boolean;
 }) {
+  // Shared compact chrome: tight padding, small font. When `compact` (pinned
+  // panel) it also drops the pool-address footer to save vertical space.
+  const shell = `my-3 p-2 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-[10px] space-y-1`;
+  const header = `flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`;
+  const label = `text-[8px] ${theme.text}/50`;
+  const value = `font-bold ${theme.primary}`;
+
   if (data.mode === "onchain") {
     return (
-      <div
-        className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
-      >
-        <div
-          className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
-        >
-          <span className="font-bold">ON-CHAIN POOL PRICE ({data.dexName})</span>
-          <span className="uppercase">{data.chainName}</span>
+      <div className={shell}>
+        <div className={header}>
+          <span className="font-bold truncate">
+            ON-CHAIN POOL PRICE ({data.dexName})
+          </span>
+          <span className="uppercase shrink-0">{data.chainName}</span>
         </div>
-        <div className={`grid grid-cols-2 gap-4 ${theme.text}`}>
+        <div className={`grid grid-cols-2 gap-2 ${theme.text}`}>
           <div>
-            <div className={`text-[10px] ${theme.text}/50`}>PAIR</div>
-            <div className={`text-base font-bold ${theme.primary}`}>
+            <div className={label}>PAIR</div>
+            <div className={`text-xs ${value} whitespace-nowrap`}>
               {data.symbolA} / {data.symbolB}
             </div>
           </div>
           <div>
-            <div className={`text-[10px] ${theme.text}/50`}>RATE (ON-CHAIN)</div>
-            <div className={`text-base font-bold ${theme.primary}`}>
+            <div className={label}>RATE (ON-CHAIN)</div>
+            <div className={`text-xs ${value} whitespace-nowrap`}>
               1 {data.symbolA} ={" "}
               {Number(data.rate).toLocaleString(undefined, {
                 minimumFractionDigits: 2,
@@ -66,11 +74,13 @@ export default function PriceCard({
             </div>
           </div>
         </div>
-        <div
-          className={`text-[9px] ${theme.text}/40 truncate pt-1 border-t ${theme.border}`}
-        >
-          POOL ADDRESS: {data.pairAddress}
-        </div>
+        {!compact && data.pairAddress && (
+          <div
+            className={`text-[8px] ${theme.text}/40 truncate pt-1 border-t ${theme.border}`}
+          >
+            POOL ADDRESS: {data.pairAddress}
+          </div>
+        )}
       </div>
     );
   }
@@ -78,27 +88,23 @@ export default function PriceCard({
   // api mode
   const h24 = data.h24;
   return (
-    <div
-      className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
-    >
-      <div
-        className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
-      >
-        <span className="font-bold">
+    <div className={shell}>
+      <div className={header}>
+        <span className="font-bold truncate">
           DEXSCREENER API PRICE ({String(data.dex).toUpperCase()})
         </span>
-        <span className="uppercase">{data.chain}</span>
+        <span className="uppercase shrink-0">{data.chain}</span>
       </div>
-      <div className={`grid grid-cols-2 gap-4 ${theme.text}`}>
+      <div className={`grid grid-cols-2 gap-2 ${theme.text}`}>
         <div>
-          <div className={`text-[10px] ${theme.text}/50`}>PAIR</div>
-          <div className={`text-base font-bold ${theme.primary}`}>
+          <div className={label}>PAIR</div>
+          <div className={`text-xs ${value} whitespace-nowrap`}>
             {data.tokenSymbol} / {data.quoteSymbol}
           </div>
         </div>
         <div>
-          <div className={`text-[10px] ${theme.text}/50`}>PRICE (USD)</div>
-          <div className={`text-base font-bold ${theme.primary}`}>
+          <div className={label}>PRICE (USD)</div>
+          <div className={`text-xs ${value}`}>
             $
             {data.priceUsd
               ? parseFloat(data.priceUsd).toLocaleString(undefined, {
@@ -109,10 +115,8 @@ export default function PriceCard({
           </div>
         </div>
         <div>
-          <div className={`text-[10px] ${theme.text}/50`}>
-            PRICE ({data.quoteSymbol})
-          </div>
-          <div className={`text-base font-bold ${theme.primary}`}>
+          <div className={label}>PRICE ({data.quoteSymbol})</div>
+          <div className={`text-xs ${value}`}>
             {data.priceNative
               ? parseFloat(data.priceNative).toLocaleString(undefined, {
                   maximumFractionDigits: 6
@@ -121,9 +125,15 @@ export default function PriceCard({
           </div>
         </div>
         <div>
-          <div className={`text-[10px] ${theme.text}/50`}>24H CHANGE</div>
+          <div className={label}>24H CHANGE</div>
           <div
-            className={`text-base font-bold ${h24 !== undefined && h24 >= 0 ? "text-green-400" : "text-red-400"}`}
+            className={`text-xs ${
+              h24 === undefined
+                ? theme.muted
+                : h24 < 0
+                  ? "text-red-400"
+                  : theme.primary
+            }`}
           >
             {h24 !== undefined ? `${h24 > 0 ? "+" : ""}${h24}%` : "N/A"}
           </div>

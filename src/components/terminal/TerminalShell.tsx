@@ -41,6 +41,10 @@ import TerminalPrompt from "./TerminalPrompt";
 
 import {
   THEMES,
+  THEME_ORDER,
+  resolveThemeKey,
+  isKnownThemeInput,
+  HEADER_PAD,
   SUPPORTED_CHAINS,
   NATIVE_TOKEN_ADDRESS,
   WRAPPED_NATIVE,
@@ -176,14 +180,14 @@ function CopyableAddress({
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       }}
-      className={`cursor-pointer font-mono transition-colors relative group inline-flex items-center gap-1 ${
-        copied ? "text-green-400 font-bold" : "hover:underline"
+      className={`cursor-pointer transition-colors relative group inline-flex items-center gap-1 ${
+        copied ? `${theme.primary} font-bold` : "hover:underline"
       } ${className}`}
       title="Click to copy address"
     >
       <span>{address}</span>
-      <span className="text-[10px] opacity-60 group-hover:opacity-100">
-        {copied ? "[COPIED!]" : "📋"}
+      <span className={`text-[10px] ${theme.primary} opacity-60 group-hover:opacity-100`}>
+        {copied ? "[COPIED]" : "▣"}
       </span>
     </span>
   );
@@ -237,7 +241,7 @@ function ExportWidget({
               />
             </svg>
             {copied ? (
-              <span className="text-green-400 font-bold">COPIED!</span>
+              <span className={`${theme.primary} font-bold`}>COPIED!</span>
             ) : (
               <span>COPY</span>
             )}
@@ -250,7 +254,7 @@ function ExportWidget({
         wallet terminal:
       </div>
       <pre
-        className={`p-3 bg-black/40 rounded border ${theme.border} font-mono text-[10px] overflow-x-auto select-all max-h-48 text-green-400`}
+        className={`p-3 bg-black/40 rounded border ${theme.border} font-mono text-[10px] overflow-x-auto select-all max-h-48 ${theme.primary}`}
       >
         {jsonString}
       </pre>
@@ -283,7 +287,7 @@ export default function TerminalShell({
   // share a symbol. `id` is the stable uniqueness key.
   const [customTokens, setCustomTokens] = useState<CustomTokensMap>({});
 
-  const theme = THEMES[currentThemeKey];
+  const theme = THEMES[resolveThemeKey(currentThemeKey)];
 
   const [logs, setLogs] = useState<LogEntry[]>([
     { id: "1", type: "text", text: "0xTERM v1.5.0 [FULL ON-CHAIN DEFI SUITE]" },
@@ -435,6 +439,23 @@ export default function TerminalShell({
   const generateId = () => Math.random().toString(36).substring(2, 9);
 
   // --- Pin / unpin (floating right column) --------------------------------
+  // Identity key for a price pin: the same network + dex + pair must not be
+  // pinned twice, but different price params may each get their own pin.
+  const pricePinKey = (cd: any, activeChain: number | null, activeDex: string | null): string | null => {
+    if (cd?.kind !== "price") return null;
+    if (cd.mode === "onchain") {
+      const addr = cd.pairAddress as string | undefined;
+      if (!activeChain || !activeDex || !addr) return null;
+      return `price:onchain:${activeChain}:${activeDex}:${addr.toLowerCase()}`;
+    }
+    // api mode — network slug + dex + pair tokens
+    const net = (cd.chain as string) || "";
+    const d = (cd.dex as string) || "";
+    const q = `${cd.tokenSymbol || ""}/${cd.quoteSymbol || ""}`.toLowerCase();
+    if (!net || !d || q === "/") return null;
+    return `price:api:${net}:${d}:${q}`;
+  };
+
   // Toggle a log entry between the main feed and the pinned column. `refresh`
   // is the live-data loader (only set for widgets with a live source).
   const onPin = (log: LogEntry) => {
@@ -453,8 +474,21 @@ export default function TerminalShell({
         });
         return next;
       }
-      // one pinned widget per kind — can't pin a second inbox/price/board, etc.
-      if (prev.some((p) => p.kind === log.type)) return prev;
+      // one pinned widget per kind — can't pin a second inbox/board, etc.
+      // (price is exempt so different price params can each be pinned).
+      if (prev.some((p) => p.kind === log.type) && log.type !== "component")
+        return prev;
+      if (log.type === "component") {
+        const cd = log.componentData;
+        const key = pricePinKey(cd, activeChainId, activeDexId);
+        if (key && prev.some((p) => p.kind === "component" && p.componentData?.kind === "price")) {
+          const dup = prev.find((p) => {
+            const k = pricePinKey(p.componentData, p.chainId ?? null, p.dexId ?? null);
+            return k === key;
+          });
+          if (dup) return prev;
+        }
+      }
       const manifest: PinnedManifest = buildPinManifest(log);
       return [...prev, manifest];
     });
@@ -1113,11 +1147,10 @@ export default function TerminalShell({
           const prefs = JSON.parse(saved);
           const loadedDetails: string[] = [];
 
-          if (prefs.theme && THEMES[prefs.theme as ThemeMode]) {
-            onThemeChange(prefs.theme as ThemeMode);
-            loadedDetails.push(
-              `Theme: ${THEMES[prefs.theme as ThemeMode].name}`
-            );
+          if (prefs.theme) {
+            const themeKey = resolveThemeKey(prefs.theme);
+            onThemeChange(themeKey);
+            loadedDetails.push(`Theme: ${THEMES[themeKey].name}`);
           }
 
           if (prefs.rpcProviders) setRpcProviders(prefs.rpcProviders);
@@ -1708,7 +1741,7 @@ export default function TerminalShell({
 
       if (!pairAddress || pairAddress === NATIVE_TOKEN_ADDRESS) {
         return (
-          <div className="text-yellow-400 my-2 p-3 border border-yellow-900/50 bg-yellow-950/30 rounded max-w-md text-xs">
+          <div className={`${theme.warn} my-2 p-3 border ${theme.rounded} max-w-md text-xs`}>
             <div className="font-bold mb-1">NO POOL FOUND</div>
             <div>
               No {activeDex.type} pool exists for {tokenA.symbol}/
@@ -2530,27 +2563,26 @@ export default function TerminalShell({
       return { id: generateId(), type: "text", text: dexText };
     },
     theme: (args) => {
-      const themeKeys = Object.keys(THEMES) as ThemeMode[];
+      const list = THEME_ORDER.map(
+        (k) => `${k === currentThemeKey ? "*" : " "} ${k}`
+      ).join("\n");
       if (!args[1]) {
         return {
           id: generateId(),
           type: "text",
-          text: `Active Theme: ${theme.name}.\nAvailable themes: ${themeKeys.join(", ")}`
+          text: `Active Theme: ${theme.name}.\n${list}`
         };
       }
 
-      const input = args[1].toLowerCase();
-      const targetThemeKey =
-        (themeKeys.find((k) => k.toLowerCase() === input) as ThemeMode) ||
-        (input as ThemeMode);
-      if (!THEMES[targetThemeKey]) {
+      if (!isKnownThemeInput(args[1])) {
         return {
           id: generateId(),
           type: "text",
-          text: `[!] Error: Theme "${args[1]}" not found.\nAvailable themes: ${themeKeys.join(", ")}`
+          text: `[!] Error: Theme "${args[1]}" not found.\n${list}`
         };
       }
 
+      const targetThemeKey = resolveThemeKey(args[1]);
       handleThemeSwitch(targetThemeKey);
       return {
         id: generateId(),
@@ -3289,11 +3321,8 @@ export default function TerminalShell({
 
         if (data.preferences) {
           localStorage.setItem(userKey, JSON.stringify(data.preferences));
-          if (
-            data.preferences.theme &&
-            THEMES[data.preferences.theme as ThemeMode]
-          ) {
-            onThemeChange(data.preferences.theme as ThemeMode);
+          if (data.preferences.theme) {
+            onThemeChange(resolveThemeKey(data.preferences.theme));
           }
           if (data.preferences.rpcProviders)
             setRpcProviders(data.preferences.rpcProviders);
@@ -3715,7 +3744,7 @@ export default function TerminalShell({
               <div>
                 <div className={`text-[10px] ${theme.text}/50`}>24H CHANGE</div>
                 <div
-                  className={`text-base font-bold ${h24 >= 0 ? "text-green-400" : "text-red-400"}`}
+                  className={`text-base font-bold ${h24 >= 0 ? theme.primary : "text-red-400"}`}
                 >
                   {h24 !== undefined ? `${h24 > 0 ? "+" : ""}${h24}%` : "N/A"}
                 </div>
@@ -4196,6 +4225,7 @@ export default function TerminalShell({
             value: txValue
           }}
           approvalAddress={approvalAddress}
+          theme={theme}
         />
       );
 
@@ -4994,7 +5024,7 @@ export default function TerminalShell({
     const userLog: LogEntry = {
       id: generateId(),
       type: "input",
-      text: `$ ${trimmed}`
+      text: `${theme.promptSymbol || ">"} ${trimmed}`
     };
 
     setLogs((prev) => [...prev, userLog].slice(-MAX_LOGS));
@@ -5194,7 +5224,7 @@ export default function TerminalShell({
           (command === "theme" || command === "style") &&
           currentArgIdx === 1
         ) {
-          candidates = Object.keys(THEMES);
+          candidates = [...THEME_ORDER];
 
           // 3. Tokens Command
         } else if (command === "tokens" && currentArgIdx === 1) {
@@ -5410,13 +5440,19 @@ export default function TerminalShell({
   return (
     <div
       className={`relative z-10 w-full h-full flex flex-col cursor-text overflow-hidden transition-all duration-300 ${theme.bg} ${theme.text} ${theme.font}`}
+      style={{
+        ["--phosphor" as string]: theme.phosphor,
+        ["--scanline-alpha" as string]: theme.scanlineAlpha,
+        ["--grid-color" as string]: theme.gridColor
+      }}
     >
-      {/* EXCLUSIVE SCANLINE OVERLAY */}
-      {currentThemeKey === "matrix" && (
-        <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.35)_50%)] bg-[length:100%_4px] opacity-70 z-20"></div>
-      )}
-      {currentThemeKey === "bloomberg" && (
-        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(#ffb000_1px,transparent_1px)] [background-size:16px_16px] opacity-10 z-20"></div>
+      {theme.hasScanlines && <div className="crt-scanlines" />}
+      {theme.hasGrid && (
+        <div
+          className={
+            currentThemeKey === "teletype" ? "term-grid-bars" : "term-grid"
+          }
+        />
       )}
 
       {/* TOP HEADER BAR */}
@@ -5424,11 +5460,13 @@ export default function TerminalShell({
         theme={theme}
         currentThemeKey={currentThemeKey}
         onThemeChange={handleThemeSwitch}
+        onCommand={handleCommand}
+        chainName={SUPPORTED_CHAINS.find((c) => c.id === activeChainId)?.name}
       />
 
       {/* TERMINAL CONTENT CONTAINER */}
       <div
-        className="flex-1 flex flex-col p-6 pt-20 overflow-hidden relative z-10"
+        className={`flex-1 flex flex-col px-6 pb-6 ${HEADER_PAD[theme.headerStyle]} overflow-hidden relative z-10`}
         onClick={() => inputRef.current?.focus()}
       >
         <div

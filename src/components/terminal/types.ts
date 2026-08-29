@@ -7,23 +7,24 @@
 import type React from 'react'
 import type { Address, Chain } from 'viem'
 
+export type HeaderStyle =
+  | 'crt'
+  | 'bloomberg'
+  | 'macintosh'
+  | 'ibm'
+  | 'dos'
+  | 'teletype'
+  | 'void'
+
 export type ThemeMode =
   | 'matrix'
-  | 'mac'
+  | 'amber'
+  | 'ibm3270'
   | 'bloomberg'
-  | 'whatsapp'
-  | 'oneDark'
-  | 'dracula'
-  | 'monokai'
-  | 'githubDark'
-  | 'tokyoNight'
-  | 'catppuccin'
-  | 'nord'
-  | 'gruvbox'
-  | 'ristretto'
-  | 'rosePine'
-  | 'kanagawa'
-  | 'vantablack'
+  | 'macintosh'
+  | 'dos'
+  | 'teletype'
+  | 'void'
 
 export type LogEntry = {
   id: string
@@ -95,7 +96,12 @@ export type ThemeConfig = {
   font: string
   rounded: string
   promptSymbol: string
-  headerStyle: 'matrix' | 'mac' | 'bloomberg' | 'whatsapp'
+  headerStyle: HeaderStyle
   hasScanlines: boolean
   hasGrid: boolean
+  warn: string
+  muted: string
+  phosphor: string
+  scanlineAlpha: string
+  gridColor: string
 }

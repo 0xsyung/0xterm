@@ -9,6 +9,7 @@
 import React, { useState, useEffect } from "react";
 import { useSendTransaction, useWriteContract, usePublicClient } from "wagmi";
 import { formatUnits, parseAbi, type Address, type Chain } from "viem";
+import type { ThemeConfig } from "./types";
 
 const erc20Abi = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
@@ -39,6 +40,7 @@ type SwapWidgetProps = {
   };
   approvalAddress?: Address;
   estimatedGasUsd?: string;
+  theme: ThemeConfig;
 };
 
 export default function SwapWidget({
@@ -53,7 +55,8 @@ export default function SwapWidget({
   slippagePct = 0.5,
   transactionRequest,
   approvalAddress,
-  estimatedGasUsd
+  estimatedGasUsd,
+  theme
 }: SwapWidgetProps) {
   const [status, setStatus] = useState<
     | "idle"
@@ -185,41 +188,41 @@ export default function SwapWidget({
   };
 
   return (
-    <div className="my-2 p-4 border border-[#00ff66]/50 bg-[#001105]/90 rounded max-w-lg matrix-glow text-xs space-y-3">
-      <div className="flex justify-between items-center border-b border-[#00ff66]/20 pb-2">
-        <span className="font-bold text-[#00ff66]">
+    <div className={`my-2 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} max-w-lg text-xs space-y-3`}>
+      <div className={`flex justify-between items-center border-b ${theme.border} pb-2`}>
+        <span className={`font-bold ${theme.primary}`}>
           DEX SWAP ROUTE [AGGREGATED]
         </span>
-        <span className="text-[#00ff66]/70">
+        <span className={theme.muted}>
           {targetChain.name.toUpperCase()}
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-[#00ff66]/90 font-mono">
+      <div className={`grid grid-cols-2 gap-2 ${theme.text} font-mono`}>
         <div>
-          <div className="text-[10px] text-[#00ff66]/50">YOU PAY</div>
-          <div className="text-base font-bold text-[#00ff66]">
+          <div className={`text-[10px] ${theme.muted}`}>YOU PAY</div>
+          <div className={`text-base font-bold ${theme.primary}`}>
             {fromAmountFormatted} {fromToken.symbol}
           </div>
         </div>
         <div>
-          <div className="text-[10px] text-[#00ff66]/50">EXPECTED OUTPUT</div>
-          <div className="text-base font-bold text-[#00ff66]">
+          <div className={`text-[10px] ${theme.muted}`}>EXPECTED OUTPUT</div>
+          <div className={`text-base font-bold ${theme.primary}`}>
             ≈ {toAmountFormatted} {toToken.symbol}
           </div>
         </div>
       </div>
 
       {estimatedGasUsd && (
-        <div className="text-[11px] text-[#00ff66]/60 border-t border-[#00ff66]/10 pt-2 flex justify-between">
+        <div className={`text-[11px] ${theme.muted} border-t ${theme.border} pt-2 flex justify-between`}>
           <span>ESTIMATED NETWORK FEE:</span>
-          <span className="text-[#00ff66] font-bold">${estimatedGasUsd}</span>
+          <span className={`font-bold ${theme.primary}`}>${estimatedGasUsd}</span>
         </div>
       )}
 
-      <div className="text-[11px] text-[#00ff66]/60 border-t border-[#00ff66]/10 pt-2 flex justify-between">
+      <div className={`text-[11px] ${theme.muted} border-t ${theme.border} pt-2 flex justify-between`}>
         <span>SLIPPAGE TOLERANCE:</span>
-        <span className="text-[#00ff66] font-bold">
+        <span className={`font-bold ${theme.primary}`}>
           {slippagePct}%
           {amountOutMin > 0n && (
             <span className="ml-2 opacity-70">
@@ -236,7 +239,7 @@ export default function SwapWidget({
       )}
 
       {status === "success" && txHash && (
-        <div className="p-2 border border-emerald-500/50 bg-emerald-950/40 text-emerald-400 rounded space-y-1">
+        <div className={`p-2 border ${theme.border} ${theme.cardBg} ${theme.primary} ${theme.rounded} space-y-1`}>
           <div className="font-bold">
             [✓] SWAP CONFIRMED ON-CHAIN SUCCESSFULLY!
           </div>
@@ -246,7 +249,7 @@ export default function SwapWidget({
               href={`${blockExplorer}/tx/${txHash}`}
               target="_blank"
               rel="noreferrer"
-              className="text-[10px] underline hover:text-emerald-300 block pt-0.5"
+              className={`text-[10px] underline hover:opacity-80 block pt-0.5 ${theme.primary}`}
             >
               View on {targetChain.name} Explorer ↗
             </a>
@@ -256,7 +259,7 @@ export default function SwapWidget({
 
       <div className="pt-2 flex gap-2">
         {status === "checking_approval" && (
-          <div className="text-[#00ff66]/60 animate-pulse">
+          <div className={`${theme.warn} animate-pulse`}>
             VERIFYING TOKEN ALLOWANCE...
           </div>
         )}
@@ -264,20 +267,20 @@ export default function SwapWidget({
         {status === "needs_approval" && (
           <button
             onClick={handleApprove}
-            className="px-3 py-1.5 border border-[#00ff66] bg-[#00ff66]/20 hover:bg-[#00ff66]/30 text-[#00ff66] font-bold rounded cursor-pointer transition-all"
+            className={`px-3 py-1.5 border ${theme.border} bg-current/20 hover:bg-current/30 ${theme.primary} font-bold ${theme.rounded} cursor-pointer transition-all`}
           >
             [ STEP 1/2: APPROVE {fromToken.symbol} ]
           </button>
         )}
 
         {status === "approving" && (
-          <div className="text-yellow-400 font-bold animate-pulse">
+          <div className={`${theme.warn} font-bold animate-pulse`}>
             APPROVING {fromToken.symbol} IN WALLET...
           </div>
         )}
 
         {status === "waiting_approval_confirmation" && (
-          <div className="text-yellow-400 font-bold animate-pulse">
+          <div className={`${theme.warn} font-bold animate-pulse`}>
             WAITING FOR APPROVAL CONFIRMATION ON-CHAIN...
           </div>
         )}
@@ -285,20 +288,20 @@ export default function SwapWidget({
         {status === "ready" && (
           <button
             onClick={handleExecuteSwap}
-            className="px-4 py-1.5 border border-[#00ff66] bg-[#00ff66]/30 hover:bg-[#00ff66]/50 text-[#00ff66] font-bold rounded cursor-pointer matrix-glow transition-all"
+            className={`px-4 py-1.5 border ${theme.border} bg-current/30 hover:bg-current/50 ${theme.primary} font-bold ${theme.rounded} cursor-pointer ${theme.glow} transition-all`}
           >
             [ EXECUTE SWAP ]
           </button>
         )}
 
         {status === "swapping" && (
-          <div className="text-yellow-400 font-bold animate-pulse">
+          <div className={`${theme.warn} font-bold animate-pulse`}>
             SIGN SWAP TRANSACTION IN WALLET...
           </div>
         )}
 
         {status === "waiting_swap_confirmation" && (
-          <div className="text-yellow-400 font-bold animate-pulse">
+          <div className={`${theme.warn} font-bold animate-pulse`}>
             WAITING FOR SWAP CONFIRMATION ON-CHAIN...
           </div>
         )}

@@ -21,245 +21,246 @@ import type { DexProtocol, ThemeConfig, ThemeMode } from './types'
 
 export const THEMES: Record<ThemeMode, ThemeConfig> = {
   matrix: {
-    name: 'Matrix Style',
+    name: 'Matrix',
     bg: 'bg-black',
     cardBg: 'bg-[#001105]/90',
-    text: 'text-[#00ff66]',
+    text: 'text-[#00cc52]',
     primary: 'text-[#00ff66]',
-    border: 'border-[#00ff66]/50',
-    glow: 'matrix-glow',
-    font: 'font-mono',
+    border: 'border-[#00ff66]/40',
+    glow: 'term-glow',
+    font: 'font-plex tracking-wide',
     rounded: 'rounded-none',
     promptSymbol: '>',
-    headerStyle: 'matrix',
+    headerStyle: 'crt',
     hasScanlines: true,
-    hasGrid: false
+    hasGrid: false,
+    warn: 'text-[#c8ff00] border-[#c8ff00]/50 bg-[#c8ff00]/10',
+    muted: 'text-[#00ff66]/45',
+    phosphor: '#00ff66',
+    scanlineAlpha: '0.15',
+    gridColor: 'transparent'
   },
-  mac: {
-    name: 'Mac Terminal',
-    bg: 'bg-[#1e1e1e]',
-    cardBg: 'bg-[#2d2d2d]/95',
-    text: 'text-[#f1f1f1]',
-    primary: 'text-[#38bdf8]',
-    border: 'border-neutral-700',
-    glow: 'shadow-2xl shadow-black/80 backdrop-blur-xl',
-    font: 'font-mono',
-    rounded: 'rounded-xl',
+  amber: {
+    name: 'Amber',
+    bg: 'bg-[#0a0800]',
+    cardBg: 'bg-[#140f00]/92',
+    text: 'text-[#e09a00]',
+    primary: 'text-[#ffb000]',
+    border: 'border-[#ffb000]/45',
+    glow: 'term-glow',
+    font: 'font-plex tracking-wide',
+    rounded: 'rounded-none',
     promptSymbol: '>',
-    headerStyle: 'mac',
-    hasScanlines: false,
-    hasGrid: false
+    headerStyle: 'crt',
+    hasScanlines: true,
+    hasGrid: false,
+    warn: 'text-[#ff6a00] border-[#ff6a00]/50 bg-[#ff6a00]/10',
+    muted: 'text-[#ffb000]/45',
+    phosphor: '#ffb000',
+    scanlineAlpha: '0.15',
+    gridColor: 'transparent'
+  },
+  ibm3270: {
+    name: 'IBM 3270',
+    bg: 'bg-black',
+    cardBg: 'bg-[#001018]/90',
+    text: 'text-[#7eeaea]',
+    primary: 'text-[#e8ffff]',
+    border: 'border-[#3dd6d6]/40',
+    glow: 'term-glow',
+    font: 'font-plex tracking-wider',
+    rounded: 'rounded-none',
+    promptSymbol: '►',
+    headerStyle: 'ibm',
+    hasScanlines: true,
+    hasGrid: false,
+    warn: 'text-[#f2e55c] border-[#f2e55c]/50 bg-[#f2e55c]/10',
+    muted: 'text-[#7eeaea]/45',
+    phosphor: '#7eeaea',
+    scanlineAlpha: '0.15',
+    gridColor: 'transparent'
   },
   bloomberg: {
-    name: 'Bloomberg Terminal',
-    bg: 'bg-[#0c0c0c]',
-    cardBg: 'bg-[#141414]',
-    text: 'text-[#ffb000]',
-    primary: 'text-[#ffb000]',
-    border: 'border-[#ffb000]/60',
-    glow: 'shadow-md shadow-[#ffb000]/20',
-    font: 'font-mono tracking-wider',
+    name: 'Bloomberg',
+    bg: 'bg-[#0a0a0a]',
+    cardBg: 'bg-[#121212]',
+    text: 'text-[#d49200]',
+    primary: 'text-[#FFA028]',
+    border: 'border-[#FFA028]/70',
+    glow: 'shadow-[0_0_0_1px_rgba(255,160,40,0.12)]',
+    font: 'font-plex tracking-widest uppercase text-[12px] leading-relaxed',
+    rounded: 'rounded-none',
+    promptSymbol: '■',
+    headerStyle: 'bloomberg',
+    hasScanlines: false,
+    hasGrid: true,
+    warn: 'text-[#ff5a36] border-[#ff5a36]/60 bg-[#ff5a36]/10',
+    muted: 'text-[#FFA028]/40',
+    phosphor: '#FFA028',
+    scanlineAlpha: '0',
+    gridColor: '#FFA028'
+  },
+  macintosh: {
+    name: 'Macintosh',
+    bg: 'bg-[#1d1d1d]',
+    cardBg: 'bg-[#2a2a2a]/95',
+    text: 'text-[#f0f0f0]',
+    primary: 'text-[#007AFF]',
+    border: 'border-white/10',
+    glow: 'shadow-2xl shadow-black/40',
+    font: 'font-mac',
+    rounded: 'rounded-[10px]',
+    promptSymbol: '$',
+    headerStyle: 'macintosh',
+    hasScanlines: false,
+    hasGrid: false,
+    warn: 'text-[#febc2e] border-[#febc2e]/50 bg-[#febc2e]/10',
+    muted: 'text-white/40',
+    phosphor: '#007AFF',
+    scanlineAlpha: '0',
+    gridColor: 'transparent'
+  },
+  dos: {
+    name: 'DOS',
+    bg: 'bg-[#0000aa]',
+    cardBg: 'bg-[#0000aa]',
+    text: 'text-[#aaaaaa]',
+    primary: 'text-[#ffff55]',
+    border: 'border-[#5555ff]',
+    glow: '',
+    font: 'font-plex text-[18px] leading-tight',
+    rounded: 'rounded-none',
+    promptSymbol: 'C>',
+    headerStyle: 'dos',
+    hasScanlines: false,
+    hasGrid: false,
+    warn: 'text-[#ff5555] border-[#ff5555]/70 bg-[#aa0000]',
+    muted: 'text-[#5555ff]',
+    phosphor: '#ffff55',
+    scanlineAlpha: '0',
+    gridColor: 'transparent'
+  },
+  teletype: {
+    name: 'Teletype',
+    bg: 'bg-[#F3F0E6]',
+    cardBg: 'bg-[#F3F0E6]/95',
+    text: 'text-[#21241C]',
+    primary: 'text-[#0d5c2e]',
+    border: 'border-[#21241C]/25',
+    glow: '',
+    font: 'font-plex',
     rounded: 'rounded-none',
     promptSymbol: '>',
-    headerStyle: 'bloomberg',
+    headerStyle: 'teletype',
     hasScanlines: false,
-    hasGrid: true
+    hasGrid: true,
+    warn: 'text-[#8a1f12] border-[#8a1f12]/40 bg-[#8a1f12]/10',
+    muted: 'text-[#21241C]/45',
+    phosphor: '#0d5c2e',
+    scanlineAlpha: '0',
+    gridColor: '#DCE7CF'
   },
-  whatsapp: {
-    name: 'WhatsApp Style',
-    bg: 'bg-[#0b141a]',
-    cardBg: 'bg-[#111b21]',
-    text: 'text-[#e9edef]',
-    primary: 'text-[#00a884]',
-    border: 'border-[#00a884]/30',
-    glow: 'shadow-lg shadow-black/60',
-    font: 'font-sans',
-    rounded: 'rounded-2xl',
-    promptSymbol: '>',
-    headerStyle: 'whatsapp',
+  void: {
+    name: 'Void',
+    bg: 'bg-black',
+    cardBg: 'bg-[#07070a]/95',
+    text: 'text-[#c8c8d0]',
+    primary: 'text-[#8eb4ff]',
+    border: 'border-white/10',
+    glow: '',
+    font: 'font-plex tracking-tight',
+    rounded: 'rounded-none',
+    promptSymbol: '›',
+    headerStyle: 'void',
     hasScanlines: false,
-    hasGrid: false
-  },
-  oneDark: {
-    name: 'One Dark Pro',
-    bg: 'bg-[#282c34]',
-    cardBg: 'bg-[#21252b]/95',
-    text: 'text-[#abb2bf]',
-    primary: 'text-[#61afef]',
-    border: 'border-[#528bff]/40',
-    glow: 'shadow-lg shadow-black/50',
-    font: 'font-mono',
-    rounded: 'rounded-lg',
-    promptSymbol: '>',
-    headerStyle: 'mac',
-    hasScanlines: false,
-    hasGrid: false
-  },
-  dracula: {
-    name: 'Dracula',
-    bg: 'bg-[#282a36]',
-    cardBg: 'bg-[#21222c]/95',
-    text: 'text-[#f8f8f2]',
-    primary: 'text-[#bd93f9]',
-    border: 'border-[#bd93f9]/40',
-    glow: 'shadow-lg shadow-[#bd93f9]/10',
-    font: 'font-mono',
-    rounded: 'rounded-lg',
-    promptSymbol: '>',
-    headerStyle: 'mac',
-    hasScanlines: false,
-    hasGrid: false
-  },
-  monokai: {
-    name: 'Monokai',
-    bg: 'bg-[#272822]',
-    cardBg: 'bg-[#1e1f1c]/95',
-    text: 'text-[#f8f8f2]',
-    primary: 'text-[#a6e22e]',
-    border: 'border-[#a6e22e]/40',
-    glow: 'shadow-lg shadow-black/50',
-    font: 'font-mono',
-    rounded: 'rounded-lg',
-    promptSymbol: '>',
-    headerStyle: 'matrix',
-    hasScanlines: false,
-    hasGrid: false
-  },
-  githubDark: {
-    name: 'GitHub Dark',
-    bg: 'bg-[#0d1117]',
-    cardBg: 'bg-[#161b22]/95',
-    text: 'text-[#e6edf3]',
-    primary: 'text-[#58a6ff]',
-    border: 'border-[#30363d]',
-    glow: 'shadow-lg shadow-black/50',
-    font: 'font-mono',
-    rounded: 'rounded-lg',
-    promptSymbol: '>',
-    headerStyle: 'mac',
-    hasScanlines: false,
-    hasGrid: false
-  },
-  tokyoNight: {
-    name: 'Tokyo Night',
-    bg: 'bg-[#1a1b26]',
-    cardBg: 'bg-[#16161e]/95',
-    text: 'text-[#a9b1d6]',
-    primary: 'text-[#7aa2f7]',
-    border: 'border-[#7aa2f7]/40',
-    glow: 'shadow-lg shadow-[#7aa2f7]/10',
-    font: 'font-mono',
-    rounded: 'rounded-lg',
-    promptSymbol: '>',
-    headerStyle: 'mac',
-    hasScanlines: false,
-    hasGrid: false
-  },
-  catppuccin: {
-    name: 'Catppuccin Mocha',
-    bg: 'bg-[#1e1e2e]',
-    cardBg: 'bg-[#181825]/95',
-    text: 'text-[#cdd6f4]',
-    primary: 'text-[#89b4fa]',
-    border: 'border-[#89b4fa]/40',
-    glow: 'shadow-lg shadow-[#f5c2e7]/5',
-    font: 'font-mono',
-    rounded: 'rounded-xl',
-    promptSymbol: '>',
-    headerStyle: 'mac',
-    hasScanlines: false,
-    hasGrid: false
-  },
-  nord: {
-    name: 'Nord',
-    bg: 'bg-[#2e3440]',
-    cardBg: 'bg-[#3b4252]/95',
-    text: 'text-[#d8dee9]',
-    primary: 'text-[#88c0d0]',
-    border: 'border-[#4c566a]',
-    glow: 'shadow-lg shadow-black/40',
-    font: 'font-mono',
-    rounded: 'rounded-lg',
-    promptSymbol: '>',
-    headerStyle: 'bloomberg',
-    hasScanlines: false,
-    hasGrid: false
-  },
-  gruvbox: {
-    name: 'Gruvbox Dark',
-    bg: 'bg-[#282828]',
-    cardBg: 'bg-[#32302f]/95',
-    text: 'text-[#ebdbb2]',
-    primary: 'text-[#fabd2f]',
-    border: 'border-[#fabd2f]/40',
-    glow: 'shadow-lg shadow-black/50',
-    font: 'font-mono',
-    rounded: 'rounded-lg',
-    promptSymbol: '>',
-    headerStyle: 'bloomberg',
-    hasScanlines: false,
-    hasGrid: false
-  },
-  ristretto: {
-    name: 'Ristretto (Omarchy default)',
-    bg: 'bg-[#2c2525]',
-    cardBg: 'bg-[#352d2d]/95',
-    text: 'text-[#e6d9db]',
-    primary: 'text-[#f38d70]',
-    border: 'border-[#f38d70]/40',
-    glow: 'shadow-lg shadow-[#f38d70]/10',
-    font: 'font-mono',
-    rounded: 'rounded-lg',
-    promptSymbol: '>',
-    headerStyle: 'mac',
-    hasScanlines: false,
-    hasGrid: false
-  },
-  rosePine: {
-    name: 'Rose Pine (Omarchy)',
-    bg: 'bg-[#191724]',
-    cardBg: 'bg-[#1f1d2e]/95',
-    text: 'text-[#e0def4]',
-    primary: 'text-[#ebbcba]',
-    border: 'border-[#ebbcba]/40',
-    glow: 'shadow-lg shadow-[#eb6f92]/10',
-    font: 'font-mono',
-    rounded: 'rounded-lg',
-    promptSymbol: '>',
-    headerStyle: 'mac',
-    hasScanlines: false,
-    hasGrid: false
-  },
-  kanagawa: {
-    name: 'Kanagawa (Omarchy)',
-    bg: 'bg-[#1f1f28]',
-    cardBg: 'bg-[#16161d]/95',
-    text: 'text-[#dcd7ba]',
-    primary: 'text-[#7e9cd8]',
-    border: 'border-[#7e9cd8]/40',
-    glow: 'shadow-lg shadow-[#938aa9]/10',
-    font: 'font-mono',
-    rounded: 'rounded-lg',
-    promptSymbol: '>',
-    headerStyle: 'mac',
-    hasScanlines: false,
-    hasGrid: false
-  },
-  vantablack: {
-    name: 'Vantablack (Omarchy)',
-    bg: 'bg-[#000000]',
-    cardBg: 'bg-[#0a0a0a]/95',
-    text: 'text-[#e5e5e5]',
-    primary: 'text-[#6ba8ff]',
-    border: 'border-[#2a2a2a]',
-    glow: 'shadow-lg shadow-black',
-    font: 'font-mono',
-    rounded: 'rounded-md',
-    promptSymbol: '>',
-    headerStyle: 'matrix',
-    hasScanlines: false,
-    hasGrid: false
+    hasGrid: false,
+    warn: 'text-[#e8c27a] border-[#e8c27a]/40 bg-[#e8c27a]/10',
+    muted: 'text-white/35',
+    phosphor: '#8eb4ff',
+    scanlineAlpha: '0',
+    gridColor: 'transparent'
   }
+}
+
+export const THEME_ORDER: ThemeMode[] = [
+  'matrix',
+  'amber',
+  'ibm3270',
+  'bloomberg',
+  'macintosh',
+  'dos',
+  'teletype',
+  'void'
+]
+
+export const THEME_ALIASES: Record<string, ThemeMode> = {
+  mac: 'macintosh',
+  vantablack: 'void',
+  whatsapp: 'matrix',
+  oneDark: 'void',
+  dracula: 'void',
+  monokai: 'matrix',
+  githubDark: 'void',
+  tokyoNight: 'void',
+  catppuccin: 'void',
+  nord: 'void',
+  gruvbox: 'bloomberg',
+  ristretto: 'macintosh',
+  rosePine: 'void',
+  kanagawa: 'void'
+}
+
+export const HEADER_PAD: Record<ThemeConfig['headerStyle'], string> = {
+  crt: 'pt-[40px]',
+  bloomberg: 'pt-[32px]',
+  macintosh: 'pt-[52px]',
+  ibm: 'pt-[24px]',
+  dos: 'pt-[22px]',
+  teletype: 'pt-[28px]',
+  void: 'pt-[32px]'
+}
+
+export const HEADER_TOP: Record<ThemeConfig['headerStyle'], string> = {
+  crt: 'top-[40px]',
+  bloomberg: 'top-[32px]',
+  macintosh: 'top-[52px]',
+  ibm: 'top-[24px]',
+  dos: 'top-[22px]',
+  teletype: 'top-[28px]',
+  void: 'top-[32px]'
+}
+
+export const HEADER_H: Record<ThemeConfig['headerStyle'], string> = {
+  crt: 'h-[40px]',
+  bloomberg: 'h-[32px]',
+  macintosh: 'h-[52px]',
+  ibm: 'h-[24px]',
+  dos: 'h-[22px]',
+  teletype: 'h-[28px]',
+  void: 'h-[32px]'
+}
+
+export function resolveThemeKey(raw?: string | null): ThemeMode {
+  if (!raw) return 'matrix'
+  if (Object.prototype.hasOwnProperty.call(THEMES, raw)) return raw as ThemeMode
+  if (Object.prototype.hasOwnProperty.call(THEME_ALIASES, raw)) {
+    return THEME_ALIASES[raw]
+  }
+  const lower = raw.toLowerCase()
+  const keyMatch = THEME_ORDER.find((k) => k.toLowerCase() === lower)
+  if (keyMatch) return keyMatch
+  const aliasKey = Object.keys(THEME_ALIASES).find(
+    (k) => k.toLowerCase() === lower
+  )
+  if (aliasKey) return THEME_ALIASES[aliasKey]
+  return 'matrix'
+}
+
+export function isKnownThemeInput(raw: string): boolean {
+  const lower = raw.toLowerCase()
+  if (THEME_ORDER.some((k) => k.toLowerCase() === lower)) return true
+  if (Object.keys(THEME_ALIASES).some((k) => k.toLowerCase() === lower)) return true
+  return Object.prototype.hasOwnProperty.call(THEMES, raw)
 }
 
 export const SUPPORTED_CHAINS: Chain[] = [

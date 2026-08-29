@@ -49,29 +49,29 @@ export default function TerminalPrompt({
         <div className="flex items-center gap-2">
           {mounted && isConnected && address ? (
             <span
-              className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 font-mono ${theme.primary}`}
+              className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 ${theme.primary}`}
             >
               WALLET: {address.slice(0, 6)}...{address.slice(-4)}
             </span>
           ) : (
-            <span className="px-2 py-0.5 rounded border border-yellow-500/50 bg-yellow-500/10 text-yellow-400 font-mono">
+            <span className={`px-2 py-0.5 rounded border ${theme.warn}`}>
               WALLET: DISCONNECTED (Type `connect`)
             </span>
           )}
           {chainObj ? (
             <span
-              className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 font-mono ${theme.primary}`}
+              className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 ${theme.primary}`}
             >
               NET: {chainObj.name}
             </span>
           ) : (
-            <span className="px-2 py-0.5 rounded border border-orange-500/50 bg-orange-500/10 text-orange-400 font-mono">
+            <span className={`px-2 py-0.5 rounded border ${theme.warn}`}>
               NET: NOT SELECTED (Type `networks`)
             </span>
           )}
           {activeDexObj && (
             <span
-              className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 font-mono ${theme.primary} hidden sm:inline-block`}
+              className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 ${theme.primary} hidden sm:inline-block`}
             >
               DEX: {activeDexObj.name}
             </span>
@@ -81,7 +81,13 @@ export default function TerminalPrompt({
 
       {/* LINE 2: Interactive Input Field */}
       <div className="flex items-center gap-2 relative">
-        <span className={`font-bold ${theme.primary} tracking-widest`}>$</span>
+        <span className={`font-bold ${theme.primary} tracking-widest`}>
+          {theme.promptSymbol === "■" ? (
+            <span className="inline-block text-[8px] leading-none">■</span>
+          ) : (
+            theme.promptSymbol
+          )}
+        </span>
         <input
           ref={inputRef}
           type="text"
@@ -89,7 +95,7 @@ export default function TerminalPrompt({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder='Type "help" to view available commands...'
-          className={`flex-1 bg-transparent outline-none font-mono text-xs ${theme.text} placeholder:opacity-40 placeholder:${theme.text}`}
+          className={`flex-1 bg-transparent outline-none text-xs ${theme.text} ${theme.muted.replace("text-", "placeholder:text-")}`}
           autoFocus
           spellCheck={false}
           autoComplete="off"
@@ -99,13 +105,13 @@ export default function TerminalPrompt({
       {/* LINE 3: Inline Suggestion Choices */}
       {suggestions.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap text-xs pb-0.5">
-          <span className="text-[9px] opacity-40 font-mono shrink-0">
+          <span className="text-[9px] opacity-40 shrink-0">
             CHOICES [← →]:
           </span>
           {suggestions.map((s, idx) => (
             <span
               key={s}
-              className={`px-2 py-0.5 rounded border font-mono whitespace-nowrap shrink-0 transition-colors ${
+              className={`px-2 py-0.5 rounded border whitespace-nowrap shrink-0 transition-colors ${
                 idx === suggestionIdx
                   ? `${theme.primary} bg-current/15 border-current font-bold`
                   : `${theme.border} ${theme.text} opacity-60`
