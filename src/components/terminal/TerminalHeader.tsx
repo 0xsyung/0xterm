@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from "react";
 import type { ThemeConfig, ThemeMode } from "./types";
-import { HEADER_HEIGHT, THEME_KEYS } from "./constants";
+import { HEADER_H, THEME_ORDER } from "./constants";
 
 function TermLogo({ size, className = "" }: { size: number; className?: string }) {
   return (
@@ -73,7 +73,7 @@ export default function TerminalHeader({
 }) {
   const [clock, setClock] = useState(() => formatClock(new Date()));
   const [stamp] = useState(() => formatStamp(new Date()));
-  const h = HEADER_HEIGHT[theme.headerStyle];
+  const hClass = HEADER_H[theme.headerStyle];
 
   useEffect(() => {
     if (theme.headerStyle !== "bloomberg") return;
@@ -82,16 +82,15 @@ export default function TerminalHeader({
   }, [theme.headerStyle]);
 
   const cycleTheme = () => {
-    const idx = THEME_KEYS.indexOf(currentThemeKey);
-    const next = THEME_KEYS[(idx + 1 + THEME_KEYS.length) % THEME_KEYS.length];
+    const idx = THEME_ORDER.indexOf(currentThemeKey);
+    const next = THEME_ORDER[(idx + 1 + THEME_ORDER.length) % THEME_ORDER.length];
     onThemeChange(next);
   };
 
   if (theme.headerStyle === "crt") {
     return (
       <div
-        className={`absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-3 rounded-none border-b ${theme.border}`}
-        style={{ height: h }}
+        className={`absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-3 rounded-none border-b ${theme.border} ${hClass}`}
       >
         <div className={`flex items-center gap-2 ${theme.primary}`}>
           <TermLogo size={20} />
@@ -112,8 +111,8 @@ export default function TerminalHeader({
     ];
     return (
       <div
-        className={`absolute top-0 left-0 right-0 z-30 flex items-center gap-4 px-3 ${theme.primary}`}
-        style={{ height: h, borderBottom: `2px solid ${theme.phosphor}` }}
+        className={`absolute top-0 left-0 right-0 z-30 flex items-center gap-4 px-3 ${theme.primary} ${hClass}`}
+        style={{ borderBottom: `2px solid ${theme.phosphor}` }}
       >
         <div className="flex items-center gap-3 shrink-0 uppercase text-[10px] tracking-widest">
           <span className="font-bold">0xTERM</span>
@@ -145,8 +144,7 @@ export default function TerminalHeader({
   if (theme.headerStyle === "macintosh") {
     return (
       <div
-        className="absolute top-0 left-0 right-0 z-30 flex items-center px-3 border-b border-white/10"
-        style={{ height: h }}
+        className={`absolute top-0 left-0 right-0 z-30 flex items-center px-3 border-b border-white/10 ${hClass}`}
       >
         <div className="flex items-center gap-1.5">
           <span
@@ -174,9 +172,8 @@ export default function TerminalHeader({
   if (theme.headerStyle === "ibm") {
     return (
       <div
-        className={`absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-2 ${theme.primary}`}
+        className={`absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-2 ${theme.primary} ${hClass}`}
         style={{
-          height: h,
           borderBottom: `1px solid color-mix(in srgb, ${theme.phosphor} 40%, transparent)`
         }}
       >
@@ -199,8 +196,8 @@ export default function TerminalHeader({
   if (theme.headerStyle === "dos") {
     return (
       <div
-        className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-2 text-[12px] font-bold tracking-wide"
-        style={{ height: h, background: "#aaaaaa", color: "#000000" }}
+        className={`absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-2 text-[12px] font-bold tracking-wide ${hClass}`}
+        style={{ background: "#aaaaaa", color: "#000000" }}
       >
         <span>0xTERM.EXE</span>
         <span>{theme.name}</span>
@@ -211,8 +208,7 @@ export default function TerminalHeader({
   if (theme.headerStyle === "teletype") {
     return (
       <div
-        className={`absolute top-0 left-0 right-0 z-30 flex items-center px-3 border-b ${theme.border}`}
-        style={{ height: h }}
+        className={`absolute top-0 left-0 right-0 z-30 flex items-center px-3 border-b ${theme.border} ${hClass}`}
       >
         <span className={`text-[11px] ${theme.primary}`}>
           0xTERM / {stamp}
@@ -224,8 +220,7 @@ export default function TerminalHeader({
   // void
   return (
     <div
-      className="absolute top-0 left-0 right-0 z-30 flex items-center gap-2 px-3 border-b border-white/10"
-      style={{ height: h }}
+      className={`absolute top-0 left-0 right-0 z-30 flex items-center gap-2 px-3 border-b border-white/10 ${hClass}`}
     >
       <span className={`${theme.primary} opacity-50`}>
         <TermLogo size={16} />

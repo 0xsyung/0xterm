@@ -95,7 +95,7 @@ export default function TerminalPrompt({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder='Type "help" to view available commands...'
-          className={`flex-1 bg-transparent outline-none font-mono text-xs ${theme.text} placeholder:opacity-40 ${theme.muted}`}
+          className={`flex-1 bg-transparent outline-none font-mono text-xs ${theme.text} ${theme.muted.replace("text-", "placeholder:text-")}`}
           autoFocus
           spellCheck={false}
           autoComplete="off"
