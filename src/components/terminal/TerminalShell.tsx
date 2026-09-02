@@ -3635,7 +3635,7 @@ export default function TerminalShell({
           return {
             id: generateId(),
             type: "text",
-            text: `On-chain pool error: ${err.message || err}`
+            text: `On-chain pool error: ${formatViemError(err)}`
           };
         }
       } else {
