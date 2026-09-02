@@ -58,7 +58,9 @@ export default function NetworksList({
                   </span>
                   <span
                     className={`text-[9px] px-1.5 py-0.5 rounded font-bold border ${
-                      isTestnet ? theme.warn : `${theme.border} ${theme.primary}`
+                      isTestnet
+                        ? `${theme.border} ${theme.muted}`
+                        : `${theme.border} ${theme.primary}`
                     }`}
                   >
                     {isTestnet ? "TESTNET" : "MAINNET"}
@@ -94,8 +96,8 @@ export default function NetworksList({
           );
         })}
       </div>
-      <div className={`text-[10px] ${theme.text}/60 pt-1`}>
-        💡 Tip: Use{" "}
+      <div className={`text-[10px] ${theme.muted} pt-1`}>
+        · Tip: Use{" "}
         <span className={`font-bold ${theme.primary}`}>
           network &lt;name|id&gt;
         </span>{" "}
