@@ -84,9 +84,9 @@ export default function TerminalPrompt({
       </div>
 
       {/* Boot copy: teaching lives on the prompt, not in the log (#4). */}
-      <div className={`text-[10px] leading-tight ${theme.muted}`}>
-        <div>0xTERM v1.5.0</div>
-        <div>type help · connect · networks · theme</div>
+      <div className="text-[10px] leading-tight">
+        <div className={theme.text}>0xTERM v1.5.0</div>
+        <div className={theme.muted}>type help · connect · networks · theme</div>
       </div>
 
       {/* LINE 2: Interactive Input Field */}
@@ -105,7 +105,7 @@ export default function TerminalPrompt({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder=""
-          className={`flex-1 bg-transparent outline-none text-xs ${theme.text}`}
+          className={`flex-1 bg-transparent outline-none text-xs ${theme.text} [caret-color:var(--phosphor)] [caret-shape:block]`}
           autoFocus
           spellCheck={false}
           autoComplete="off"
