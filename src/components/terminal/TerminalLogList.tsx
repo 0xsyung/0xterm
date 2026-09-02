@@ -105,7 +105,7 @@ function renderLog(
   // hashes, errors) have nothing to pin.
   return (
     <div className="relative group">
-      <div className={`${theme.text}/90`}>
+      <div className={log.warn ? theme.warn : `${theme.text}/90`}>
         {log.text}
         {log.componentData?.kind === "price" ? (
           <PriceCard data={log.componentData} theme={theme} />

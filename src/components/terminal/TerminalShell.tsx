@@ -1316,7 +1316,9 @@ export default function TerminalShell({
 
   // Detect whether an address is a valid ERC-20 or ERC-721 contract by probing
   // its interface (ERC-165) and core standard functions. Returns the verified
-  // type plus metadata, or null if it doesn't clearly match either standard.
+  // type plus metadata, null if the address clearly isn't a token, or
+  // { type: "error" } when a read failed so callers can distinguish "not a
+  // token" from "couldn't tell" (RPC down / rate-limited) instead of lying.
   const detectTokenType = async (
     address: Address,
     chain: Chain,
@@ -1324,11 +1326,36 @@ export default function TerminalShell({
   ): Promise<
     | { type: "erc20"; name: string; symbol: string; decimals: number }
     | { type: "erc721"; name: string; symbol: string }
+    | { type: "error" }
     | null
   > => {
     const client = getClient(chain);
 
-    // ERC-165 interface probe
+    // Known common tokens are already verified; skip the brittle probe so
+    // `info`/`is` work even when an RPC flake would fail a view read.
+    const commonToken = Object.values(COMMON_TOKENS[chain.id] || {}).find(
+      (t) => t.address.toLowerCase() === address.toLowerCase()
+    );
+    if (commonToken) {
+      return {
+        type: "erc20",
+        name: commonToken.name,
+        symbol: commonToken.symbol,
+        decimals: commonToken.decimals
+      };
+    }
+
+    // No code at this address (or getCode itself failed) → definitively not a
+    // contract, so report null / error instead of probing dead code.
+    let hasCode: boolean;
+    try {
+      hasCode = ((await client.getCode({ address })) ?? "0x").length > 0;
+    } catch {
+      return { type: "error" };
+    }
+    if (!hasCode) return null;
+
+    // ERC-165 interface probe (optional — many tokens don't implement it).
     let erc165 = false;
     try {
       erc165 = Boolean(
@@ -1415,71 +1442,116 @@ export default function TerminalShell({
       } catch {}
     }
 
-    // Fallback: probe core functions directly (many tokens lack ERC-165).
-    const erc721Candidates = hint === "erc20" ? [] : ["ownerOf", "tokenURI"];
-    for (const fn of erc721Candidates) {
-      try {
-        await client.readContract({
-          address,
-          abi: erc721Abi,
-          functionName: fn as any
-        });
-        let name = "",
-          symbol = "";
+    // ERC-721 probe: try ownerOf with a tokenId (never a no-arg call, which a
+    // proxy can answer with empty data and falsely look like a valid read).
+    if (hint !== "erc20") {
+      for (const tokenId of [0n, 1n]) {
         try {
-          const [n, s] = await Promise.all([
-            client.readContract({
-              address,
-              abi: erc721Abi,
-              functionName: "name"
-            }),
-            client.readContract({
-              address,
-              abi: erc721Abi,
-              functionName: "symbol"
-            })
-          ]);
-          name = String(n);
-          symbol = String(s);
+          await client.readContract({
+            address,
+            abi: erc721Abi,
+            functionName: "ownerOf",
+            args: [tokenId]
+          });
+          let name = "",
+            symbol = "";
+          try {
+            const [n, s] = await Promise.all([
+              client.readContract({
+                address,
+                abi: erc721Abi,
+                functionName: "name"
+              }),
+              client.readContract({
+                address,
+                abi: erc721Abi,
+                functionName: "symbol"
+              })
+            ]);
+            name = String(n);
+            symbol = String(s);
+          } catch {}
+          return { type: "erc721", name, symbol };
         } catch {}
-        return { type: "erc721", name, symbol };
-      } catch {}
+      }
     }
 
-    // ERC-20 fallback: totalSupply + decimals + symbol + name must all succeed
+    // ERC-20 probe: read each view independently. Require a core set
+    // (decimals + totalSupply or symbol) so a single flaky metadata read
+    // (name, or an RPC 429 on symbol) doesn't collapse the whole detection.
+    // name/symbol are optional metadata — bytes32 legacy tokens are handled by
+    // reading them and String()-ing the result.
+    let readError = false;
     if (hint !== "erc721") {
+      let decimals: number | undefined;
+      let total: bigint | undefined;
+      let symbol: string | undefined;
+      let name: string | undefined;
+
       try {
-        const [total, dec, sym, name] = await Promise.all([
-          client.readContract({
-            address,
-            abi: erc20FullAbi,
-            functionName: "totalSupply"
-          }),
-          client.readContract({
+        decimals = Number(
+          await client.readContract({
             address,
             abi: erc20FullAbi,
             functionName: "decimals"
-          }),
-          client.readContract({
+          })
+        );
+      } catch {
+        readError = true;
+      }
+      try {
+        total = (await client.readContract({
+          address,
+          abi: erc20FullAbi,
+          functionName: "totalSupply"
+        })) as bigint;
+      } catch {
+        readError = true;
+      }
+      try {
+        symbol = String(
+          await client.readContract({
             address,
             abi: erc20FullAbi,
             functionName: "symbol"
-          }),
-          client.readContract({
+          })
+        );
+      } catch {
+        readError = true;
+      }
+      try {
+        name = String(
+          await client.readContract({
             address,
             abi: erc20FullAbi,
             functionName: "name"
           })
-        ]);
+        );
+      } catch {
+        // name is optional metadata — a missing name must not count as a read
+        // failure or block detection of an otherwise valid ERC-20.
+      }
+
+      if (decimals !== undefined && total !== undefined) {
         return {
           type: "erc20",
-          name: String(name),
-          symbol: String(sym),
-          decimals: Number(dec)
+          name: name ?? "",
+          symbol: symbol ?? "TOKEN",
+          decimals
         };
-      } catch {
-        return null;
       }
+      if (decimals !== undefined && symbol !== undefined) {
+        return {
+          type: "erc20",
+          name: name ?? "",
+          symbol,
+          decimals
+        };
+      }
+
+      // At least one read failed on a contract that has code → tell the user
+      // the read failed rather than claiming it's not a token.
+      if (readError) return { type: "error" };
     }
     return null;
   };
@@ -2959,7 +3031,7 @@ export default function TerminalShell({
         );
       };
 
-      if (detected) {
+      if (detected && detected.type !== "error") {
         doRegister({
           name: detected.name,
           symbol: detected.symbol,
@@ -2969,7 +3041,10 @@ export default function TerminalShell({
         return null;
       }
 
-      // Invalid contract: ask for confirmation before registering anyway
+      // Invalid contract (or unreadable RPC): ask for confirmation before
+      // registering anyway. For an RPC read failure we say so — the address
+      // may still be a valid token.
+      const unreadable = detected?.type === "error";
       setPendingConfirm({
         onYes: () =>
           doRegister({
@@ -2994,7 +3069,10 @@ export default function TerminalShell({
       return {
         id: generateId(),
         type: "text",
-        text: `[!] Address ${tokenAddress} does not look like a valid ERC20/ERC721 contract on ${targetChain.name}. Register it anyway? (y/n)`
+        warn: unreadable,
+        text: unreadable
+          ? `[!] Could not verify ${tokenAddress} on ${targetChain.name} (RPC returned no data). It may still be a valid token. Register it anyway? (y/n)`
+          : `[!] Address ${tokenAddress} does not look like a valid ERC20/ERC721 contract on ${targetChain.name}. Register it anyway? (y/n)`
       };
     },
     is: async (args) => {
@@ -3214,6 +3292,13 @@ export default function TerminalShell({
 
       const tokenAddress = addrArg as Address;
       const detected = await detectTokenType(tokenAddress, targetChain);
+      if (detected?.type === "error")
+        return {
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text: `[!] On-chain read failed for ${tokenAddress} on ${targetChain.name}. The RPC returned no data — try again or check your RPC provider.`
+        };
       if (!detected)
         return {
           id: generateId(),
@@ -5077,6 +5162,7 @@ export default function TerminalShell({
           {
             id: generateId(),
             type: "text",
+            warn: true,
             text: formatViemError(err)
           } as LogEntry
         ].slice(-MAX_LOGS)
