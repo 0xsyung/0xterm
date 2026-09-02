@@ -643,6 +643,11 @@ export default function TerminalShell({
               ? DEXSCREENER_CHAIN[m.chainId]
               : undefined;
             const pair =
+              (cd.pairAddress &&
+                pairs.find(
+                  (p: any) =>
+                    p.pairAddress?.toLowerCase() === cd.pairAddress.toLowerCase()
+                )) ||
               pairs.find(
                 (p: any) =>
                   (!chainSlug || p.chainId.toLowerCase() === chainSlug) &&
@@ -1040,7 +1045,10 @@ export default function TerminalShell({
           }
         }
       } else {
-        // api mode: re-fetch DexScreener for the same pair query
+        // api mode: re-fetch DexScreener for the same pair. Persist the chain
+        // so refresh is scoped even if the user switches networks later.
+        base.chainId = activeChainId || undefined;
+        base.dexId = activeDexId || undefined;
         registerPinRefresh(log.id, async () => {
           const q = `${cd.tokenSymbol} ${cd.quoteSymbol}`;
           const res = await fetch(
@@ -1051,6 +1059,11 @@ export default function TerminalShell({
           const pairs: any[] = data.pairs || [];
           const chainSlug = DEXSCREENER_CHAIN[activeChainId || 0];
           const pair =
+            (cd.pairAddress &&
+              pairs.find(
+                (p: any) =>
+                  p.pairAddress?.toLowerCase() === cd.pairAddress.toLowerCase()
+              )) ||
             pairs.find(
               (p: any) =>
                 (!chainSlug || p.chainId.toLowerCase() === chainSlug) &&
@@ -3761,6 +3774,7 @@ export default function TerminalShell({
           componentData: {
             kind: "price",
             mode: "api",
+            pairAddress: pair.pairAddress,
             priceUsd,
             priceNative,
             tokenSymbol,
