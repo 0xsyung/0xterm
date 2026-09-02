@@ -1,6 +1,6 @@
 /**
  * @file PinnedPanel.tsx
- * @description Floating right-hand column of pinned widgets
+ * @description Right-hand (md+) / above-prompt (<md) column of pinned widgets
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
@@ -16,7 +16,6 @@ import ChatWidget from "./widgets/ChatWidget";
 import BillboardWidget from "./widgets/BillboardWidget";
 import PriceCard from "./widgets/PriceCard";
 import type { PinnedManifest, ThemeConfig } from "./types";
-import { HEADER_TOP } from "./constants";
 
 const REFRESH_INTERVAL = 60;
 
@@ -40,7 +39,7 @@ export default function PinnedPanel({
   if (pinned.length === 0) return null;
 
   return (
-    <div className={`absolute ${HEADER_TOP[theme.headerStyle]} right-2 bottom-14 w-72 overflow-y-auto z-30 space-y-2 pointer-events-none`}>
+    <div className="w-full md:w-72 md:justify-self-end max-h-[40vh] md:max-h-none md:h-full min-h-0 overflow-y-auto space-y-2">
       {pinned.map((p) => {
         const hasRefresh = countdowns && countdowns[p.id] !== undefined;
         const secs =
@@ -52,7 +51,7 @@ export default function PinnedPanel({
         return (
           <div
             key={p.id}
-            className={`pointer-events-auto border ${theme.border} ${theme.cardBg} ${theme.rounded} p-1.5 text-[10px] ${theme.text} backdrop-blur-md bg-black/40`}
+            className={`border ${theme.border} ${theme.cardBg} ${theme.rounded} p-1.5 text-[10px] ${theme.text}`}
           >
             <div
               className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-0.5 ${minimized ? "" : "mb-1"}`}
