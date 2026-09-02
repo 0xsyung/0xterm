@@ -30,6 +30,8 @@ export type LogEntry = {
   id: string
   type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'chat' | 'billboard' | 'component'
   text?: string
+  // Render plain text in the theme's warn color (failures, read errors).
+  warn?: boolean
   payload?: any
   component?: React.ReactNode
   title?: string
