@@ -18,10 +18,7 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://0xterm.xyz"),
   title: "0xterm",
-  description: "Matrix-style Web3 Terminal Interface",
-  alternates: {
-    canonical: "/"
-  }
+  description: "Matrix-style Web3 Terminal Interface"
 };
 
 export default function RootLayout({

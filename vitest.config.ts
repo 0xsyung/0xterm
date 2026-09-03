@@ -16,6 +16,8 @@ export default defineConfig({
       exclude: [
         // issue-authorized: bytecode blob, not worth testing
         "src/components/terminal/implementationBytecode.ts",
+        // static marketing page — pure presentational, no logic to cover
+        "src/app/page.tsx",
         "src/**/*.test.{ts,tsx}",
       ],
       thresholds: {

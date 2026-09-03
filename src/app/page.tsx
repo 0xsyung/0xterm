@@ -1,72 +1,210 @@
-/**
- * @file page.tsx
- * @description Home page entry
- * @license Proprietary / All Rights Reserved
- * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
- */
 "use client";
 
-import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { WagmiProvider } from "wagmi";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { config } from "@/config/wagmi";
-import type { ThemeMode } from "@/components/terminal/types";
 
-function Splash() {
+const CHAINS = [
+  "Ethereum",
+  "Base",
+  "Arbitrum",
+  "Optimism",
+  "Polygon",
+  "+ Sepolia testnets"
+];
+
+const FEATURES = [
+  {
+    title: "Wallet-native terminal",
+    desc: "Portfolio, balances, and P/L from a command line. No dashboard — just queries."
+  },
+  {
+    title: "On-chain tokens",
+    desc: "Register, probe, and track any ERC-20 across supported chains."
+  },
+  {
+    title: "Swap & deploy",
+    desc: "Execute swaps and deploy contracts without leaving the terminal."
+  },
+  {
+    title: "Portfolio snapshots",
+    desc: "Snapshot your holdings and compare P/L over time."
+  }
+];
+
+const COMMANDS = [
+  { cmd: "portfolio", desc: "list holdings across all chains" },
+  { cmd: "balance eth", desc: "read an on-chain balance" },
+  { cmd: "snapshot", desc: "save a P/L baseline" },
+  { cmd: "pnl", desc: "compare against a snapshot" },
+  { cmd: "is erc20 <addr>", desc: "probe ERC-20 / ERC-721" },
+  { cmd: "swap", desc: "swap tokens on-chain" }
+];
+
+function Scramble({ text }: { text: string }) {
+  const glyphs = "ABCDEF0123456789#%&*+=-";
+  const [display, setDisplay] = useState(text);
+
+  useEffect(() => {
+    let frame = 0;
+    const total = 24;
+    const interval = window.setInterval(() => {
+      frame++;
+      if (frame >= total) {
+        setDisplay(text);
+        window.clearInterval(interval);
+        return;
+      }
+      setDisplay(
+        text
+          .split("")
+          .map((ch, i) =>
+            ch === " " || ch === "—"
+              ? ch
+              : frame + i < total
+                ? glyphs[Math.floor(Math.random() * glyphs.length)]
+                : text[i]
+          )
+          .join("")
+      );
+    }, 40);
+    return () => window.clearInterval(interval);
+  }, [text]);
+
   return (
-    <div className="w-screen h-screen bg-black text-[#00ff66] font-mono flex flex-col items-center justify-center gap-4">
-      <img
-        src="/logo.svg"
-        alt="0xTERM"
-        className="h-14 w-14"
-        draggable={false}
-      />
-      <div>INITIALIZING 0xTERM</div>
-    </div>
+    <span
+      style={{ textShadow: "0 0 8px rgba(0,255,102,0.6), 0 0 20px rgba(0,255,102,0.2)" }}
+    >
+      {display}
+    </span>
   );
 }
 
-const TerminalShell = dynamic(
-  () => import("@/components/terminal/TerminalShell"),
-  { ssr: false }
-);
-
-const queryClient = new QueryClient();
-
-export default function Page() {
-  const [currentThemeKey, setCurrentThemeKey] = useState<ThemeMode>("matrix");
-  const [isRainActive, setIsRainActive] = useState(false);
-  const [shellReady, setShellReady] = useState(false);
-  const [minHoldDone, setMinHoldDone] = useState(false);
-
-  useEffect(() => {
-    const hold = window.setTimeout(() => setMinHoldDone(true), 1000);
-    import("@/components/terminal/TerminalShell").then(() => {
-      setShellReady(true);
-    });
-    return () => window.clearTimeout(hold);
-  }, []);
-
-  const toggleRain = () => setIsRainActive(!isRainActive);
-  const showSplash = !(shellReady && minHoldDone);
-
+export default function LandingPage() {
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <main className="w-screen h-screen overflow-hidden relative">
-          {showSplash && (
-            <div className="absolute inset-0 z-50">
-              <Splash />
+    <div
+      className="w-full min-h-screen h-full overflow-x-hidden overflow-y-auto bg-black text-[#00ff66] font-plex relative"
+      style={{ ["--phosphor" as string]: "#00ff66" }}
+    >
+      {/* phosphor grid backdrop */}
+      <div
+        className="absolute inset-0 z-0 pointer-events-none"
+        style={{
+          backgroundImage: "radial-gradient(rgba(0,255,102,0.12) 1px, transparent 1px)",
+          backgroundSize: "16px 16px"
+        }}
+      />
+      <div className="crt-scanlines" />
+      <div className="absolute inset-0 z-0 pointer-events-none bg-gradient-to-b from-transparent via-transparent to-black" />
+
+      <div className="relative z-10">
+        {/* nav */}
+        <header className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto w-full">
+          <div className="flex items-center gap-2">
+            <img src="/logo.svg" alt="0xTERM" className="h-6 w-6" draggable={false} />
+            <span className="font-bold tracking-widest">0XTERM</span>
+          </div>
+          <Link
+            href="/app"
+            className="border border-[#00ff66]/50 px-4 py-2 text-sm hover:bg-[#00ff66]/10 hover:border-[#00ff66] transition-colors"
+          >
+            Launch Terminal
+          </Link>
+        </header>
+
+        {/* hero */}
+        <section className="px-6 max-w-6xl mx-auto w-full pt-16 pb-12">
+          <p className="text-xs tracking-[0.3em] opacity-70 mb-4">
+            WEB3 TERMINAL INTERFACE
+          </p>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mb-6">
+            <Scramble text="YOUR PORTFOLIO," />
+            <br />
+            <Scramble text="FROM THE COMMAND LINE." />
+          </h1>
+          <p className="max-w-xl opacity-80 leading-relaxed mb-8">
+            0xterm is a Matrix-style Web3 terminal. Connect a wallet, then type
+            your way across chains — portfolio, balances, swaps, and contract
+            probes, all in a keyboard-first interface.
+          </p>
+          <div className="flex flex-wrap gap-4">
+            <Link
+              href="/app"
+              className="bg-[#00ff66] text-black font-bold px-6 py-3 hover:bg-[#00ff66]/90 transition-colors"
+            >
+              [ Launch Terminal ]
+            </Link>
+            <a
+              href="#commands"
+              className="border border-[#00ff66]/50 px-6 py-3 hover:bg-[#00ff66]/10 transition-colors"
+            >
+              Commands
+            </a>
+          </div>
+        </section>
+
+        {/* features */}
+        <section className="px-6 max-w-6xl mx-auto w-full py-12 border-t border-[#00ff66]/20">
+          <h2 className="text-sm tracking-[0.3em] opacity-70 mb-8">FEATURES</h2>
+          <div className="grid sm:grid-cols-2 gap-6">
+            {FEATURES.map((f) => (
+              <div key={f.title} className="border border-[#00ff66]/20 p-6">
+                <h3 className="font-bold mb-2">{f.title}</h3>
+                <p className="opacity-70 text-sm leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* chains */}
+        <section className="px-6 max-w-6xl mx-auto w-full py-12 border-t border-[#00ff66]/20">
+          <h2 className="text-sm tracking-[0.3em] opacity-70 mb-4">CHAINS</h2>
+          <div className="flex flex-wrap gap-3">
+            {CHAINS.map((c) => (
+              <span
+                key={c}
+                className="border border-[#00ff66]/30 px-3 py-1 text-sm"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        </section>
+
+        {/* commands */}
+        <section
+          id="commands"
+          className="px-6 max-w-6xl mx-auto w-full py-12 border-t border-[#00ff66]/20"
+        >
+          <h2 className="text-sm tracking-[0.3em] opacity-70 mb-8">TRY IT</h2>
+          <div className="border border-[#00ff66]/30">
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-[#00ff66]/30 text-xs opacity-60">
+              <span className="w-2 h-2 rounded-full bg-[#00ff66]/40" />
+              <span>0xterm — type a command</span>
             </div>
-          )}
-          <TerminalShell
-            onToggleRain={toggleRain}
-            currentThemeKey={currentThemeKey}
-            onThemeChange={setCurrentThemeKey}
-          />
-        </main>
-      </QueryClientProvider>
-    </WagmiProvider>
+            <div className="p-4 space-y-2">
+              {COMMANDS.map((c) => (
+                <div
+                  key={c.cmd}
+                  className="flex flex-col md:flex-row md:items-baseline gap-1 md:gap-4 text-sm"
+                >
+                  <span className="text-black bg-[#00ff66] px-2 font-bold w-fit">
+                    {c.cmd}
+                  </span>
+                  <span className="opacity-70 min-w-0">{c.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* footer */}
+        <footer className="px-6 max-w-6xl mx-auto w-full py-8 border-t border-[#00ff66]/20 text-xs opacity-50 flex flex-wrap justify-between gap-2">
+          <span>© 2026 0XTERM</span>
+          <Link href="/app" className="hover:opacity-80">
+            Launch the terminal
+          </Link>
+        </footer>
+      </div>
+    </div>
   );
 }
