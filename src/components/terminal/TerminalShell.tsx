@@ -72,6 +72,7 @@ import { formatViemError } from "../../lib/viemError";
 import { migrateCustomTokens, pricePinKey } from "./helpers";
 import { detectTokenType } from "./tokenType";
 import { getNativePriceUsd, getTokenPriceUsd } from "./pricing";
+import { fetchPortfolioHoldings as fetchPortfolioHoldingsImpl } from "./portfolio";
 import {
   resolveTokenDetails as resolveTokenDetailsImpl,
   resolveWithPreferred as resolveWithPreferredImpl,
@@ -101,10 +102,7 @@ import type {
   CustomTokenEntry,
   CustomTokensMap
 } from "./types";
-import PortfolioWidget, {
-  type PortfolioHolding,
-  type SnapshotHolding
-} from "./widgets/PortfolioWidget";
+import PortfolioWidget, { type SnapshotHolding } from "./widgets/PortfolioWidget";
 import { trackEvent } from "../../lib/analytics";
 import DeployWidget from "./widgets/DeployWidget";
 import PinnedPanel from "./PinnedPanel";
@@ -1619,99 +1617,13 @@ export default function TerminalShell({
   // Reusable holdings builder for `portfolio` (and pinned-portfolio refresh).
   // Reads native + registered (COMMON_TOKENS + custom) token balances across
   // all chains, pricing via getTokenPriceUsd.
-  const fetchPortfolioHoldings = async (
+  const fetchPortfolioHoldings = (
     userAddress: Address,
     filterType?: string
-  ): Promise<PortfolioHolding[]> => {
-    const holdings: PortfolioHolding[] = [];
-
-    for (const chain of SUPPORTED_CHAINS) {
-      const client = getClient(chain);
-      let nativeBal = 0n;
-      try {
-        nativeBal = await client.getBalance({ address: userAddress });
-      } catch {
-        nativeBal = 0n;
-      }
-
-      const nativePrice = await getTokenPriceUsd(
-        chain,
-        chain.nativeCurrency.symbol,
-        (WRAPPED_NATIVE[chain.id] || NATIVE_TOKEN_ADDRESS) as Address,
-        true,
-        client
-      );
-      const nativeBalance = formatEther(nativeBal);
-      const nativeValue =
-        nativePrice !== null ? nativePrice * parseFloat(nativeBalance) : null;
-
-      if (filterType !== "erc20") {
-        holdings.push({
-          chainName: chain.name,
-          chainId: chain.id,
-          symbol: chain.nativeCurrency.symbol,
-          type: "native",
-          balance: nativeBalance,
-          priceUsd: nativePrice,
-          valueUsd: nativeValue,
-          change24h: null,
-          priceSource: nativePrice !== null ? "api" : "—",
-          isTestnet: !!chain.testnet
-        });
-      }
-
-      // Custom-first view merged by address: every custom entry (including
-      // duplicate symbols), plus COMMON_TOKENS entries not shadowed by a
-      // custom token at the same address.
-      const customList = customTokens[chain.id] || [];
-      const commonMap = COMMON_TOKENS[chain.id] || {};
-      const customAddrs = new Set(
-        customList.map((t) => t.address.toLowerCase())
-      );
-      const view = [
-        ...customList,
-        ...Object.values(commonMap).filter(
-          (c) => !customAddrs.has(c.address.toLowerCase())
-        )
-      ];
-      for (const info of view) {
-        if (filterType === "native") continue;
-        if (info.address === NATIVE_TOKEN_ADDRESS) continue;
-        const addr = info.address as Address;
-        const symbol = info.symbol;
-        try {
-          const bal = (await client.readContract({
-            address: addr,
-            abi: erc20Abi,
-            functionName: "balanceOf",
-            args: [userAddress]
-          })) as bigint;
-          const decimals = info.decimals ?? 18;
-          const formatted = formatUnits(bal, decimals);
-          if (parseFloat(formatted) === 0) continue;
-
-          const price = await getTokenPriceUsd(chain, symbol, addr, false, client);
-          holdings.push({
-            chainName: chain.name,
-            chainId: chain.id,
-            symbol,
-            type: "erc20",
-            address: addr,
-            balance: formatted,
-            priceUsd: price,
-            valueUsd: price !== null ? price * parseFloat(formatted) : null,
-            change24h: null,
-            priceSource: price !== null ? "api" : "—",
-            isTestnet: !!chain.testnet
-          });
-        } catch {
-          // skip tokens that fail to read (e.g. non-ERC20 or wrong chain)
-        }
-      }
-    }
-
-    return holdings;
-  };
+  ) =>
+    fetchPortfolioHoldingsImpl(userAddress, customTokens, filterType, {
+      getClient
+    });
 
   // --- new-message poller ----------------------------------------------
   // Background check every 60s for unread chat messages. When a new message is

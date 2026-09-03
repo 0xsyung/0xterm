@@ -1,0 +1,124 @@
+/**
+ * @file portfolio.test.ts
+ * @description Unit tests for portfolio holdings builder
+ * @license Proprietary / All Rights Reserved
+ * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
+ */
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Address, PublicClient } from "viem";
+import { base } from "viem/chains";
+import { fetchPortfolioHoldings, type FetchPortfolioDeps } from "./portfolio";
+import { NATIVE_TOKEN_ADDRESS, SUPPORTED_CHAINS } from "./constants";
+import type { CustomTokensMap } from "./types";
+
+const USER = "0x1111111111111111111111111111111111111111" as Address;
+const TOKEN = "0x2222222222222222222222222222222222222222" as Address;
+
+const jsonRes = (body: any) => ({ ok: true, json: async () => body });
+
+function mockClient(overrides: {
+  getBalance?: (args: any) => Promise<any>;
+  readContract?: (args: any) => Promise<any>;
+} = {}): PublicClient {
+  return {
+    getBalance: vi.fn(overrides.getBalance ?? (async () => 1n)),
+    readContract: vi.fn(overrides.readContract ?? (async () => 100n))
+  } as unknown as PublicClient;
+}
+
+function deps(overrides: Partial<FetchPortfolioDeps> = {}): FetchPortfolioDeps {
+  return {
+    getClient: vi.fn(() => mockClient()),
+    // Avoid real network: pricing falls through to null without a matching pair.
+    fetchImpl: (vi.fn(async () => jsonRes({ pairs: [] })) as unknown) as typeof fetch,
+    ...overrides
+  };
+}
+
+function oneTokenMap(): CustomTokensMap {
+  return {
+    [base.id]: [
+      { id: "c_tok", address: TOKEN, symbol: "FOO", name: "Foo", decimals: 6, isNative: false }
+    ]
+  };
+}
+
+beforeEach(() => {
+  vi.resetModules();
+});
+
+describe("fetchPortfolioHoldings", () => {
+  it("includes a native holding for every supported chain", async () => {
+    const d = deps();
+    const res = await fetchPortfolioHoldings(USER, {}, undefined, d);
+    const natives = res.filter((h) => h.type === "native");
+    expect(natives.length).toBe(SUPPORTED_CHAINS.length);
+    for (const h of natives) {
+      expect(h.balance).not.toBe("");
+      expect(h.symbol).toBeTruthy();
+    }
+  });
+
+  it("reads a custom token balance and formats it", async () => {
+    const client = mockClient({ readContract: async () => 1000n });
+    const d = deps({ getClient: vi.fn(() => client) });
+    const res = await fetchPortfolioHoldings(USER, oneTokenMap(), "erc20", d);
+    const foo = res.find((h) => h.symbol === "FOO");
+    expect(foo).toBeDefined();
+    expect(foo!.balance).toBe("0.001"); // 1000 / 1e6
+    expect(foo!.type).toBe("erc20");
+    expect(foo!.address).toBe(TOKEN);
+  });
+
+  it("skips zero-balance tokens", async () => {
+    const client = mockClient({ readContract: async () => 0n });
+    const d = deps({ getClient: vi.fn(() => client) });
+    const res = await fetchPortfolioHoldings(USER, oneTokenMap(), "erc20", d);
+    expect(res.find((h) => h.symbol === "FOO")).toBeUndefined();
+  });
+
+  it("respects the native filter", async () => {
+    const client = mockClient({ readContract: async () => 100n });
+    const d = deps({ getClient: vi.fn(() => client) });
+    const res = await fetchPortfolioHoldings(USER, oneTokenMap(), "native", d);
+    for (const h of res) expect(h.type).toBe("native");
+  });
+
+  it("respects the erc20 filter (excludes native)", async () => {
+    const client = mockClient({ readContract: async () => 100n });
+    const d = deps({ getClient: vi.fn(() => client) });
+    const res = await fetchPortfolioHoldings(USER, oneTokenMap(), "erc20", d);
+    for (const h of res) expect(h.type).toBe("erc20");
+  });
+
+  it("merges COMMON_TOKENS entries not shadowed by a custom token", async () => {
+    const client = mockClient({ readContract: async () => 100n });
+    const d = deps({ getClient: vi.fn(() => client) });
+    const res = await fetchPortfolioHoldings(USER, {}, "erc20", d);
+    expect(res.some((h) => h.symbol === "USDC")).toBe(true);
+  });
+
+  it("skips the zero-address custom entry", async () => {
+    const client = mockClient({ readContract: async () => 100n });
+    const d = deps({ getClient: vi.fn(() => client) });
+    const map: CustomTokensMap = {
+      [base.id]: [
+        { id: "c_zero", address: NATIVE_TOKEN_ADDRESS as Address, symbol: "ZERO", name: "Zero", decimals: 18, isNative: false }
+      ]
+    };
+    const res = await fetchPortfolioHoldings(USER, map, undefined, d);
+    expect(res.some((h) => h.symbol === "ZERO")).toBe(false);
+  });
+
+  it("uses a fetched price for value when available", async () => {
+    const client = mockClient({ readContract: async () => 1_000_000n }); // 1 FOO (decimals 6)
+    const fetchImpl = (vi.fn(async () =>
+      jsonRes({ pairs: [{ chainId: "base", baseToken: { symbol: "FOO", address: TOKEN }, priceUsd: "5" }] })
+    ) as unknown) as typeof fetch;
+    const d = deps({ getClient: vi.fn(() => client), fetchImpl });
+    const res = await fetchPortfolioHoldings(USER, oneTokenMap(), "erc20", d);
+    const foo = res.find((h) => h.symbol === "FOO");
+    expect(foo!.priceUsd).toBe(5);
+    expect(foo!.valueUsd).toBe(5);
+  });
+});
