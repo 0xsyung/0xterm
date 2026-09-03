@@ -82,6 +82,7 @@ import {
   resolveWithPreferred as resolveWithPreferredImpl,
   resolveWithPreferredDecimals as resolveWithPreferredDecimalsImpl
 } from "./resolveToken";
+import { buildTokenArgCandidates, isTokenArgPosition } from "./autocomplete";
 import {
   deriveKeysFromSignature,
   deriveAesKey,
@@ -4765,72 +4766,21 @@ export default function TerminalShell({
           candidates = ["erc20", "erc721"];
 
           // 10. Standard Token Resolution
-        } else {
-          let isTokenArg = false;
-          if (
-            command === "swap" &&
-            (currentArgIdx === 2 || currentArgIdx === 3)
-          )
-            isTokenArg = true;
-          if (
-            [
-              "addliq",
-              "provideliq",
-              "createpool",
-              "initialize",
-              "initpool",
-              "getpool",
-              "findpool",
-              "price"
-            ].includes(command) &&
-            (currentArgIdx === 1 || currentArgIdx === 2)
-          )
-            isTokenArg = true;
-          if (["balance", "bal"].includes(command) && currentArgIdx === 1)
-            isTokenArg = true;
-
-          if (isTokenArg && activeChainId) {
-            const commonMap = COMMON_TOKENS[activeChainId] || {};
-            const customList = customTokens[activeChainId] || [];
-
-            // Candidate labels: a hardcoded common token always yields its plain
-            // symbol; a custom token yields its plain symbol only when it's the
-            // sole occurrence of that symbol (otherwise it would be ambiguous),
-            // and the address-qualified SYM@0xaddr form always (custom shadows
-            // hardcoded in resolveTokenDetails, but the plain common label
-            // remains the user's way to reach the hardcoded token).
-            const labelSet = new Set<string>();
-            const symCounts = new Map<string, number>();
-            for (const t of customList)
-              symCounts.set(
-                t.symbol.toUpperCase(),
-                (symCounts.get(t.symbol.toUpperCase()) || 0) + 1
-              );
-            for (const sym of Object.keys(commonMap))
-              labelSet.add(sym);
-            for (const t of customList) {
-              const k = t.symbol.toUpperCase();
-              // Plain label only when this symbol is unique to a single custom
-              // token AND no common token shares it (plain common exists then).
-              if (symCounts.get(k) === 1 && !(k in commonMap))
-                labelSet.add(t.symbol);
-              labelSet.add(
-                `${t.symbol}@${t.address.slice(0, 6)}…${t.address.slice(-4)}`
-              );
-            }
-
-            const chainObj = SUPPORTED_CHAINS.find(
-              (c) => c.id === activeChainId
-            );
-            if (chainObj) labelSet.add(chainObj.nativeCurrency.symbol);
-            if (command === "price") {
-              labelSet.add("pool");
-              labelSet.add("api");
-            }
-            candidates = Array.from(labelSet);
-          } else if (command === "price" && currentArgIdx === 3) {
-            candidates = ["pool", "api"];
-          }
+        } else if (
+          isTokenArgPosition(command, currentArgIdx) &&
+          activeChainId
+        ) {
+          const chainObj = SUPPORTED_CHAINS.find(
+            (c) => c.id === activeChainId
+          );
+          candidates = buildTokenArgCandidates(
+            command,
+            Object.keys(COMMON_TOKENS[activeChainId] || {}),
+            customTokens[activeChainId] || [],
+            chainObj?.nativeCurrency.symbol
+          );
+        } else if (command === "price" && currentArgIdx === 3) {
+          candidates = ["pool", "api"];
         }
 
         if (candidates.length > 0) {
