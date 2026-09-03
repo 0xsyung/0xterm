@@ -7,7 +7,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Address, PublicClient } from "viem";
 import { base } from "viem/chains";
-import { fetchPortfolioHoldings, type FetchPortfolioDeps } from "./portfolio";
+import {
+  fetchPortfolioHoldings,
+  fetchTokenBalanceData,
+  type FetchPortfolioDeps,
+  type FetchTokenBalanceDeps
+} from "./portfolio";
 import { NATIVE_TOKEN_ADDRESS, SUPPORTED_CHAINS } from "./constants";
 import type { CustomTokensMap } from "./types";
 
@@ -120,5 +125,51 @@ describe("fetchPortfolioHoldings", () => {
     const foo = res.find((h) => h.symbol === "FOO");
     expect(foo!.priceUsd).toBe(5);
     expect(foo!.valueUsd).toBe(5);
+  });
+});
+
+describe("fetchTokenBalanceData", () => {
+  function balDeps(overrides: Partial<FetchTokenBalanceDeps> = {}): FetchTokenBalanceDeps {
+    return {
+      getClient: vi.fn(() => mockClient()),
+      resolveToken: vi.fn(async () => ({
+        address: TOKEN,
+        symbol: "FOO",
+        name: "Foo",
+        decimals: 6,
+        isNative: false
+      })),
+      ...overrides
+    };
+  }
+
+  it("returns native balance when no query token", async () => {
+    const client = mockClient({ getBalance: async () => 2n * 10n ** 18n });
+    const d = balDeps({ getClient: vi.fn(() => client) });
+    const res = await fetchTokenBalanceData(USER, base, undefined, d);
+    expect(res).toEqual({ balance: "2", symbol: base.nativeCurrency.symbol });
+  });
+
+  it("returns native balance for a native token symbol", async () => {
+    const client = mockClient({ getBalance: async () => 3n * 10n ** 18n });
+    const d = balDeps({
+      getClient: vi.fn(() => client),
+      resolveToken: vi.fn(async () => ({
+        address: NATIVE_TOKEN_ADDRESS as Address,
+        symbol: "ETH",
+        name: "Ether",
+        decimals: 18,
+        isNative: true
+      }))
+    });
+    const res = await fetchTokenBalanceData(USER, base, "eth", d);
+    expect(res).toEqual({ balance: "3", symbol: "ETH" });
+  });
+
+  it("reads an ERC20 balance and formats with token decimals", async () => {
+    const client = mockClient({ readContract: async () => 1_500_000n });
+    const d = balDeps({ getClient: vi.fn(() => client) });
+    const res = await fetchTokenBalanceData(USER, base, "FOO", d);
+    expect(res).toEqual({ balance: "1.5", symbol: "FOO" });
   });
 });
