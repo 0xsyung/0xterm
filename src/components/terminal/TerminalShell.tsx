@@ -56,12 +56,7 @@ import {
   uniV2FactoryAbi,
   uniV3FactoryAbi,
   uniV2PairAbi,
-  erc165Abi,
   erc20FullAbi,
-  erc721Abi,
-  INTERFACE_ID_ERC165,
-  INTERFACE_ID_ERC20,
-  INTERFACE_ID_ERC721,
   COMMON_TOKENS,
   resolveChain,
   IMPLEMENTATION_ADDRESSES,
@@ -83,6 +78,12 @@ import {
   resolveWithPreferredDecimals as resolveWithPreferredDecimalsImpl
 } from "./resolveToken";
 import { buildTokenArgCandidates, isTokenArgPosition } from "./autocomplete";
+import {
+  formatProbeReport,
+  probeCoreFunctions,
+  probeErc165,
+  probeTokenMeta
+} from "./probeToken";
 import {
   deriveKeysFromSignature,
   deriveAesKey,
@@ -2490,36 +2491,11 @@ export default function TerminalShell({
       const isErc721 = kind === "erc721";
 
       // 1) ERC-165 supportsInterface — the canonical signal
-      let erc165 = false;
-      try {
-        erc165 = Boolean(
-          await client.readContract({
-            address,
-            abi: erc165Abi,
-            functionName: "supportsInterface",
-            args: [INTERFACE_ID_ERC165]
-          })
-        );
-      } catch {
-        erc165 = false;
-      }
-
-      const wantsId = isErc721 ? INTERFACE_ID_ERC721 : INTERFACE_ID_ERC20;
-      let interfaceSupported = false;
-      if (erc165) {
-        try {
-          interfaceSupported = Boolean(
-            await client.readContract({
-              address,
-              abi: erc165Abi,
-              functionName: "supportsInterface",
-              args: [wantsId]
-            })
-          );
-        } catch {
-          interfaceSupported = false;
-        }
-      }
+      const { erc165, interfaceSupported, wantsId } = await probeErc165(
+        client,
+        address,
+        isErc721
+      );
 
       if (interfaceSupported) {
         return {
@@ -2530,106 +2506,26 @@ export default function TerminalShell({
       }
 
       // 2) Fallback: verify all core standard functions are callable
-      const checks: string[] = [];
-      const verified: string[] = [];
-
-      if (isErc721) {
-        // Only view functions can be probed read-only. safeTransferFrom /
-        // transferFrom are writes: they revert on eth_call against a real NFT
-        // (no approval), so they always false-negative — skip them. ownerOf is
-        // the strongest signal; try tokenId 0 then 1 so an unminted first token
-        // doesn't false-negative.
-        const fnChecks: [string, readonly unknown[], string][] = [
-          ["ownerOf", [0n], "ownerOf(0) → address"],
-          ["ownerOf", [1n], "ownerOf(1) → address"],
-          ["balanceOf", [address], "balanceOf(address) → uint256"]
-        ];
-        for (const [fn, fnArgs, label] of fnChecks) {
-          try {
-            await client.readContract({
-              address,
-              abi: erc721Abi,
-              functionName: fn as any,
-              args: fnArgs as [bigint] | [bigint] | [Address]
-            });
-            verified.push(label);
-          } catch {
-            checks.push(label);
-          }
-        }
-      } else {
-        // Only view functions can be probed read-only. transfer / transferFrom
-        // / approve are writes: they revert on eth_call against a real ERC-20,
-        // so they always false-negative — skip them.
-        const fnChecks: [string, readonly unknown[], string][] = [
-          ["totalSupply", [], "totalSupply() → uint256"],
-          ["balanceOf", [address], "balanceOf(address) → uint256"],
-          ["allowance", [address, address], "allowance(address,address) → uint256"]
-        ];
-        for (const [fn, fnArgs, label] of fnChecks) {
-          try {
-            await client.readContract({
-              address,
-              abi: erc20FullAbi,
-              functionName: fn as any,
-              args: fnArgs as readonly [Address] | readonly [Address, Address]
-            });
-            verified.push(label);
-          } catch {
-            checks.push(label);
-          }
-        }
-      }
-
-      const okCount = verified.length;
-      const missingCount = checks.length;
-      const allCore = okCount === 3;
+      const { verified, checks } = await probeCoreFunctions(
+        client,
+        address,
+        isErc721
+      );
 
       // Report optional metadata too
-      let meta = "";
-      try {
-        const [sym, name] = await Promise.all([
-          client.readContract({
-            address,
-            abi: erc20FullAbi,
-            functionName: "symbol"
-          }),
-          client.readContract({
-            address,
-            abi: erc20FullAbi,
-            functionName: "name"
-          })
-        ]);
-        meta = ` (${String(name)} / ${String(sym)})`;
-      } catch {
-        meta = "";
-      }
+      const meta = await probeTokenMeta(client, address);
 
-      const resultLines = [
-        `Interface check for ${address} on ${targetChain.name}:`,
-        `ERC-165: ${erc165 ? "supported" : "not supported"}`,
-        `${
-          isErc721 ? "ERC-721" : "ERC-20"
-        } interface (${wantsId}): ${interfaceSupported ? "yes" : "no"}`,
-        `Core functions callable: ${okCount}/3`,
-        ...verified.map((v) => `  ✓ ${v}`),
-        ...checks.map((c) => `  ✗ ${c}`),
-        ``
-      ];
-
-      if (allCore) {
-        resultLines.push(
-          `[✓] ${address} appears to be a valid ${isErc721 ? "ERC-721 (NFT)" : "ERC-20"} contract${meta}.`
-        );
-      } else if (okCount > 0) {
-        resultLines.push(
-          `[?] ${address} has some ${isErc721 ? "ERC-721" : "ERC-20"} characteristics but is missing: ${checks.join(", ")}.`
-        );
-      } else {
-        resultLines.push(
-          `[✗] ${address} does not look like a ${isErc721 ? "ERC-721" : "ERC-20"} contract.`
-        );
-      }
+      const resultLines = formatProbeReport({
+        address,
+        chainName: targetChain.name,
+        erc165,
+        interfaceSupported,
+        wantsId,
+        isErc721,
+        verified,
+        checks,
+        meta
+      });
 
       return { id: generateId(), type: "text", text: resultLines.join("\n") };
     },
