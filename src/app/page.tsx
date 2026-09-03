@@ -36,7 +36,7 @@ const COMMANDS = [
   { cmd: "balance eth", desc: "read an on-chain balance" },
   { cmd: "snapshot", desc: "save a P/L baseline" },
   { cmd: "pnl", desc: "compare against a snapshot" },
-  { cmd: "is 0x…", desc: "probe a token contract" },
+  { cmd: "is erc20 <addr>", desc: "probe ERC-20 / ERC-721" },
   { cmd: "swap", desc: "swap tokens on-chain" }
 ];
 
@@ -81,18 +81,22 @@ function Scramble({ text }: { text: string }) {
 
 export default function LandingPage() {
   return (
-    <div className="w-screen h-screen overflow-hidden bg-black text-[#00ff66] font-mono relative">
+    <div
+      className="w-full min-h-screen h-full overflow-x-hidden overflow-y-auto bg-black text-[#00ff66] font-plex relative"
+      style={{ ["--phosphor" as string]: "#00ff66" }}
+    >
       {/* phosphor grid backdrop */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 z-0 pointer-events-none"
         style={{
           backgroundImage: "radial-gradient(rgba(0,255,102,0.12) 1px, transparent 1px)",
           backgroundSize: "16px 16px"
         }}
       />
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black" />
+      <div className="crt-scanlines" />
+      <div className="absolute inset-0 z-0 pointer-events-none bg-gradient-to-b from-transparent via-transparent to-black" />
 
-      <div className="relative z-10 h-full overflow-y-auto">
+      <div className="relative z-10">
         {/* nav */}
         <header className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto w-full">
           <div className="flex items-center gap-2">
@@ -103,7 +107,7 @@ export default function LandingPage() {
             href="/app"
             className="border border-[#00ff66]/50 px-4 py-2 text-sm hover:bg-[#00ff66]/10 hover:border-[#00ff66] transition-colors"
           >
-            Launch Terminal →
+            Launch Terminal
           </Link>
         </header>
 
@@ -179,11 +183,14 @@ export default function LandingPage() {
             </div>
             <div className="p-4 space-y-2">
               {COMMANDS.map((c) => (
-                <div key={c.cmd} className="flex items-baseline gap-4 text-sm">
-                  <span className="text-black bg-[#00ff66] px-2 font-bold whitespace-nowrap">
+                <div
+                  key={c.cmd}
+                  className="flex flex-col md:flex-row md:items-baseline gap-1 md:gap-4 text-sm"
+                >
+                  <span className="text-black bg-[#00ff66] px-2 font-bold w-fit">
                     {c.cmd}
                   </span>
-                  <span className="opacity-70">{c.desc}</span>
+                  <span className="opacity-70 min-w-0">{c.desc}</span>
                 </div>
               ))}
             </div>
@@ -193,7 +200,9 @@ export default function LandingPage() {
         {/* footer */}
         <footer className="px-6 max-w-6xl mx-auto w-full py-8 border-t border-[#00ff66]/20 text-xs opacity-50 flex flex-wrap justify-between gap-2">
           <span>© 2026 0XTERM</span>
-          <span>TERMINAL AT /APP</span>
+          <Link href="/app" className="hover:opacity-80">
+            Launch the terminal
+          </Link>
         </footer>
       </div>
     </div>
