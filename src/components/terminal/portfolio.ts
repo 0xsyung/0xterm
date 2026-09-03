@@ -15,7 +15,7 @@ import {
 import { getTokenPriceUsd } from "./pricing";
 import type { CustomTokensMap } from "./types";
 import type { TokenResolution } from "./resolveToken";
-import type { PortfolioHolding } from "./widgets/PortfolioWidget";
+import type { PortfolioHolding, SnapshotHolding } from "./widgets/PortfolioWidget";
 
 export type FetchPortfolioDeps = {
   getClient: (chain: Chain) => PublicClient;
@@ -152,6 +152,74 @@ export const fetchPortfolioHoldings = async (
         });
       } catch {
         // skip tokens that fail to read (e.g. non-ERC20 or wrong chain)
+      }
+    }
+  }
+
+  return holdings;
+};
+
+// Snapshot variant of fetchPortfolioHoldings: builds an address-keyed map so
+// duplicate symbols on one chain don't collide. Used by the `snapshot` command.
+export const fetchPortfolioSnapshot = async (
+  userAddress: Address,
+  customTokens: CustomTokensMap,
+  deps: FetchPortfolioDeps
+): Promise<Record<string, SnapshotHolding>> => {
+  const { getClient, fetchImpl = fetch } = deps;
+  const holdings: Record<string, SnapshotHolding> = {};
+
+  for (const chain of SUPPORTED_CHAINS) {
+    const client = getClient(chain);
+    let nativeBal = 0n;
+    try {
+      nativeBal = await client.getBalance({ address: userAddress });
+    } catch {
+      nativeBal = 0n;
+    }
+    const nativePrice = await getTokenPriceUsd(
+      chain,
+      chain.nativeCurrency.symbol,
+      (WRAPPED_NATIVE[chain.id] || NATIVE_TOKEN_ADDRESS) as Address,
+      true,
+      client,
+      fetchImpl
+    );
+    holdings[`${chain.id}:${chain.nativeCurrency.symbol}`] = {
+      price: nativePrice,
+      balance: formatEther(nativeBal)
+    };
+
+    const customList = customTokens[chain.id] || [];
+    const commonMap = COMMON_TOKENS[chain.id] || {};
+    const customAddrs = new Set(
+      customList.map((t) => t.address.toLowerCase())
+    );
+    const view = [
+      ...customList,
+      ...Object.values(commonMap).filter(
+        (c) => !customAddrs.has(c.address.toLowerCase())
+      )
+    ];
+    for (const info of view) {
+      if (info.address === NATIVE_TOKEN_ADDRESS) continue;
+      const symbol = info.symbol;
+      const addr = info.address as Address;
+      try {
+        const bal = (await client.readContract({
+          address: addr,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [userAddress]
+        })) as bigint;
+        const decimals = info.decimals ?? 18;
+        // address-keyed so duplicate symbols don't collide in the snapshot
+        holdings[`${chain.id}:${addr.toLowerCase()}`] = {
+          price: await getTokenPriceUsd(chain, symbol, addr, false, client, fetchImpl),
+          balance: formatUnits(bal, decimals)
+        };
+      } catch {
+        // skip failed reads
       }
     }
   }
