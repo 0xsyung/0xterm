@@ -19,15 +19,15 @@ export default defineConfig({
         "src/**/*.test.{ts,tsx}",
       ],
       thresholds: {
-        // v1 baseline measured 2026-09-03: Lines 7.79%, Statements 8.33%,
-        // Functions 8.09%, Branches 8.22% across all of src/. Hard-fail at
-        // floor(measured) so CI stays green while TerminalShell.tsx (~5.3k
-        // lines, 0% covered) is still in the include set. Climbing toward 90%
-        // is tracked in the extraction follow-up issue.
-        lines: 7,
-        statements: 8,
-        functions: 8,
-        branches: 8,
+        // Ratchet — measured 2026-09-03 after pricing.ts extraction (#37):
+        // Lines 10.24%, Statements 10.79%, Functions 9.13%, Branches 10.69%.
+        // Hard-fail at floor(measured) so CI stays green while TerminalShell.tsx
+        // (~5.2k lines, 0% covered) is still in the include set. Climb toward
+        // 90% is tracked in issue #37.
+        lines: 10,
+        statements: 10,
+        functions: 9,
+        branches: 10,
       },
     },
   },
