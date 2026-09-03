@@ -71,9 +71,10 @@ import {
 import { formatViemError } from "../../lib/viemError";
 import { migrateCustomTokens, pricePinKey } from "./helpers";
 import { detectTokenType } from "./tokenType";
-import { getNativePriceUsd, getTokenPriceUsd } from "./pricing";
+import { getNativePriceUsd } from "./pricing";
 import {
   fetchPortfolioHoldings as fetchPortfolioHoldingsImpl,
+  fetchPortfolioSnapshot as fetchPortfolioSnapshotImpl,
   fetchTokenBalanceData as fetchTokenBalanceDataImpl
 } from "./portfolio";
 import {
@@ -1607,6 +1608,9 @@ export default function TerminalShell({
     fetchPortfolioHoldingsImpl(userAddress, customTokens, filterType, {
       getClient
     });
+
+  const fetchPortfolioSnapshot = (userAddress: Address) =>
+    fetchPortfolioSnapshotImpl(userAddress, customTokens, { getClient });
 
   // --- new-message poller ----------------------------------------------
   // Background check every 60s for unread chat messages. When a new message is
@@ -3565,61 +3569,7 @@ export default function TerminalShell({
         };
 
       const label = args[1] || `snapshot-${Date.now().toString().slice(-6)}`;
-      const holdings: Record<string, SnapshotHolding> = {};
-
-      for (const chain of SUPPORTED_CHAINS) {
-        const client = getClient(chain);
-        let nativeBal = 0n;
-        try {
-          nativeBal = await client.getBalance({ address: address as Address });
-        } catch {
-          nativeBal = 0n;
-        }
-        const nativePrice = await getTokenPriceUsd(
-          chain,
-          chain.nativeCurrency.symbol,
-          WRAPPED_NATIVE[chain.id] || NATIVE_TOKEN_ADDRESS as Address,
-          true,
-          client
-        );
-        holdings[`${chain.id}:${chain.nativeCurrency.symbol}`] = {
-          price: nativePrice,
-          balance: formatEther(nativeBal)
-        };
-
-        const customList = customTokens[chain.id] || [];
-        const commonMap = COMMON_TOKENS[chain.id] || {};
-        const customAddrs = new Set(
-          customList.map((t) => t.address.toLowerCase())
-        );
-        const view = [
-          ...customList,
-          ...Object.values(commonMap).filter(
-            (c) => !customAddrs.has(c.address.toLowerCase())
-          )
-        ];
-        for (const info of view) {
-          if (info.address === NATIVE_TOKEN_ADDRESS) continue;
-          const symbol = info.symbol;
-          const addr = info.address as Address;
-          try {
-            const bal = (await client.readContract({
-              address: addr,
-              abi: erc20Abi,
-              functionName: "balanceOf",
-              args: [address as Address]
-            })) as bigint;
-            const decimals = info.decimals ?? 18;
-            // address-keyed so duplicate symbols don't collide in the snapshot
-            holdings[`${chain.id}:${addr.toLowerCase()}`] = {
-              price: await getTokenPriceUsd(chain, symbol, addr, false, client),
-              balance: formatUnits(bal, decimals)
-            };
-          } catch {
-            // skip failed reads
-          }
-        }
-      }
+      const holdings = await fetchPortfolioSnapshot(address as Address);
 
       savePreference("portfolioSnapshot", {
         label,
