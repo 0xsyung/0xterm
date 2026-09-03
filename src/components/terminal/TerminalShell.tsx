@@ -655,6 +655,8 @@ export default function TerminalShell({
               ) ||
               pairs.find((p: any) => p.dexId === cd.dex) ||
               pairs[0];
+            // #8 closed: pairAddress is canonical. DexId / pairs[0] fallbacks
+            // left as-is — this PR is layout only (#9). Do not reopen #8.
             if (!pair) throw new Error("No fresh DexScreener data for this pair.");
             return {
               componentData: {
@@ -1071,6 +1073,8 @@ export default function TerminalShell({
             ) ||
             pairs.find((p: any) => p.dexId === cd.dex) ||
             pairs[0];
+          // #8 closed: pairAddress is canonical. DexId / pairs[0] fallbacks
+          // left as-is — this PR is layout only (#9). Do not reopen #8.
           if (!pair) throw new Error("No fresh DexScreener data for this pair.");
           return {
             componentData: {
@@ -5566,31 +5570,39 @@ export default function TerminalShell({
         className={`flex-1 flex flex-col px-6 pb-6 ${HEADER_PAD[theme.headerStyle]} overflow-hidden relative z-10`}
         onClick={() => inputRef.current?.focus()}
       >
+        {/* Log + pin: md+ two columns; <md pin stacks above the prompt. Never overlay. */}
         <div
-          ref={logContainerRef}
-          className="flex-1 overflow-y-auto pt-2 pr-2 whitespace-pre-wrap"
+          className={
+            pinned.length > 0
+              ? "flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)_auto] md:grid-rows-1 md:grid-cols-[minmax(0,1fr)_18rem] gap-2"
+              : "flex-1 min-h-0 flex flex-col"
+          }
         >
-          <div className="min-h-full flex flex-col justify-end space-y-2.5">
-            <TerminalLogList
-              logs={logs}
-              theme={theme}
-              activeChainId={activeChainId}
-              onPin={onPin}
-              pinnedIds={new Set(pinned.map((p) => p.id))}
-            />
+          <div
+            ref={logContainerRef}
+            className="h-full min-h-0 min-w-0 overflow-y-auto pt-2 pr-2 whitespace-pre-wrap"
+          >
+            <div className="min-h-full flex flex-col justify-end space-y-2.5">
+              <TerminalLogList
+                logs={logs}
+                theme={theme}
+                activeChainId={activeChainId}
+                onPin={onPin}
+                pinnedIds={new Set(pinned.map((p) => p.id))}
+              />
+            </div>
           </div>
-        </div>
 
-        {/* FLOATING PINNED WIDGET COLUMN (right) */}
-        <PinnedPanel
-          pinned={pinned}
-          theme={theme}
-          refreshing={refreshingId}
-          countdowns={countdowns}
-          onRefresh={onRefreshPinned}
-          onMinimize={onMinimize}
-          onUnpin={onUnpin}
-        />
+          <PinnedPanel
+            pinned={pinned}
+            theme={theme}
+            refreshing={refreshingId}
+            countdowns={countdowns}
+            onRefresh={onRefreshPinned}
+            onMinimize={onMinimize}
+            onUnpin={onUnpin}
+          />
+        </div>
 
         {/* TWO-LINE PROMPT LAYOUT */}
         <TerminalPrompt
