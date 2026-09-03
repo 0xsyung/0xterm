@@ -54,8 +54,10 @@ export default function TerminalPrompt({
               WALLET: {address.slice(0, 6)}...{address.slice(-4)}
             </span>
           ) : (
-            <span className={`px-2 py-0.5 rounded border ${theme.warn}`}>
-              WALLET: DISCONNECTED (Type `connect`)
+            <span
+              className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 ${theme.muted}`}
+            >
+              WALLET: DISCONNECTED
             </span>
           )}
           {chainObj ? (
@@ -65,8 +67,10 @@ export default function TerminalPrompt({
               NET: {chainObj.name}
             </span>
           ) : (
-            <span className={`px-2 py-0.5 rounded border ${theme.warn}`}>
-              NET: NOT SELECTED (Type `networks`)
+            <span
+              className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 ${theme.muted}`}
+            >
+              NET: —
             </span>
           )}
           {activeDexObj && (
@@ -77,6 +81,12 @@ export default function TerminalPrompt({
             </span>
           )}
         </div>
+      </div>
+
+      {/* Boot copy: teaching lives on the prompt, not in the log (#4). */}
+      <div className="text-[10px] leading-tight">
+        <div className={theme.text}>0xTERM v1.5.0</div>
+        <div className={theme.muted}>type help · connect · networks · theme</div>
       </div>
 
       {/* LINE 2: Interactive Input Field */}
@@ -94,8 +104,8 @@ export default function TerminalPrompt({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder='Type "help" to view available commands...'
-          className={`flex-1 bg-transparent outline-none text-xs ${theme.text} ${theme.muted.replace("text-", "placeholder:text-")}`}
+          placeholder=""
+          className={`flex-1 bg-transparent outline-none text-xs ${theme.text} [caret-color:var(--phosphor)] [caret-shape:block]`}
           autoFocus
           spellCheck={false}
           autoComplete="off"

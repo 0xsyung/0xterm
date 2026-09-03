@@ -289,10 +289,7 @@ export default function TerminalShell({
 
   const theme = THEMES[resolveThemeKey(currentThemeKey)];
 
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: "1", type: "text", text: "0xTERM v1.5.0 [FULL ON-CHAIN DEFI SUITE]" },
-    { id: "2", type: "text", text: 'TYPE "help" TO SEE AVAILABLE COMMANDS.\n' }
-  ]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
