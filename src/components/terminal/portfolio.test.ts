@@ -9,6 +9,7 @@ import type { Address, PublicClient } from "viem";
 import { base } from "viem/chains";
 import {
   fetchPortfolioHoldings,
+  fetchPortfolioSnapshot,
   fetchTokenBalanceData,
   type FetchPortfolioDeps,
   type FetchTokenBalanceDeps
@@ -171,5 +172,48 @@ describe("fetchTokenBalanceData", () => {
     const d = balDeps({ getClient: vi.fn(() => client) });
     const res = await fetchTokenBalanceData(USER, base, "FOO", d);
     expect(res).toEqual({ balance: "1.5", symbol: "FOO" });
+  });
+});
+
+describe("fetchPortfolioSnapshot", () => {
+  it("records a native holding per chain keyed by chain: symbol", async () => {
+    const d = deps();
+    const res = await fetchPortfolioSnapshot(USER, {}, d);
+    for (const chain of SUPPORTED_CHAINS) {
+      const key = `${chain.id}:${chain.nativeCurrency.symbol}`;
+      expect(res[key]).toBeDefined();
+      expect(res[key]!.balance).toBe("0.000000000000000001"); // 1n wei
+    }
+  });
+
+  it("records custom token balances keyed by chain: address", async () => {
+    const client = mockClient({ readContract: async () => 1000n });
+    const d = deps({ getClient: vi.fn(() => client) });
+    const res = await fetchPortfolioSnapshot(USER, oneTokenMap(), d);
+    const key = `${base.id}:${TOKEN.toLowerCase()}`;
+    expect(res[key]).toBeDefined();
+    expect(res[key]!.balance).toBe("0.001"); // 1000 / 1e6
+  });
+
+  it("skips the zero-address custom entry", async () => {
+    const d = deps();
+    const map: CustomTokensMap = {
+      [base.id]: [
+        { id: "c_zero", address: NATIVE_TOKEN_ADDRESS as Address, symbol: "ZERO", name: "Zero", decimals: 18, isNative: false }
+      ]
+    };
+    const res = await fetchPortfolioSnapshot(USER, map, d);
+    expect(res[`${base.id}:zero`]).toBeUndefined();
+  });
+
+  it("uses a fetched price for the token when available", async () => {
+    const client = mockClient({ readContract: async () => 1_000_000n }); // 1 FOO (decimals 6)
+    const fetchImpl = (vi.fn(async () =>
+      jsonRes({ pairs: [{ chainId: "base", baseToken: { symbol: "FOO", address: TOKEN }, priceUsd: "5" }] })
+    ) as unknown) as typeof fetch;
+    const d = deps({ getClient: vi.fn(() => client), fetchImpl });
+    const res = await fetchPortfolioSnapshot(USER, oneTokenMap(), d);
+    const key = `${base.id}:${TOKEN.toLowerCase()}`;
+    expect(res[key]!.price).toBe(5);
   });
 });
