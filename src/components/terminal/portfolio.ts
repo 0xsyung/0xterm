@@ -14,11 +14,48 @@ import {
 } from "./constants";
 import { getTokenPriceUsd } from "./pricing";
 import type { CustomTokensMap } from "./types";
+import type { TokenResolution } from "./resolveToken";
 import type { PortfolioHolding } from "./widgets/PortfolioWidget";
 
 export type FetchPortfolioDeps = {
   getClient: (chain: Chain) => PublicClient;
   fetchImpl?: typeof fetch;
+};
+
+export type FetchTokenBalanceDeps = {
+  getClient: (chain: Chain) => PublicClient;
+  resolveToken: (queryToken: string, chain: Chain) => Promise<TokenResolution>;
+};
+
+export const fetchTokenBalanceData = async (
+  userAddress: Address,
+  targetChain: Chain,
+  queryToken: string | undefined,
+  deps: FetchTokenBalanceDeps
+): Promise<{ balance: string; symbol: string }> => {
+  const client = deps.getClient(targetChain);
+  if (!queryToken) {
+    const bal = await client.getBalance({ address: userAddress });
+    return {
+      balance: formatEther(bal),
+      symbol: targetChain.nativeCurrency.symbol
+    };
+  }
+  const token = await deps.resolveToken(queryToken, targetChain);
+  if (token.isNative) {
+    const bal = await client.getBalance({ address: userAddress });
+    return { balance: formatEther(bal), symbol: token.symbol };
+  }
+  const bal = await client.readContract({
+    address: token.address,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: [userAddress]
+  });
+  return {
+    balance: formatUnits(bal as bigint, token.decimals),
+    symbol: token.symbol
+  };
 };
 
 // Reusable holdings builder for `portfolio` (and pinned-portfolio refresh).

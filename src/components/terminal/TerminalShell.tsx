@@ -72,7 +72,10 @@ import { formatViemError } from "../../lib/viemError";
 import { migrateCustomTokens, pricePinKey } from "./helpers";
 import { detectTokenType } from "./tokenType";
 import { getNativePriceUsd, getTokenPriceUsd } from "./pricing";
-import { fetchPortfolioHoldings as fetchPortfolioHoldingsImpl } from "./portfolio";
+import {
+  fetchPortfolioHoldings as fetchPortfolioHoldingsImpl,
+  fetchTokenBalanceData as fetchTokenBalanceDataImpl
+} from "./portfolio";
 import {
   resolveTokenDetails as resolveTokenDetailsImpl,
   resolveWithPreferred as resolveWithPreferredImpl,
@@ -1584,35 +1587,15 @@ export default function TerminalShell({
     }
   };
 
-  const fetchTokenBalanceData = async (
+  const fetchTokenBalanceData = (
     userAddress: Address,
     targetChain: Chain,
     queryToken?: string
-  ) => {
-    const client = getClient(targetChain);
-    if (!queryToken) {
-      const bal = await client.getBalance({ address: userAddress });
-      return {
-        balance: formatEther(bal),
-        symbol: targetChain.nativeCurrency.symbol
-      };
-    }
-    const token = await resolveTokenDetails(queryToken, targetChain);
-    if (token.isNative) {
-      const bal = await client.getBalance({ address: userAddress });
-      return { balance: formatEther(bal), symbol: token.symbol };
-    }
-    const bal = await client.readContract({
-      address: token.address,
-      abi: erc20Abi,
-      functionName: "balanceOf",
-      args: [userAddress]
+  ) =>
+    fetchTokenBalanceDataImpl(userAddress, targetChain, queryToken, {
+      getClient,
+      resolveToken: resolveTokenDetails
     });
-    return {
-      balance: formatUnits(bal as bigint, token.decimals),
-      symbol: token.symbol
-    };
-  };
 
   // Reusable holdings builder for `portfolio` (and pinned-portfolio refresh).
   // Reads native + registered (COMMON_TOKENS + custom) token balances across
