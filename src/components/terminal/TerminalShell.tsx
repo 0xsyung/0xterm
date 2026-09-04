@@ -72,6 +72,7 @@ import { formatViemError } from "../../lib/viemError";
 import { migrateCustomTokens, pricePinKey } from "./helpers";
 import { detectTokenType } from "./tokenType";
 import { getNativePriceUsd } from "./pricing";
+import { getPoolPriceRatio } from "./poolPrice";
 import {
   fetchPortfolioHoldings as fetchPortfolioHoldingsImpl,
   fetchPortfolioSnapshot as fetchPortfolioSnapshotImpl,
@@ -475,96 +476,31 @@ export default function TerminalShell({
             const pairAddr = cd.pairAddress as Address;
             refs[m.id] = async () => {
               const client = getClient(chain);
-              let priceRatio = 0;
-              if (dex.type === "V2") {
-                const [token0, reserves] = await Promise.all([
-                  client.readContract({
-                    address: pairAddr,
-                    abi: uniV2PairAbi,
-                    functionName: "token0"
-                  }),
-                  client.readContract({
-                    address: pairAddr,
-                    abi: uniV2PairAbi,
-                    functionName: "getReserves"
-                  })
-                ]);
-                const a = (
-                  await resolveWithPreferred(
-                    cd.symbolA as string,
-                    cd.symbolAAddress,
-                    chain
-                  )
-                ).address;
-                const reserveA =
-                  (token0 as string).toLowerCase() === a.toLowerCase()
-                    ? reserves[0]
-                    : reserves[1];
-                const reserveB =
-                  (token0 as string).toLowerCase() === a.toLowerCase()
-                    ? reserves[1]
-                    : reserves[0];
-                const [decA, decB] = await Promise.all([
-                  resolveWithPreferredDecimals(
-                    cd.symbolA as string,
-                    cd.symbolAAddress,
-                    chain
-                  ).then((t) => t.decimals),
-                  resolveWithPreferredDecimals(
-                    cd.symbolB as string,
-                    cd.symbolBAddress,
-                    chain
-                  ).then((t) => t.decimals)
-                ]);
-                const formattedA = parseFloat(formatUnits(reserveA, decA));
-                const formattedB = parseFloat(formatUnits(reserveB, decB));
-                if (formattedA === 0)
-                  throw new Error("Pool reserve for token A is zero.");
-                priceRatio = formattedB / formattedA;
-              } else {
-                const [token0, slot0] = await Promise.all([
-                  client.readContract({
-                    address: pairAddr,
-                    abi: parseAbi(["function token0() view returns (address)"]),
-                    functionName: "token0"
-                  }),
-                  client.readContract({
-                    address: pairAddr,
-                    abi: uniV3PoolAbi,
-                    functionName: "slot0"
-                  })
-                ]);
-                const a = (
-                  await resolveWithPreferred(
-                    cd.symbolA as string,
-                    cd.symbolAAddress,
-                    chain
-                  )
-                ).address;
-                const isTokenA0 =
-                  (token0 as string).toLowerCase() === a.toLowerCase();
-                const sqrtPriceFloat = Number(slot0[0]) / 2 ** 96;
-                const pRaw = Math.pow(sqrtPriceFloat, 2);
-                const [decA, decB] = await Promise.all([
-                  resolveWithPreferredDecimals(
-                    cd.symbolA as string,
-                    cd.symbolAAddress,
-                    chain
-                  ).then((t) => t.decimals),
-                  resolveWithPreferredDecimals(
-                    cd.symbolB as string,
-                    cd.symbolBAddress,
-                    chain
-                  ).then((t) => t.decimals)
-                ]);
-                const dec0 = isTokenA0 ? decA : decB;
-                const dec1 = isTokenA0 ? decB : decA;
-                const pToken0InToken1 = pRaw * Math.pow(10, dec0 - dec1);
-                priceRatio = isTokenA0
-                  ? pToken0InToken1
-                  : 1 / pToken0InToken1;
-              }
-              return { componentData: { ...cd, rate: priceRatio } };
+              const [a, decA, decB] = await Promise.all([
+                resolveWithPreferred(
+                  cd.symbolA as string,
+                  cd.symbolAAddress,
+                  chain
+                ).then((t) => t.address),
+                resolveWithPreferredDecimals(
+                  cd.symbolA as string,
+                  cd.symbolAAddress,
+                  chain
+                ).then((t) => t.decimals),
+                resolveWithPreferredDecimals(
+                  cd.symbolB as string,
+                  cd.symbolBAddress,
+                  chain
+                ).then((t) => t.decimals)
+              ]);
+              const rate = await getPoolPriceRatio(client, {
+                dexType: dex.type,
+                pairAddress: pairAddr,
+                tokenAAddress: a,
+                tokenADecimals: decA,
+                tokenBDecimals: decB
+              });
+              return { componentData: { ...cd, rate } };
             };
           }
         } else if (cd.mode === "api" && cd.tokenSymbol) {
@@ -889,97 +825,31 @@ export default function TerminalShell({
           if (chain && dex) {
             registerPinRefresh(log.id, async () => {
               const client = getClient(chain);
-              let priceRatio = 0;
-              if (dex.type === "V2") {
-                const [token0, reserves] = await Promise.all([
-                  client.readContract({
-                    address: pairAddr,
-                    abi: uniV2PairAbi,
-                    functionName: "token0"
-                  }),
-                  client.readContract({
-                    address: pairAddr,
-                    abi: uniV2PairAbi,
-                    functionName: "getReserves"
-                  })
-                ]);
-                const symA = cd.symbolA as string;
-                const a = (
-                  await resolveWithPreferred(symA, cd.symbolAAddress, chain)
-                ).address;
-                const reserveA =
-                  (token0 as string).toLowerCase() === a.toLowerCase()
-                    ? reserves[0]
-                    : reserves[1];
-                const reserveB =
-                  (token0 as string).toLowerCase() === a.toLowerCase()
-                    ? reserves[1]
-                    : reserves[0];
-                const [decA, decB] = await Promise.all([
-                  resolveWithPreferredDecimals(
-                    cd.symbolA as string,
-                    cd.symbolAAddress,
-                    chain
-                  ).then((t) => t.decimals),
-                  resolveWithPreferredDecimals(
-                    cd.symbolB as string,
-                    cd.symbolBAddress,
-                    chain
-                  ).then((t) => t.decimals)
-                ]);
-                const formattedA = parseFloat(formatUnits(reserveA, decA));
-                const formattedB = parseFloat(formatUnits(reserveB, decB));
-                if (formattedA === 0) throw new Error("Pool reserve for token A is zero.");
-                priceRatio = formattedB / formattedA;
-              } else {
-                const [token0, slot0] = await Promise.all([
-                  client.readContract({
-                    address: pairAddr,
-                    abi: parseAbi(["function token0() view returns (address)"]),
-                    functionName: "token0"
-                  }),
-                  client.readContract({
-                    address: pairAddr,
-                    abi: uniV3PoolAbi,
-                    functionName: "slot0"
-                  })
-                ]);
-                const a = (
-                  await resolveWithPreferred(
-                    cd.symbolA as string,
-                    cd.symbolAAddress,
-                    chain
-                  )
-                ).address;
-                const isTokenA0 =
-                  (token0 as string).toLowerCase() === a.toLowerCase();
-                const sqrtPriceFloat = Number(slot0[0]) / 2 ** 96;
-                const pRaw = Math.pow(sqrtPriceFloat, 2);
-                const [decA, decB] = await Promise.all([
-                  resolveWithPreferredDecimals(
-                    cd.symbolA as string,
-                    cd.symbolAAddress,
-                    chain
-                  ).then((t) => t.decimals),
-                  resolveWithPreferredDecimals(
-                    cd.symbolB as string,
-                    cd.symbolBAddress,
-                    chain
-                  ).then((t) => t.decimals)
-                ]);
-                const dec0 = isTokenA0 ? decA : decB;
-                const dec1 = isTokenA0 ? decB : decA;
-                const pToken0InToken1 = pRaw * Math.pow(10, dec0 - dec1);
-                priceRatio = isTokenA0
-                  ? pToken0InToken1
-                  : 1 / pToken0InToken1;
-              }
-              return {
-                componentData: {
-                  ...cd,
-                  rate: priceRatio
-                }
-              };
+              const [a, decA, decB] = await Promise.all([
+                resolveWithPreferred(
+                  cd.symbolA as string,
+                  cd.symbolAAddress,
+                  chain
+                ).then((t) => t.address),
+                resolveWithPreferredDecimals(
+                  cd.symbolA as string,
+                  cd.symbolAAddress,
+                  chain
+                ).then((t) => t.decimals),
+                resolveWithPreferredDecimals(
+                  cd.symbolB as string,
+                  cd.symbolBAddress,
+                  chain
+                ).then((t) => t.decimals)
+              ]);
+              const rate = await getPoolPriceRatio(client, {
+                dexType: dex.type,
+                pairAddress: pairAddr,
+                tokenAAddress: a,
+                tokenADecimals: decA,
+                tokenBDecimals: decB
+              });
+              return { componentData: { ...cd, rate } };
             });
           }
         }
@@ -2751,73 +2621,13 @@ export default function TerminalShell({
             };
           }
 
-          let priceRatio = 0;
-
-          if (activeDex.type === "V2") {
-            const [token0, reserves] = await Promise.all([
-              client.readContract({
-                address: pairAddress,
-                abi: uniV2PairAbi,
-                functionName: "token0"
-              }),
-              client.readContract({
-                address: pairAddress,
-                abi: uniV2PairAbi,
-                functionName: "getReserves"
-              })
-            ]);
-
-            const reserveA =
-              (token0 as string).toLowerCase() === addrA.toLowerCase()
-                ? reserves[0]
-                : reserves[1];
-            const reserveB =
-              (token0 as string).toLowerCase() === addrA.toLowerCase()
-                ? reserves[1]
-                : reserves[0];
-
-            const formattedA = parseFloat(
-              formatUnits(reserveA, tokenA.decimals)
-            );
-            const formattedB = parseFloat(
-              formatUnits(reserveB, tokenB.decimals)
-            );
-
-            if (formattedA === 0)
-              throw new Error("Pool reserve for token A is zero.");
-            priceRatio = formattedB / formattedA;
-          } else {
-            const [token0, slot0] = await Promise.all([
-              client.readContract({
-                address: pairAddress,
-                abi: parseAbi(["function token0() view returns (address)"]),
-                functionName: "token0"
-              }),
-              client.readContract({
-                address: pairAddress,
-                abi: uniV3PoolAbi,
-                functionName: "slot0"
-              })
-            ]);
-
-            const sqrtPriceX96 = slot0[0];
-            const isTokenA0 =
-              (token0 as string).toLowerCase() === addrA.toLowerCase();
-
-            const sqrtPriceFloat = Number(sqrtPriceX96) / 2 ** 96;
-            const pRaw = Math.pow(sqrtPriceFloat, 2);
-
-            const dec0 = isTokenA0 ? tokenA.decimals : tokenB.decimals;
-            const dec1 = isTokenA0 ? tokenB.decimals : tokenA.decimals;
-
-            const pToken0InToken1 = pRaw * Math.pow(10, dec0 - dec1);
-
-            if (isTokenA0) {
-              priceRatio = pToken0InToken1;
-            } else {
-              priceRatio = 1 / pToken0InToken1;
-            }
-          }
+          const priceRatio = await getPoolPriceRatio(client, {
+            dexType: activeDex.type,
+            pairAddress,
+            tokenAAddress: addrA,
+            tokenADecimals: tokenA.decimals,
+            tokenBDecimals: tokenB.decimals
+          });
 
           const priceWidget = (
             <div
