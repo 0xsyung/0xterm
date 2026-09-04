@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { WagmiProvider } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { config } from "@/config/wagmi";
+import { isCoarsePointer } from "@/components/terminal/viewport";
 import type { ThemeMode } from "@/components/terminal/types";
 
 function Splash() {
@@ -31,12 +32,16 @@ function Splash() {
 // viewport, pin the shell's height to the visual viewport so the prompt
 // rides above the keyboard instead of under it. Height only — a transform
 // would create a containing block for the fixed rain overlay.
+// Coarse-pointer gate: on desktop (devtools docked, browser chrome) the
+// visual viewport can also be < innerHeight and would squash the shell for
+// no benefit — only touch devices have a software keyboard.
 function useVisualViewportHeight(): number | null {
   const [height, setHeight] = useState<number | null>(null);
 
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
+    if (!isCoarsePointer()) return;
     let raf = 0;
     const update = () => {
       cancelAnimationFrame(raf);
