@@ -74,6 +74,7 @@ import { detectTokenType } from "./tokenType";
 import { getNativePriceUsd } from "./pricing";
 import { getPoolPriceRatio } from "./poolPrice";
 import { fetchBillboard, fetchChatThread } from "./pinLoaders";
+import { buildBalanceLog, buildPnlLog } from "./commands";
 import {
   fetchPortfolioHoldings as fetchPortfolioHoldingsImpl,
   fetchPortfolioSnapshot as fetchPortfolioSnapshotImpl,
@@ -1329,6 +1330,25 @@ export default function TerminalShell({
 
   const fetchPortfolioSnapshot = (userAddress: Address) =>
     fetchPortfolioSnapshotImpl(userAddress, customTokens, { getClient });
+
+  const buildBalance = (args: string[]) =>
+    buildBalanceLog(
+      args,
+      { isConnected, address, activeChainId },
+      { generateId, fetchTokenBalanceData }
+    );
+
+  const buildPnl = () =>
+    buildPnlLog(
+      { isConnected, address, activeChainId },
+      {
+        generateId,
+        readPreference: (addr) =>
+          JSON.parse(
+            localStorage.getItem(`0xterm_user_${addr.toLowerCase()}`) || "{}"
+          )
+      }
+    );
 
   // --- new-message poller ----------------------------------------------
   // Background check every 60s for unread chat messages. When a new message is
@@ -3149,23 +3169,7 @@ export default function TerminalShell({
 
       return { id: generateId(), type: "component", component: swapWidget, title: `SWAP ${args[1]} ${fromToken.symbol}→${toToken.symbol}` };
     },
-    balance: async (args) => {
-      if (!isConnected || !address)
-        return {
-          id: generateId(),
-          type: "text",
-          text: "Wallet not connected."
-        };
-      const targetChain =
-        SUPPORTED_CHAINS.find((c) => c.id === activeChainId) ||
-        SUPPORTED_CHAINS[5];
-      const balData = await fetchTokenBalanceData(
-        address as Address,
-        targetChain,
-        args[1]
-      );
-      return { id: generateId(), type: "balance", payload: balData };
-    },
+    balance: async (args) => await buildBalance(args),
     portfolio: async (args) => {
       if (!isConnected || !address)
         return {
@@ -3242,30 +3246,7 @@ export default function TerminalShell({
         text: `[✓] Snapshot "${label}" saved (${count} holdings) at ${new Date().toLocaleString()}. Run 'portfolio' to see P/L vs this snapshot.`
       };
     },
-    pnl: async (args) => {
-      if (!isConnected || !address)
-        return {
-          id: generateId(),
-          type: "text",
-          text: "Wallet not connected."
-        };
-      const prefs = JSON.parse(
-        localStorage.getItem(`0xterm_user_${address.toLowerCase()}`) || "{}"
-      );
-      const snap = prefs.portfolioSnapshot;
-      if (!snap) {
-        return {
-          id: generateId(),
-          type: "text",
-          text: "No snapshot found. Run 'snapshot' first to establish a P/L baseline."
-        };
-      }
-      return {
-        id: generateId(),
-        type: "text",
-        text: `Snapshot "${snap.label}" at ${new Date(snap.timestamp).toLocaleString()} with ${Object.keys(snap.holdings).length} holdings. Run 'portfolio' for per-token P/L.`
-      };
-    },
+    pnl: async () => buildPnl(),
     pool: async (args) => {
       if (!activeChainId)
         return {
