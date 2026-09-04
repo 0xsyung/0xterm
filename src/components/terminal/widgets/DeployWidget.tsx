@@ -228,7 +228,7 @@ export default function DeployWidget({
         <button
           onClick={handleExecute}
           disabled={status !== "resolve"}
-          className={`w-full py-2 mt-2 font-bold transition-all border ${
+          className={`w-full py-2 min-h-[44px] mt-2 font-bold transition-all border ${
             status === "deploying_impl" ||
             status === "deploying_proxy" ||
             status === "initializing"

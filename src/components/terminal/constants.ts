@@ -211,33 +211,33 @@ export const THEME_ALIASES: Record<string, ThemeMode> = {
 }
 
 export const HEADER_PAD: Record<ThemeConfig['headerStyle'], string> = {
-  crt: 'pt-[40px]',
-  bloomberg: 'pt-[32px]',
-  macintosh: 'pt-[52px]',
-  ibm: 'pt-[24px]',
-  dos: 'pt-[22px]',
-  teletype: 'pt-[28px]',
-  void: 'pt-[32px]'
+  crt: 'pt-[calc(40px_+_env(safe-area-inset-top))]',
+  bloomberg: 'max-md:pt-[calc(80px_+_env(safe-area-inset-top))] md:pt-[calc(32px_+_env(safe-area-inset-top))]',
+  macintosh: 'pt-[calc(52px_+_env(safe-area-inset-top))]',
+  ibm: 'pt-[calc(24px_+_env(safe-area-inset-top))]',
+  dos: 'pt-[calc(22px_+_env(safe-area-inset-top))]',
+  teletype: 'pt-[calc(28px_+_env(safe-area-inset-top))]',
+  void: 'pt-[calc(32px_+_env(safe-area-inset-top))]'
 }
 
 export const HEADER_TOP: Record<ThemeConfig['headerStyle'], string> = {
-  crt: 'top-[40px]',
-  bloomberg: 'top-[32px]',
-  macintosh: 'top-[52px]',
-  ibm: 'top-[24px]',
-  dos: 'top-[22px]',
-  teletype: 'top-[28px]',
-  void: 'top-[32px]'
+  crt: 'top-[calc(40px_+_env(safe-area-inset-top))]',
+  bloomberg: 'max-md:top-[calc(80px_+_env(safe-area-inset-top))] md:top-[calc(32px_+_env(safe-area-inset-top))]',
+  macintosh: 'top-[calc(52px_+_env(safe-area-inset-top))]',
+  ibm: 'top-[calc(24px_+_env(safe-area-inset-top))]',
+  dos: 'top-[calc(22px_+_env(safe-area-inset-top))]',
+  teletype: 'top-[calc(28px_+_env(safe-area-inset-top))]',
+  void: 'top-[calc(32px_+_env(safe-area-inset-top))]'
 }
 
 export const HEADER_H: Record<ThemeConfig['headerStyle'], string> = {
-  crt: 'h-[40px]',
-  bloomberg: 'h-[32px]',
-  macintosh: 'h-[52px]',
-  ibm: 'h-[24px]',
-  dos: 'h-[22px]',
-  teletype: 'h-[28px]',
-  void: 'h-[32px]'
+  crt: 'h-[calc(40px_+_env(safe-area-inset-top))]',
+  bloomberg: 'max-md:h-auto max-md:min-h-[calc(80px_+_env(safe-area-inset-top))] md:h-[calc(32px_+_env(safe-area-inset-top))]',
+  macintosh: 'h-[calc(52px_+_env(safe-area-inset-top))]',
+  ibm: 'h-[calc(24px_+_env(safe-area-inset-top))]',
+  dos: 'h-[calc(22px_+_env(safe-area-inset-top))]',
+  teletype: 'h-[calc(28px_+_env(safe-area-inset-top))]',
+  void: 'h-[calc(32px_+_env(safe-area-inset-top))]'
 }
 
 export function resolveThemeKey(raw?: string | null): ThemeMode {

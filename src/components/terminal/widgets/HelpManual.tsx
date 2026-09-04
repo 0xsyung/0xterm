@@ -20,104 +20,104 @@ export default function HelpManual({
       >
         SYSTEM COMMAND MANUAL
       </div>
-      <div className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 pt-1">
-          <div className={`font-bold ${theme.primary} whitespace-nowrap tracking-wider`}>
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,max-content)_1fr] gap-x-6 gap-y-2 pt-1">
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words tracking-wider`}>
             COMMAND
           </div>
           <div className={`font-bold ${theme.primary} tracking-wider`}>DESCRIPTION</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>networks</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>networks</div>
           <div>List all available blockchain networks</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             network &lt;name|id&gt;
           </div>
           <div>Switch active network</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>dexes</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>dexes</div>
           <div>List available DEXes</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>dex &lt;id&gt;</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>dex &lt;id&gt;</div>
           <div>Set active DEX protocol</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             rpc [use|add|remove|alchemy|infura|quicknode]
           </div>
           <div>Manage &amp; switch RPC providers</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>theme &lt;name&gt;</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>theme &lt;name&gt;</div>
           <div>Switch terminal color theme / style</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             register &lt;address&gt; [symbol] [erc20|erc721]
           </div>
           <div>Verify and register a custom ERC20 or ERC721/NFT token</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             price &lt;tA&gt; [tB] [pool|api]
           </div>
           <div>Query token price from on-chain pool or API</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             tokens [erc20|erc721]
           </div>
           <div>List all registered tokens for the active network</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>export</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>export</div>
           <div>Export settings &amp; custom tokens to JSON</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>import &lt;json&gt;</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>import &lt;json&gt;</div>
           <div>Import settings &amp; custom tokens from JSON</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             createpool &lt;tA&gt; &lt;tB&gt; [fee]
           </div>
           <div>Deploy pool contract</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             getpool &lt;tA&gt; &lt;tB&gt; [fee]
           </div>
           <div>Query pool address</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             initialize &lt;tA&gt; &lt;tB&gt; [fee]
           </div>
           <div>Initialize V3 pool price curve</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             addliq &lt;tA&gt; &lt;tB&gt; &lt;amtA&gt; &lt;amtB&gt; [fee]
           </div>
           <div>Add liquidity position</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             swap &lt;amt&gt; &lt;from&gt; &lt;to&gt;
           </div>
           <div>Execute token swap</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>pool &lt;address&gt;</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>pool &lt;address&gt;</div>
           <div>Check V2/V3 pool metrics</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             balance &lt;token&gt;
           </div>
           <div>Check token balance</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             portfolio [native|erc20]
           </div>
           <div>Wallet balances + USD value across all chains (P/L vs snapshot)</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>snapshot [label]</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>snapshot [label]</div>
           <div>Record current portfolio baseline for P/L tracking</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>pnl</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>pnl</div>
           <div>Show portfolio P/L vs last snapshot</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             is &lt;erc20|erc721&gt; &lt;address&gt;
           </div>
           <div>Check if address is a valid ERC20 or ERC721/NFT contract</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>info &lt;address&gt;</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>info &lt;address&gt;</div>
           <div>Print metadata of an ERC20 or ERC721/NFT token contract</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             ens &lt;name.eth | address&gt; | set &lt;name.eth&gt; | clear
           </div>
           <div>Resolve a name/address, or register/clear your record (one name per address, on the active network)</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             chat &lt;address | ens.eth&gt; &lt;message&gt;
           </div>
           <div>Send an encrypted 1:1 message (testnets only, tiny fee; your key auto-registers on first send)</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>inbox [&lt;address&gt;]</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>inbox [&lt;address&gt;]</div>
           <div>Read &amp; decrypt your chat threads (one per sender)</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>chatfee</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>chatfee</div>
           <div>Show current message fee on the active network</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             board post &lt;content&gt;
           </div>
           <div>Post public content to the on-chain billboard (tiny fee)</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             board [list] [count]
           </div>
           <div>List the latest public posts (default 5, max 50)</div>
-          <div className={`font-bold ${theme.primary} whitespace-nowrap`}>boardfee</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>boardfee</div>
           <div>Show current post fee on the active network</div>
       </div>
       <div
