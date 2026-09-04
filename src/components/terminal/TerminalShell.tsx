@@ -73,6 +73,7 @@ import { migrateCustomTokens, pricePinKey } from "./helpers";
 import { detectTokenType } from "./tokenType";
 import { getNativePriceUsd } from "./pricing";
 import { getPoolPriceRatio } from "./poolPrice";
+import { fetchBillboard, fetchChatThread } from "./pinLoaders";
 import {
   fetchPortfolioHoldings as fetchPortfolioHoldingsImpl,
   fetchPortfolioSnapshot as fetchPortfolioSnapshotImpl,
@@ -552,42 +553,8 @@ export default function TerminalShell({
       if (m.kind === "billboard" && m.contract) {
         const c = m.contract as Address;
         const count = m.count || 5;
-        refs[m.id] = async () => {
-          const client = getClient(chain);
-          const total = (await client.readContract({
-            address: c,
-            abi: billboardAbi,
-            functionName: "postCount"
-          })) as bigint;
-          const posts = ((await client.readContract({
-            address: c,
-            abi: billboardAbi,
-            functionName: "getLatest",
-            args: [BigInt(count), 0n]
-          })) as unknown as BillboardPost[]).map((x) => ({
-            ...x,
-            timestamp: Number(x.timestamp)
-          }));
-          return {
-            posts,
-            total: Number(total),
-            pageSize: count,
-            onLoadPage: (offset: number) =>
-              client
-                .readContract({
-                  address: c,
-                  abi: billboardAbi,
-                  functionName: "getLatest",
-                  args: [BigInt(count), BigInt(Math.max(0, offset))]
-                })
-                .then((r) =>
-                  (r as unknown as BillboardPost[]).map((x) => ({
-                    ...x,
-                    timestamp: Number(x.timestamp)
-                  }))
-                )
-          };
-        };
+        refs[m.id] = async () =>
+          fetchBillboard(getClient(chain), c, count);
       } else if (m.kind === "balance") {
         refs[m.id] = async () =>
           fetchTokenBalanceData(address as Address, chain, m.token);
@@ -602,58 +569,11 @@ export default function TerminalShell({
         const contract = m.contract as Address;
         const peer = m.peer as Address;
         const self = getAddress(address);
-        refs[m.id] = async () => {
-          const client = getClient(chain);
-          const count = (await client.readContract({
-            address: contract,
-            abi: chatAbi,
-            functionName: "threadCount",
-            args: [self, peer]
-          })) as bigint;
-          const msgs = (await client.readContract({
-            address: contract,
-            abi: chatAbi,
-            functionName: "getThread",
-            args: [self, peer, 0n, count]
-          })) as readonly {
-            from: string;
-            timestamp: bigint;
-            iv: string;
-            ciphertext: string;
-            senderKey: string;
-          }[];
-          const myPair = await getChatKeyPair();
-          const messages: ChatMessage[] = [];
-          for (const mm of msgs) {
-            try {
-              const aesKey = await deriveAesKey(
-                myPair.privateKey,
-                hexToBytes(mm.senderKey)
-              );
-              const text = await decryptMessage(aesKey, {
-                iv: hexToBytes(mm.iv),
-                ciphertext: hexToBytes(mm.ciphertext)
-              });
-              messages.push({
-                from: mm.from,
-                timestamp: Number(mm.timestamp),
-                iv: mm.iv,
-                ciphertext: mm.ciphertext,
-                decrypted: text
-              });
-            } catch {
-              messages.push({
-                from: mm.from,
-                timestamp: Number(mm.timestamp),
-                iv: mm.iv,
-                ciphertext: mm.ciphertext,
-                decryptFailed: true
-              });
-            }
-          }
-          const peerLabel = (await ensNameFor(peer)) || undefined;
-          return { messages, peer, self, peerLabel };
-        };
+        refs[m.id] = async () =>
+          fetchChatThread(getClient(chain), contract, self, peer, {
+            getChatKeyPair,
+            ensNameFor
+          });
       }
     }
     setPinnedRefresh(refs);
@@ -682,43 +602,12 @@ export default function TerminalShell({
       base.contract = (BILLBOARD_CONTRACT[activeChainId || 0] as string) || undefined;
       base.count = Number(p.pageSize) || 5;
       if (base.chainId && base.contract) {
-        registerPinRefresh(log.id, async () => {
-          const chain = SUPPORTED_CHAINS.find((c) => c.id === base.chainId)!;
-          const client = getClient(chain);
-          const total = (await client.readContract({
-            address: base.contract as Address,
-            abi: billboardAbi,
-            functionName: "postCount"
-          })) as bigint;
-          const posts = ((await client.readContract({
-            address: base.contract as Address,
-            abi: billboardAbi,
-            functionName: "getLatest",
-            args: [BigInt(base.count || 5), 0n]
-          })) as unknown as BillboardPost[]).map((x) => ({
-            ...x,
-            timestamp: Number(x.timestamp)
-          }));
-          return {
-            posts,
-            total: Number(total),
-            pageSize: base.count || 5,
-            onLoadPage: (offset: number) =>
-              client
-                .readContract({
-                  address: base.contract as Address,
-                  abi: billboardAbi,
-                  functionName: "getLatest",
-                  args: [BigInt(base.count || 5), BigInt(Math.max(0, offset))]
-                })
-                .then((r) =>
-                  (r as unknown as BillboardPost[]).map((x) => ({
-                    ...x,
-                    timestamp: Number(x.timestamp)
-                  }))
-                )
-          };
-        });
+        const chain = SUPPORTED_CHAINS.find((c) => c.id === base.chainId)!;
+        const contract = base.contract as Address;
+        const count = base.count || 5;
+        registerPinRefresh(log.id, () =>
+          fetchBillboard(getClient(chain), contract, count)
+        );
       }
     } else if (log.type === "balance") {
       base.title = `BALANCE${p.symbol ? ` ${p.symbol}` : ""}`;
@@ -754,57 +643,14 @@ export default function TerminalShell({
       if (address && base.chainId && base.contract && base.peer) {
         const chain = SUPPORTED_CHAINS.find((c) => c.id === base.chainId)!;
         const contract = base.contract as Address;
-        const peer = base.peer;
+        const peer = base.peer as Address;
         const self = getAddress(address);
-        registerPinRefresh(log.id, async () => {
-          const client = getClient(chain);
-          const count = (await client.readContract({
-            address: contract,
-            abi: chatAbi,
-            functionName: "threadCount",
-            args: [self, peer as Address]
-          })) as bigint;
-          const msgs = (await client.readContract({
-            address: contract,
-            abi: chatAbi,
-            functionName: "getThread",
-            args: [self, peer as Address, 0n, count]
-          })) as readonly {
-            from: string;
-            timestamp: bigint;
-            iv: string;
-            ciphertext: string;
-            senderKey: string;
-          }[];
-          const myPair = await getChatKeyPair();
-          const messages: ChatMessage[] = [];
-          for (const m of msgs) {
-            try {
-              const iv = hexToBytes(m.iv);
-              const ct = hexToBytes(m.ciphertext);
-              const senderPub = hexToBytes(m.senderKey);
-              const aesKey = await deriveAesKey(myPair.privateKey, senderPub);
-              const text = await decryptMessage(aesKey, { iv, ciphertext: ct });
-              messages.push({
-                from: m.from,
-                timestamp: Number(m.timestamp),
-                iv: m.iv,
-                ciphertext: m.ciphertext,
-                decrypted: text
-              });
-            } catch {
-              messages.push({
-                from: m.from,
-                timestamp: Number(m.timestamp),
-                iv: m.iv,
-                ciphertext: m.ciphertext,
-                decryptFailed: true
-              });
-            }
-          }
-          const peerLabel = (await ensNameFor(peer)) || undefined;
-          return { messages, peer, self, peerLabel };
-        });
+        registerPinRefresh(log.id, () =>
+          fetchChatThread(getClient(chain), contract, self, peer, {
+            getChatKeyPair,
+            ensNameFor
+          })
+        );
       }
     } else if (
       log.type === "component" &&
