@@ -287,7 +287,7 @@ export default function AddLiquidityWidget({
         {step === "check_approval" && (
           <button
             onClick={handleExecuteLiquidity}
-            className={`px-4 py-2 border ${theme.border} bg-current/10 hover:bg-current/20 ${theme.primary} font-bold ${theme.rounded} cursor-pointer transition-all text-center`}
+            className={`px-4 py-2 min-h-[44px] border ${theme.border} bg-current/10 hover:bg-current/20 ${theme.primary} font-bold ${theme.rounded} cursor-pointer transition-all text-center`}
           >
             [ EXECUTE APPROVALS & ADD LIQUIDITY ]
           </button>

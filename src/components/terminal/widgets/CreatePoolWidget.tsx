@@ -99,7 +99,7 @@ export default function CreatePoolWidget({ targetChain, activeDex, tokenA, token
 
       <div className="pt-2 flex gap-2">
         {(status === 'ready' || status === 'error') && (
-          <button onClick={handleCreate} className={`px-4 py-1.5 border ${theme.border} bg-current/10 hover:bg-current/20 ${theme.primary} font-bold ${theme.rounded} cursor-pointer transition-all`}>
+          <button onClick={handleCreate} className={`px-4 py-1.5 min-h-[44px] border ${theme.border} bg-current/10 hover:bg-current/20 ${theme.primary} font-bold ${theme.rounded} cursor-pointer transition-all`}>
             [ CALL CREATE POOL ]
           </button>
         )}

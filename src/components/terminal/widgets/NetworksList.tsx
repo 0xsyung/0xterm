@@ -25,7 +25,7 @@ export default function NetworksList({
         <PinButton
           onPin={onPin}
           theme={theme}
-          className="absolute -top-1 -right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute -top-1 -right-1 z-10 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity"
         />
       )}
       <div
@@ -86,7 +86,7 @@ export default function NetworksList({
                     href={chain.blockExplorers.default.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="underline hover:opacity-80"
+                    className="underline hover:opacity-80 pointer-coarse:min-h-[44px] pointer-coarse:inline-flex pointer-coarse:items-center"
                   >
                     Explorer ↗
                   </a>

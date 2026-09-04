@@ -43,7 +43,7 @@ export default function PriceCard({
   // panel) it also drops the pool-address footer to save vertical space.
   const shell = `my-3 p-2 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-[10px] space-y-1`;
   const header = `flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`;
-  const label = `text-[8px] ${theme.text}/50`;
+  const label = `text-[9px] ${theme.text}/50`;
   const value = `font-bold ${theme.primary}`;
 
   if (data.mode === "onchain") {
@@ -58,13 +58,13 @@ export default function PriceCard({
         <div className={`grid grid-cols-2 gap-2 ${theme.text}`}>
           <div>
             <div className={label}>PAIR</div>
-            <div className={`text-xs ${value} whitespace-nowrap`}>
+            <div className={`text-xs ${value} [overflow-wrap:anywhere] tabular-nums`}>
               {data.symbolA} / {data.symbolB}
             </div>
           </div>
           <div>
             <div className={label}>RATE (ON-CHAIN)</div>
-            <div className={`text-xs ${value} whitespace-nowrap`}>
+            <div className={`text-xs ${value} [overflow-wrap:anywhere] tabular-nums`}>
               1 {data.symbolA} ={" "}
               {Number(data.rate).toLocaleString(undefined, {
                 minimumFractionDigits: 2,
@@ -76,7 +76,7 @@ export default function PriceCard({
         </div>
         {!compact && data.pairAddress && (
           <div
-            className={`text-[8px] ${theme.text}/40 truncate pt-1 border-t ${theme.border}`}
+            className={`text-[9px] ${theme.text}/40 break-all pt-1 border-t ${theme.border}`}
           >
             POOL ADDRESS: {data.pairAddress}
           </div>
@@ -98,7 +98,7 @@ export default function PriceCard({
       <div className={`grid grid-cols-2 gap-2 ${theme.text}`}>
         <div>
           <div className={label}>PAIR</div>
-          <div className={`text-xs ${value} whitespace-nowrap`}>
+          <div className={`text-xs ${value} [overflow-wrap:anywhere] tabular-nums`}>
             {data.tokenSymbol} / {data.quoteSymbol}
           </div>
         </div>

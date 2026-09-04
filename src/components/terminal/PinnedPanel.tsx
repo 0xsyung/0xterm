@@ -26,7 +26,8 @@ export default function PinnedPanel({
   countdowns,
   onRefresh,
   onMinimize,
-  onUnpin
+  onUnpin,
+  stacked
 }: {
   pinned: PinnedManifest[];
   theme: ThemeConfig;
@@ -35,11 +36,18 @@ export default function PinnedPanel({
   onRefresh: (id: string) => void;
   onMinimize: (id: string) => void;
   onUnpin: (id: string) => void;
+  stacked?: boolean;
 }) {
   if (pinned.length === 0) return null;
 
   return (
-    <div className="w-full md:w-72 md:justify-self-end max-h-[40vh] md:max-h-none md:h-full min-h-0 overflow-y-auto space-y-2">
+    <div
+      className={
+        stacked
+          ? "w-full max-h-[30vh] min-h-0 overflow-y-auto space-y-2"
+          : "w-full h-full min-h-0 overflow-y-auto space-y-2"
+      }
+    >
       {pinned.map((p) => {
         const hasRefresh = countdowns && countdowns[p.id] !== undefined;
         const secs =

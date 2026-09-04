@@ -4,7 +4,7 @@
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
@@ -19,6 +19,15 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://0xterm.xyz"),
   title: "0xterm",
   description: "Matrix-style Web3 Terminal Interface"
+};
+
+// viewport-fit=cover so safe-area insets apply on notched devices (issue #49).
+// No maximumScale — pinch-zoom stays enabled.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content"
 };
 
 export default function RootLayout({

@@ -116,7 +116,7 @@ export default function InitializePoolWidget({
         {(status === "ready" || status === "error") && (
           <button
             onClick={handleInitialize}
-            className={`px-4 py-1.5 border ${theme.border} bg-current/10 hover:bg-current/20 ${theme.primary} font-bold ${theme.rounded} cursor-pointer transition-all`}
+            className={`px-4 py-1.5 min-h-[44px] border ${theme.border} bg-current/10 hover:bg-current/20 ${theme.primary} font-bold ${theme.rounded} cursor-pointer transition-all`}
           >
             [ EXECUTE INITIALIZE ]
           </button>

@@ -19,7 +19,7 @@ export default function PinButton({
       type="button"
       onClick={onPin}
       title="Pin to right panel"
-      className={`uppercase text-[9px] px-1 py-0.5 border ${theme.border} ${theme.cardBg} ${theme.primary} cursor-pointer ${className}`}
+      className={`uppercase text-[9px] px-1 py-0.5 border ${theme.border} ${theme.cardBg} ${theme.primary} cursor-pointer pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:flex pointer-coarse:items-center pointer-coarse:justify-center ${className}`}
     >
       ▣
     </button>
