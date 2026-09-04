@@ -89,6 +89,7 @@ import {
   probeErc165,
   probeTokenMeta
 } from "./probeToken";
+import { pinGridClass, useLayoutBand } from "./viewport";
 import {
   deriveKeysFromSignature,
   deriveAesKey,
@@ -252,6 +253,7 @@ export default function TerminalShell({
   // Pinned widgets (floating right column). `refresh` is a live-data loader
   // re-run every 60s; manifests are what get persisted / exported / imported.
   const REFRESH_INTERVAL = 60; // seconds
+  const { band, narrow } = useLayoutBand();
   const [pinned, setPinned] = useState<PinnedManifest[]>([]);
   const [pinnedRefresh, setPinnedRefresh] = useState<
     Record<string, () => Promise<any>>
@@ -4339,6 +4341,26 @@ export default function TerminalShell({
       );
     });
 
+  // Tap handler for CHOICES chips: mirrors Enter/Tab on the keyboard path for
+  // both normal suggestions and the ambiguous-token picker (issue #49).
+  const selectSuggestion = (idx: number) => {
+    if (pendingTokenPick) {
+      const { choices, resolve } = pendingTokenPick;
+      const i = Math.max(0, idx);
+      const chosen = choices[i]?.token ?? null;
+      setPendingTokenPick(null);
+      setSuggestions([]);
+      setSuggestionIdx(-1);
+      setInput(pickBaseInputRef.current.replace(/\S+$/, "") + choices[i]?.label + " ");
+      resolve(chosen);
+      inputRef.current?.focus();
+      return;
+    }
+    if (suggestions.length > 0 && suggestions[idx]) {
+      applySuggestion(suggestions[idx]);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // While a token pick is open, route all keys to the picker (shadows Tab
     // autocomplete and normal Enter handling).
@@ -4623,17 +4645,15 @@ export default function TerminalShell({
 
       {/* TERMINAL CONTENT CONTAINER */}
       <div
-        className={`flex-1 flex flex-col px-6 pb-6 ${HEADER_PAD[theme.headerStyle]} overflow-hidden relative z-10`}
+        className={`flex-1 flex flex-col px-[calc(0.75rem_+_env(safe-area-inset-left))] md:px-[calc(1.5rem_+_env(safe-area-inset-left))] pb-[calc(1.5rem_+_env(safe-area-inset-bottom))] ${HEADER_PAD[theme.headerStyle]} overflow-hidden relative z-10 ${
+          theme.headerStyle === "bloomberg"
+            ? "max-md:pt-[calc(80px_+_env(safe-area-inset-top))]"
+            : ""
+        }`}
         onClick={() => inputRef.current?.focus()}
       >
-        {/* Log + pin: md+ two columns; <md pin stacks above the prompt. Never overlay. */}
-        <div
-          className={
-            pinned.length > 0
-              ? "flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)_auto] md:grid-rows-1 md:grid-cols-[minmax(0,1fr)_18rem] gap-2"
-              : "flex-1 min-h-0 flex flex-col"
-          }
-        >
+        {/* Log + pin: band-driven — stack (phone/short-landscape) vs two-column (tablet/desktop). Never overlay. */}
+        <div className={pinGridClass(band, pinned.length > 0)}>
           <div
             ref={logContainerRef}
             className="h-full min-h-0 min-w-0 overflow-y-auto pt-2 pr-2 whitespace-pre-wrap"
@@ -4657,6 +4677,7 @@ export default function TerminalShell({
             onRefresh={onRefreshPinned}
             onMinimize={onMinimize}
             onUnpin={onUnpin}
+            stacked={band === "stack"}
           />
         </div>
 
@@ -4678,11 +4699,13 @@ export default function TerminalShell({
           inputRef={inputRef}
           suggestions={suggestions}
           suggestionIdx={suggestionIdx}
+          onSelectSuggestion={selectSuggestion}
           activeChainId={activeChainId}
           activeDexId={activeDexId}
           isConnected={isConnected}
           address={address}
           mounted={mounted}
+          isNarrow={narrow}
         />
       </div>
     </div>

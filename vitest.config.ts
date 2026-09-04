@@ -18,17 +18,19 @@ export default defineConfig({
         "src/components/terminal/implementationBytecode.ts",
         // static marketing page — pure presentational, no logic to cover
         "src/app/page.tsx",
+        // app entry — viewport/keyboard wiring, no testable logic (issue #49)
+        "src/app/app/page.tsx",
         "src/**/*.test.{ts,tsx}",
       ],
       thresholds: {
-        // Ratchet — measured 2026-09-03 after fetchPortfolioSnapshot extraction (#37):
-        // Lines 18.18%, Statements 18.78%, Functions 15.57%, Branches 16.30%.
+        // Ratchet — measured 2026-09-04 after viewport module + responsive shell (#49):
+        // Lines 18.53%, Statements 19.21%, Functions 16.37%, Branches 16.77%.
         // Hard-fail at floor(measured) so CI stays green while TerminalShell.tsx
         // (~5.2k lines, 0% covered) is still in the include set. Climb toward
         // 90% is tracked in issue #37.
         lines: 18,
-        statements: 18,
-        functions: 15,
+        statements: 19,
+        functions: 16,
         branches: 16,
       },
     },

@@ -137,20 +137,20 @@ export default function TerminalHeader({
     ];
     return (
       <div
-        className={`absolute top-0 left-0 right-0 z-30 flex items-center gap-4 px-3 ${theme.primary} ${hClass}`}
+        className={`absolute top-0 left-0 right-0 z-30 flex items-center gap-4 flex-wrap px-3 pr-[calc(0.75rem_+_env(safe-area-inset-right))] ${theme.primary} ${hClass}`}
         style={{ borderBottom: `2px solid ${theme.phosphor}` }}
       >
         <div className="flex items-center gap-3 shrink-0 uppercase text-[10px] tracking-widest">
           <span className="font-bold">0xTERM</span>
           <span className="tabular-nums">{clock}</span>
         </div>
-        <div className="flex items-center gap-3 uppercase text-[10px] tracking-widest">
+        <div className="flex items-center gap-3 flex-wrap uppercase text-[10px] tracking-widest max-md:w-full max-md:justify-between">
           {keys.map((k) => (
               <button
                 key={k.id}
                 type="button"
                 onClick={k.run}
-                className="cursor-pointer bg-transparent border-0 p-0 uppercase text-[10px] tracking-widest"
+                className="cursor-pointer bg-transparent border-0 p-0 uppercase text-[10px] tracking-widest max-md:min-h-[44px] max-md:flex max-md:items-center"
                 title={k.label}
               >
                 {k.id} {k.label}

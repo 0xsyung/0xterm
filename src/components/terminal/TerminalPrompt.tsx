@@ -7,6 +7,7 @@
 import React from "react";
 import type { ThemeConfig } from "./types";
 import { SUPPORTED_CHAINS, DEX_REGISTRY } from "./constants";
+import { isCoarsePointer } from "./viewport";
 
 export default function TerminalPrompt({
   theme,
@@ -16,11 +17,13 @@ export default function TerminalPrompt({
   inputRef,
   suggestions,
   suggestionIdx,
+  onSelectSuggestion,
   activeChainId,
   activeDexId,
   isConnected,
   address,
-  mounted
+  mounted,
+  isNarrow
 }: {
   theme: ThemeConfig;
   input: string;
@@ -29,11 +32,13 @@ export default function TerminalPrompt({
   inputRef: React.RefObject<HTMLInputElement | null>;
   suggestions: string[];
   suggestionIdx: number;
+  onSelectSuggestion?: (idx: number) => void;
   activeChainId: number | null;
   activeDexId: string | null;
   isConnected: boolean;
   address: string | undefined;
   mounted: boolean;
+  isNarrow?: boolean;
 }) {
   const chainObj = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
   const activeDexObj = DEX_REGISTRY[activeChainId!]?.find(
@@ -105,8 +110,9 @@ export default function TerminalPrompt({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder=""
-          className={`flex-1 bg-transparent outline-none text-xs ${theme.text} [caret-color:var(--phosphor)] [caret-shape:block]`}
-          autoFocus
+          // 16px below 768 avoids iOS zoom-on-focus (issue #49).
+          className={`flex-1 bg-transparent outline-none ${isNarrow ? "text-base" : "text-xs"} ${theme.text} [caret-color:var(--phosphor)] [caret-shape:block]`}
+          autoFocus={!isCoarsePointer()}
           spellCheck={false}
           autoComplete="off"
         />
@@ -119,16 +125,18 @@ export default function TerminalPrompt({
             CHOICES [← →]:
           </span>
           {suggestions.map((s, idx) => (
-            <span
+            <button
               key={s}
-              className={`px-2 py-0.5 rounded border whitespace-nowrap shrink-0 transition-colors ${
+              type="button"
+              onClick={() => onSelectSuggestion?.(idx)}
+              className={`px-2 py-0.5 rounded border whitespace-nowrap shrink-0 transition-colors max-md:min-h-[44px] max-md:flex max-md:items-center ${
                 idx === suggestionIdx
                   ? `${theme.primary} bg-current/15 border-current font-bold`
                   : `${theme.border} ${theme.text} opacity-60`
               }`}
             >
               {s}
-            </span>
+            </button>
           ))}
         </div>
       )}
