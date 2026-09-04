@@ -4645,11 +4645,7 @@ export default function TerminalShell({
 
       {/* TERMINAL CONTENT CONTAINER */}
       <div
-        className={`flex-1 flex flex-col px-[calc(0.75rem_+_env(safe-area-inset-left))] md:px-[calc(1.5rem_+_env(safe-area-inset-left))] pb-[calc(1.5rem_+_env(safe-area-inset-bottom))] ${HEADER_PAD[theme.headerStyle]} overflow-hidden relative z-10 ${
-          theme.headerStyle === "bloomberg"
-            ? "max-md:pt-[calc(80px_+_env(safe-area-inset-top))]"
-            : ""
-        }`}
+        className={`flex-1 flex flex-col pl-[calc(0.75rem_+_env(safe-area-inset-left))] pr-[calc(0.75rem_+_env(safe-area-inset-right))] md:pl-[calc(1.5rem_+_env(safe-area-inset-left))] md:pr-[calc(1.5rem_+_env(safe-area-inset-right))] pb-[calc(1.5rem_+_env(safe-area-inset-bottom))] ${HEADER_PAD[theme.headerStyle]} overflow-hidden relative z-10`}
         onClick={() => inputRef.current?.focus()}
       >
         {/* Log + pin: band-driven — stack (phone/short-landscape) vs two-column (tablet/desktop). Never overlay. */}

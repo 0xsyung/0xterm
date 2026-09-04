@@ -212,7 +212,7 @@ export const THEME_ALIASES: Record<string, ThemeMode> = {
 
 export const HEADER_PAD: Record<ThemeConfig['headerStyle'], string> = {
   crt: 'pt-[calc(40px_+_env(safe-area-inset-top))]',
-  bloomberg: 'pt-[calc(32px_+_env(safe-area-inset-top))]',
+  bloomberg: 'max-md:pt-[calc(80px_+_env(safe-area-inset-top))] md:pt-[calc(32px_+_env(safe-area-inset-top))]',
   macintosh: 'pt-[calc(52px_+_env(safe-area-inset-top))]',
   ibm: 'pt-[calc(24px_+_env(safe-area-inset-top))]',
   dos: 'pt-[calc(22px_+_env(safe-area-inset-top))]',
@@ -222,7 +222,7 @@ export const HEADER_PAD: Record<ThemeConfig['headerStyle'], string> = {
 
 export const HEADER_TOP: Record<ThemeConfig['headerStyle'], string> = {
   crt: 'top-[calc(40px_+_env(safe-area-inset-top))]',
-  bloomberg: 'top-[calc(32px_+_env(safe-area-inset-top))]',
+  bloomberg: 'max-md:top-[calc(80px_+_env(safe-area-inset-top))] md:top-[calc(32px_+_env(safe-area-inset-top))]',
   macintosh: 'top-[calc(52px_+_env(safe-area-inset-top))]',
   ibm: 'top-[calc(24px_+_env(safe-area-inset-top))]',
   dos: 'top-[calc(22px_+_env(safe-area-inset-top))]',
@@ -232,7 +232,7 @@ export const HEADER_TOP: Record<ThemeConfig['headerStyle'], string> = {
 
 export const HEADER_H: Record<ThemeConfig['headerStyle'], string> = {
   crt: 'h-[calc(40px_+_env(safe-area-inset-top))]',
-  bloomberg: 'h-[calc(32px_+_env(safe-area-inset-top))]',
+  bloomberg: 'max-md:h-auto max-md:min-h-[calc(80px_+_env(safe-area-inset-top))] md:h-[calc(32px_+_env(safe-area-inset-top))]',
   macintosh: 'h-[calc(52px_+_env(safe-area-inset-top))]',
   ibm: 'h-[calc(24px_+_env(safe-area-inset-top))]',
   dos: 'h-[calc(22px_+_env(safe-area-inset-top))]',

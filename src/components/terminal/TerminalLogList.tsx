@@ -117,7 +117,7 @@ function renderLog(
         <PinButton
           onPin={() => onPin(log)}
           theme={theme}
-          className="absolute -top-1 -right-1 z-10 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity"
+          className="absolute -top-1 -right-1 z-10 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity"
         />
       )}
     </div>
