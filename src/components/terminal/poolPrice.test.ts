@@ -161,4 +161,21 @@ describe("getPoolPriceRatio", () => {
     });
     expect(ratio).toBeCloseTo(1e12, 0);
   });
+
+  it("throws when the V3 pool has zero liquidity", async () => {
+    const client = mockClient(async (args: any) => {
+      if (args.functionName === "token0") return WETH;
+      if (args.functionName === "slot0") return [0n, 0, 0, 0, 0, 0, 0, 0];
+      throw new Error("unexpected");
+    });
+    await expect(
+      getPoolPriceRatio(client, {
+        dexType: "V3",
+        pairAddress: "0xpool",
+        tokenAAddress: WETH as `0x${string}`,
+        tokenADecimals: 18,
+        tokenBDecimals: 6
+      })
+    ).rejects.toThrow("Pool has zero liquidity.");
+  });
 });

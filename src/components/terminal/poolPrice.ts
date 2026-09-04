@@ -59,6 +59,7 @@ export const getPoolPriceRatio = async (
       functionName: "slot0"
     })
   ]);
+  if (slot0[0] === 0n) throw new Error("Pool has zero liquidity.");
   const isTokenA0 = (token0 as string).toLowerCase() === d.tokenAAddress.toLowerCase();
   const sqrtPriceFloat = Number(slot0[0]) / 2 ** 96;
   const pRaw = Math.pow(sqrtPriceFloat, 2);
