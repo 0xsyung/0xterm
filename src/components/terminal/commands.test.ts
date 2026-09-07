@@ -1,17 +1,21 @@
 /**
  * @file commands.test.ts
- * @description Unit tests for wallet command log builders (balance / pnl)
+ * @description Unit tests for wallet command log builders (balance / pnl / tokens / theme)
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 import { describe, expect, it, vi } from "vitest";
 import type { Address } from "viem";
+import { base } from "viem/chains";
 import { SUPPORTED_CHAINS } from "./constants";
 import {
   buildBalanceLog,
   buildPnlLog,
+  buildThemeLog,
+  buildTokensLog,
   type BuildBalanceLogDeps,
-  type BuildPnlLogDeps
+  type BuildPnlLogDeps,
+  type BuildThemeLogDeps
 } from "./commands";
 
 const ALICE = "0x3333333333333333333333333333333333333333" as Address;
@@ -119,5 +123,89 @@ describe("buildPnlLog", () => {
     expect(res.text).toBe(
       `Snapshot "my-snap" at ${new Date(1700000000000).toLocaleString()} with 2 holdings. Run 'portfolio' for per-token P/L.`
     );
+  });
+});
+
+describe("buildTokensLog", () => {
+  const CUSTOM = {
+    [base.id]: [
+      {
+        id: "c_1",
+        address: "0x2222222222222222222222222222222222222222" as Address,
+        symbol: "CUSTOM",
+        name: "Custom",
+        tokenType: "erc721" as const,
+        isNative: false
+      }
+    ]
+  };
+
+  it("returns a select-network-first entry when no chain is active", () => {
+    const res = buildTokensLog([], null, { generateId: genId, customTokens: {} });
+    expect(res).toEqual({
+      id: "id-1",
+      type: "text",
+      text: "Select network first."
+    });
+  });
+
+  it("rejects an invalid filter type", () => {
+    const res = buildTokensLog(["tokens", "nope"], base.id, {
+      generateId: genId,
+      customTokens: {}
+    });
+    expect(res.text).toBe(
+      "Invalid filter. Use 'tokens', 'tokens erc20', or 'tokens erc721'."
+    );
+  });
+
+  it("merges common and custom tokens, filtering by type", () => {
+    const res = buildTokensLog(["tokens", "erc721"], base.id, {
+      generateId: genId,
+      customTokens: CUSTOM
+    });
+    expect(res.text).toContain("[Available ERC721 Tokens]");
+    expect(res.text).toContain("CUSTOM");
+    expect(res.text).toContain("[ERC721]");
+    expect(res.text).toContain("(Custom)");
+  });
+
+  it("returns a no-tokens-found message when the filter has no matches", () => {
+    const res = buildTokensLog(["tokens", "erc721"], base.id, {
+      generateId: genId,
+      customTokens: {}
+    });
+    expect(res.text).toBe("No ERC721 tokens found for this network.");
+  });
+});
+
+describe("buildThemeLog", () => {
+  const themeDeps = (
+    overrides: Partial<BuildThemeLogDeps> = {}
+  ): BuildThemeLogDeps => ({
+    generateId: genId,
+    currentThemeKey: "matrix",
+    themeName: "Matrix",
+    handleThemeSwitch: vi.fn(),
+    ...overrides
+  });
+
+  it("lists themes and the active theme when no arg is given", () => {
+    const res = buildThemeLog([], themeDeps());
+    expect(res.text).toContain("Active Theme: Matrix.");
+    expect(res.text).toContain("* matrix");
+    expect(res.text).toContain(" amber");
+  });
+
+  it("reports an unknown theme", () => {
+    const res = buildThemeLog(["theme", "bogus"], themeDeps());
+    expect(res.text).toContain('[!] Error: Theme "bogus" not found.');
+  });
+
+  it("switches theme via the injected handler on a valid input", () => {
+    const deps = themeDeps();
+    const res = buildThemeLog(["theme", "amber"], deps);
+    expect(deps.handleThemeSwitch).toHaveBeenCalledWith("amber");
+    expect(res.text).toBe("[✓] Theme switched to Amber");
   });
 });

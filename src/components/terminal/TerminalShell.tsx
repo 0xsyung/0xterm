@@ -43,7 +43,6 @@ import {
   THEMES,
   THEME_ORDER,
   resolveThemeKey,
-  isKnownThemeInput,
   HEADER_PAD,
   SUPPORTED_CHAINS,
   NATIVE_TOKEN_ADDRESS,
@@ -74,7 +73,12 @@ import { detectTokenType } from "./tokenType";
 import { getNativePriceUsd } from "./pricing";
 import { getPoolPriceRatio } from "./poolPrice";
 import { fetchBillboard, fetchChatThread } from "./pinLoaders";
-import { buildBalanceLog, buildPnlLog } from "./commands";
+import {
+  buildBalanceLog,
+  buildPnlLog,
+  buildThemeLog,
+  buildTokensLog
+} from "./commands";
 import {
   fetchPortfolioHoldings as fetchPortfolioHoldingsImpl,
   fetchPortfolioSnapshot as fetchPortfolioSnapshotImpl,
@@ -1350,6 +1354,17 @@ export default function TerminalShell({
       }
     );
 
+  const buildTokens = (args: string[]) =>
+    buildTokensLog(args, activeChainId, { generateId, customTokens });
+
+  const buildTheme = (args: string[]) =>
+    buildThemeLog(args, {
+      generateId,
+      currentThemeKey,
+      themeName: theme.name,
+      handleThemeSwitch
+    });
+
   // --- new-message poller ----------------------------------------------
   // Background check every 60s for unread chat messages. When a new message is
   // found it prints a notification (no pause — running `inbox` is just a manual
@@ -1513,81 +1528,7 @@ export default function TerminalShell({
     help: () => ({ id: generateId(), type: "help" }),
     "?": () => ({ id: generateId(), type: "help" }),
     networks: () => ({ id: generateId(), type: "networks" }),
-    tokens: (args) => {
-      if (!activeChainId) {
-        return {
-          id: generateId(),
-          type: "text",
-          text: "Select network first."
-        };
-      }
-
-      const filterType = args[1]?.toLowerCase();
-      if (filterType && filterType !== "erc20" && filterType !== "erc721") {
-        return {
-          id: generateId(),
-          type: "text",
-          text: "Invalid filter. Use 'tokens', 'tokens erc20', or 'tokens erc721'."
-        };
-      }
-
-      const common = COMMON_TOKENS[activeChainId] || {};
-
-      const allTokens: Array<{
-        symbol: string;
-        address: string;
-        type: string;
-        isCustom: boolean;
-      }> = [];
-
-      for (const [symbol, info] of Object.entries(common)) {
-        allTokens.push({
-          symbol,
-          address: info.address,
-          type: "erc20",
-          isCustom: false
-        });
-      }
-
-      for (const info of customTokens[activeChainId] || []) {
-        allTokens.push({
-          symbol: info.symbol,
-          address: info.address,
-          type: info.tokenType || "erc20",
-          isCustom: true
-        });
-      }
-
-      let filteredTokens = allTokens;
-      if (filterType) {
-        filteredTokens = allTokens.filter((t) => t.type === filterType);
-      }
-
-      if (filteredTokens.length === 0) {
-        return {
-          id: generateId(),
-          type: "text",
-          text: `No ${filterType ? filterType.toUpperCase() + " " : ""}tokens found for this network.`
-        };
-      }
-
-      const lines = [
-        `[Available ${filterType ? filterType.toUpperCase() + " " : ""}Tokens]`
-      ];
-      for (const t of filteredTokens) {
-        const typeBadge = t.type === "erc721" ? "[ERC721]" : "[ERC20]";
-        const customBadge = t.isCustom ? "(Custom)" : "";
-        lines.push(
-          `${t.symbol.padEnd(8)} | ${typeBadge} ${t.address} ${customBadge}`
-        );
-      }
-
-      return {
-        id: generateId(),
-        type: "text",
-        text: lines.join("\n")
-      };
-    },
+    tokens: (args) => buildTokens(args),
     network: async (args) => {
       let netText = "";
       const queryArg = args.slice(1).join(" ");
@@ -1651,34 +1592,7 @@ export default function TerminalShell({
       }
       return { id: generateId(), type: "text", text: dexText };
     },
-    theme: (args) => {
-      const list = THEME_ORDER.map(
-        (k) => `${k === currentThemeKey ? "*" : " "} ${k}`
-      ).join("\n");
-      if (!args[1]) {
-        return {
-          id: generateId(),
-          type: "text",
-          text: `Active Theme: ${theme.name}.\n${list}`
-        };
-      }
-
-      if (!isKnownThemeInput(args[1])) {
-        return {
-          id: generateId(),
-          type: "text",
-          text: `[!] Error: Theme "${args[1]}" not found.\n${list}`
-        };
-      }
-
-      const targetThemeKey = resolveThemeKey(args[1]);
-      handleThemeSwitch(targetThemeKey);
-      return {
-        id: generateId(),
-        type: "text",
-        text: `[✓] Theme switched to ${THEMES[targetThemeKey].name}`
-      };
-    },
+    theme: (args) => buildTheme(args),
     rpc: (args) => {
       if (!activeChainId)
         return {
