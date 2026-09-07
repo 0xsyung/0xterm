@@ -74,3 +74,18 @@ export const buildTokenArgCandidates = (
   }
   return Array.from(labelSet);
 };
+
+// Replace the last whitespace-delimited token of the input with `suggestion`,
+// preserving any trailing space when `commit` (Tab/Space/Enter) is set; the
+// preview path omits the trailing space so arrow-travel shows the value only.
+export const applySuggestionToInput = (
+  input: string,
+  suggestion: string,
+  commit: boolean
+): string => {
+  const suffix = commit ? " " : "";
+  if (input.endsWith(" ")) return input + suggestion + suffix;
+  const lastSpaceIdx = input.lastIndexOf(" ");
+  if (lastSpaceIdx === -1) return suggestion + suffix;
+  return input.substring(0, lastSpaceIdx + 1) + suggestion + suffix;
+};

@@ -89,7 +89,11 @@ import {
   resolveWithPreferred as resolveWithPreferredImpl,
   resolveWithPreferredDecimals as resolveWithPreferredDecimalsImpl
 } from "./resolveToken";
-import { buildTokenArgCandidates, isTokenArgPosition } from "./autocomplete";
+import {
+  applySuggestionToInput,
+  buildTokenArgCandidates,
+  isTokenArgPosition
+} from "./autocomplete";
 import {
   formatProbeReport,
   probeCoreFunctions,
@@ -3834,30 +3838,11 @@ export default function TerminalShell({
   // Live-preview a highlighted suggestion into the input (replaces the last
   // token, no trailing space) so arrow-travel shows the value without
   // committing; Tab/Space/Enter then finalize via applySuggestion.
-  const previewSuggestion = (suggestion: string) => {
-    if (input.endsWith(" ")) {
-      setInput(input + suggestion);
-    } else {
-      const lastSpaceIdx = input.lastIndexOf(" ");
-      if (lastSpaceIdx === -1) {
-        setInput(suggestion);
-      } else {
-        setInput(input.substring(0, lastSpaceIdx + 1) + suggestion);
-      }
-    }
-  };
+  const previewSuggestion = (suggestion: string) =>
+    setInput(applySuggestionToInput(input, suggestion, false));
 
   const applySuggestion = (suggestion: string) => {
-    if (input.endsWith(" ")) {
-      setInput(input + suggestion + " ");
-    } else {
-      const lastSpaceIdx = input.lastIndexOf(" ");
-      if (lastSpaceIdx === -1) {
-        setInput(suggestion + " ");
-      } else {
-        setInput(input.substring(0, lastSpaceIdx + 1) + suggestion + " ");
-      }
-    }
+    setInput(applySuggestionToInput(input, suggestion, true));
     setSuggestions([]);
     setSuggestionIdx(-1);
     inputRef.current?.focus();
