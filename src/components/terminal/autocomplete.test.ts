@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import type { Address } from "viem";
 import {
+  applySuggestionToInput,
   buildTokenArgCandidates,
   isTokenArgPosition
 } from "./autocomplete";
@@ -101,5 +102,39 @@ describe("buildTokenArgCandidates", () => {
 
   it("returns an empty array for no symbols and no customs", () => {
     expect(buildTokenArgCandidates("balance", [], [])).toEqual([]);
+  });
+});
+
+describe("applySuggestionToInput", () => {
+  it("appends when input ends with a space", () => {
+    expect(applySuggestionToInput("balance ", "USDC", false)).toBe(
+      "balance USDC"
+    );
+    expect(applySuggestionToInput("balance ", "USDC", true)).toBe(
+      "balance USDC "
+    );
+  });
+
+  it("replaces the last token when input has no trailing space", () => {
+    expect(applySuggestionToInput("balance ETH", "USDC", false)).toBe(
+      "balance USDC"
+    );
+    expect(applySuggestionToInput("balance ETH", "USDC", true)).toBe(
+      "balance USDC "
+    );
+  });
+
+  it("replaces the whole input when there is no space", () => {
+    expect(applySuggestionToInput("ETH", "USDC", false)).toBe("USDC");
+    expect(applySuggestionToInput("ETH", "USDC", true)).toBe("USDC ");
+  });
+
+  it("commits a trailing space only on commit", () => {
+    expect(applySuggestionToInput("balance ", "USDC", false)).toBe(
+      "balance USDC"
+    );
+    expect(applySuggestionToInput("balance ", "USDC", true)).toBe(
+      "balance USDC "
+    );
   });
 });
