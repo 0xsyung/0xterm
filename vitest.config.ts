@@ -23,15 +23,15 @@ export default defineConfig({
         "src/**/*.test.{ts,tsx}",
       ],
       thresholds: {
-        // Ratchet — measured 2026-09-04 after pin refresh loader extraction (#37):
-        // Lines 20.91%, Statements 21.58%, Functions 18.5%, Branches 17.89%.
+        // Ratchet — measured 2026-09-04 after balance/pnl command extraction (#37):
+        // Lines 21.33%, Statements 22.1%, Functions 19.21%, Branches 18.43%.
         // Hard-fail at floor(measured) so CI stays green while TerminalShell.tsx
         // (~4.3k lines, 0% covered) is still in the include set. Climb toward
         // 90% is tracked in issue #37.
-        lines: 20,
-        statements: 21,
-        functions: 18,
-        branches: 17,
+        lines: 21,
+        statements: 22,
+        functions: 19,
+        branches: 18,
       },
     },
   },
