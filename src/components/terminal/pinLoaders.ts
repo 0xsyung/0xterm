@@ -112,7 +112,7 @@ export const fetchChatThread = async (
       const iv = hexToBytes(m.iv);
       const ct = hexToBytes(m.ciphertext);
       const senderPub = hexToBytes(m.senderKey);
-      const aesKey = await deriveAesKey(myPair.privateKey, senderPub);
+      const aesKey = await deriveAesKey(myPair.privateKey, senderPub, myPair.publicKey);
       const text = await decryptMessage(aesKey, { iv, ciphertext: ct });
       messages.push({
         from: m.from,

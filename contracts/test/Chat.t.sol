@@ -20,11 +20,59 @@ contract ChatTest is Test {
     function setUp() public {
         Chat impl = new Chat();
         chat = Chat(address(new ERC1967Proxy(address(impl), abi.encodeCall(Chat.initialize, (FEE)))));
+        aliceKey = 0xA11CE;
+        aliceAddr = vm.addr(aliceKey);
+        bobKey = 0xB0B0;
+        bob = vm.addr(bobKey);
+        malloryKey = 0x44AF;
+        malloryAddr = vm.addr(malloryKey);
     }
 
     /// 33-byte compressed secp256k1 public key placeholder (valid length only)
     bytes constant SENDER_KEY = hex"020000000000000000000000000000000000000000000000000000000000000000";
     bytes constant SENDER_KEY2 = hex"030000000000000000000000000000000000000000000000000000000000000000";
+
+    // --- proof-of-possession signing helpers --------------------------------
+    // setPublicKey now requires a signature over keccak(chainid, msg.sender,
+    // key) by the wallet controlling msg.sender (finding C-1). These helpers
+    // produce that signature with forge-std's key/address scheme.
+    uint256 aliceKey;
+    address aliceAddr;
+    uint256 bobKey;
+    uint256 malloryKey;
+    address malloryAddr;
+
+    bytes32[] emptyProof; // reused to sign "no proof" via a zero r/s
+
+    /// signPoP(bytes32(message digest), priv) -> (v, r, s) using vm.sign
+    function signPoP(bytes32 digest, uint256 priv) internal pure returns (uint8, bytes32, bytes32) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(priv, digest);
+        return (v, r, s);
+    }
+
+    /// The EIP-191 personal-message digest an owner signs to register `key` at
+    /// `ownerAddr` on chainid — matches Chat.setPublicKey exactly:
+    /// keccak("\x19Ethereum Signed Message:\n32" ‖ keccak(chainid, addr, key)).
+    function popDigest(uint256 chainId, address ownerAddr, bytes memory key) internal pure returns (bytes32) {
+        bytes32 inner = keccak256(abi.encodePacked(chainId, ownerAddr, key));
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", inner));
+    }
+
+    /// register `key` for `ownerAddr` (pranking that address) using `priv` to sign.
+    function registerKey(address ownerAddr, uint256 priv, bytes memory key) internal {
+        (uint8 v, bytes32 r, bytes32 s) = signPoP(popDigest(block.chainid, ownerAddr, key), priv);
+        vm.prank(ownerAddr);
+        chat.setPublicKey(key, v, r, s);
+    }
+
+    /// try to register `key` for `ownerAddr` signed with `priv` — reverts with
+    /// "Chat: not the key owner" (used for all negative PoP cases).
+    function expectPoPRevert(address ownerAddr, uint256 priv, bytes memory key) internal {
+        (uint8 v, bytes32 r, bytes32 s) = signPoP(popDigest(block.chainid, ownerAddr, key), priv);
+        vm.prank(ownerAddr);
+        vm.expectRevert("Chat: not the key owner");
+        chat.setPublicKey(key, v, r, s);
+    }
 
     /// fund `sender` then prank-send `fee` wei on their behalf
     function sendAs(address sender, address to, bytes12 iv, bytes memory ct, uint256 fee) internal {
@@ -103,43 +151,79 @@ contract ChatTest is Test {
 
     /// registry: registering a key makes it readable via getPublicKey
     function test_SetPublicKey_StoredAndReadable() public {
-        vm.prank(alice);
-        chat.setPublicKey(SENDER_KEY);
+        registerKey(aliceAddr, aliceKey, SENDER_KEY);
 
-        assertEq(chat.getPublicKey(alice), SENDER_KEY);
+        assertEq(chat.getPublicKey(aliceAddr), SENDER_KEY);
         assertEq(chat.getPublicKey(bob).length, 0); // bob hasn't registered
     }
 
-    /// registry: only the owner of the key can register it
-    function test_SetPublicKey_IsPerCaller() public {
-        vm.prank(alice);
-        chat.setPublicKey(SENDER_KEY);
-        assertEq(chat.getPublicKey(alice), SENDER_KEY);
-        assertEq(chat.getPublicKey(bob).length, 0);
-    }
-
-    /// registry: a registered key can be rotated
+    /// registry: a registered key can be rotated (with the new key's PoP)
     function test_SetPublicKey_Overwrites() public {
-        vm.prank(alice);
-        chat.setPublicKey(SENDER_KEY);
-        vm.prank(alice);
-        chat.setPublicKey(SENDER_KEY2);
+        registerKey(aliceAddr, aliceKey, SENDER_KEY);
+        registerKey(aliceAddr, aliceKey, SENDER_KEY2);
 
-        assertEq(chat.getPublicKey(alice), SENDER_KEY2);
+        assertEq(chat.getPublicKey(aliceAddr), SENDER_KEY2);
     }
 
     /// registry: invalid key length reverts
     function test_SetPublicKey_InvalidLength_Reverts() public {
-        vm.prank(alice);
+        (uint8 v, bytes32 r, bytes32 s) = signPoP(popDigest(block.chainid, aliceAddr, hex"02"), aliceKey);
+        vm.prank(aliceAddr);
         vm.expectRevert("Chat: invalid public key");
-        chat.setPublicKey(hex"02"); // 1 byte, not 33
+        chat.setPublicKey(hex"02", v, r, s); // 1 byte
+    }
+
+    /// PoP: a key registered by its rightful owner is accepted
+    function test_SetPublicKey_ValidPoP() public {
+        registerKey(aliceAddr, aliceKey, SENDER_KEY);
+        assertEq(chat.getPublicKey(aliceAddr), SENDER_KEY);
+    }
+
+    /// PoP: a key signed by the WRONG wallet is rejected (no squatting)
+    function test_SetPublicKey_NotKeyOwner_Reverts() public {
+        // mallory signs a PoP claiming to own alice's registration — ecrecover
+        // recovers malloryAddr != aliceAddr, so it reverts.
+        (uint8 v, bytes32 r, bytes32 s) = signPoP(popDigest(block.chainid, aliceAddr, SENDER_KEY), malloryKey);
+        vm.prank(malloryAddr);
+        vm.expectRevert("Chat: not the key owner");
+        chat.setPublicKey(SENDER_KEY, v, r, s);
+        assertEq(chat.getPublicKey(malloryAddr).length, 0);
+    }
+
+    /// PoP: registering for a DIFFERENT address than the signer reverts
+    function test_SetPublicKey_PoPForOtherAddress_Reverts() public {
+        // alice signs a message naming bob as the address — she can't register
+        // that key for herself.
+        expectPoPRevert(bob, aliceKey, SENDER_KEY);
+        assertEq(chat.getPublicKey(bob).length, 0);
+    }
+
+    /// PoP: a signature on a different CHAIN id cannot register (chain binding)
+    function test_SetPublicKey_CrossChainPoP_Reverts() public {
+        // signed as if on chain 999999 — but we're on block.chainid.
+        (uint8 v, bytes32 r, bytes32 s) = signPoP(popDigest(999999, aliceAddr, SENDER_KEY), aliceKey);
+        vm.prank(aliceAddr);
+        vm.expectRevert("Chat: not the key owner");
+        chat.setPublicKey(SENDER_KEY, v, r, s);
+        assertEq(chat.getPublicKey(aliceAddr).length, 0);
+    }
+
+    /// PoP: tampering with the key after signing reverts (signature covers key)
+    function test_SetPublicKey_TamperedKey_Reverts() public {
+        // valid PoP for SENDER_KEY, but we pass SENDER_KEY2 — ecrecover recovers
+        // a different address, not aliceAddr.
+        (uint8 v, bytes32 r, bytes32 s) = signPoP(popDigest(block.chainid, aliceAddr, SENDER_KEY), aliceKey);
+        vm.prank(aliceAddr);
+        vm.expectRevert("Chat: not the key owner");
+        chat.setPublicKey(SENDER_KEY2, v, r, s);
+        assertEq(chat.getPublicKey(aliceAddr).length, 0);
     }
 
     /// registry + messaging: a stranger can send to an address whose key is
     /// registered, and the message stores the sender's registered key
     function test_SendMessage_WithRegisteredPeerKey() public {
-        vm.prank(bob);
-        chat.setPublicKey(SENDER_KEY);
+        // bob has a key, registered with his own signature
+        registerKey(bob, bobKey, SENDER_KEY);
 
         sendAs(alice, bob, IV, CT, FEE);
 

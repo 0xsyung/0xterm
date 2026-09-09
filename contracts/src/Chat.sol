@@ -44,6 +44,11 @@ contract Chat is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     // secp256k1 public key (their chat/messaging key). Lets a stranger send a
     // message knowing only the recipient's ADDRESS — no out-of-band key
     // exchange needed. Anyone may register/update their own key, at any time.
+    // Registration requires proof-of-possession: the key must be signed by the
+    // wallet controlling `msg.sender` (see setPublicKey), so an attacker cannot
+    // register a key for an address they don't control. This is what makes the
+    // registry authoritative for ECDH: the recipient can trust that keys[addr]
+    // belongs to addr's owner.
     mapping(address => bytes) public keys;
 
     event MessageSent(
@@ -110,8 +115,22 @@ contract Chat is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
     /// Register (or rotate) the caller's chat public key — 33-byte compressed
     /// secp256k1, matching what sendMessage() stores as senderKey.
-    function setPublicKey(bytes calldata key) external {
+    ///
+    /// Proof-of-possession: `v`/`r`/`s` must be a signature by the wallet that
+    /// controls `msg.sender` over the EIP-191 personal-message digest of
+    /// `keccak256(abi.encodePacked(block.chainid, msg.sender, key))`. The inner
+    /// hash binds the key to BOTH the chain and the address (not chain-agnostic),
+    /// so a signature harvested on one chain is worthless on another; the EIP-191
+    /// wrapper matches how wallets (wagmi/hardware) actually sign — they always
+    /// personal-sign, so requiring the wrapper is what makes ecrecover recover
+    /// msg.sender. Without this, anyone could register a key for any address and
+    /// the ECDH "encryption" would be key-authenticated by nothing (finding C-1).
+    function setPublicKey(bytes calldata key, uint8 v, bytes32 r, bytes32 s) external {
         require(key.length == 33, "Chat: invalid public key");
+        bytes32 msgHash = keccak256(abi.encodePacked(block.chainid, msg.sender, key));
+        bytes32 signedHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
+        address recovered = ecrecover(signedHash, v, r, s);
+        require(recovered == msg.sender, "Chat: not the key owner");
         keys[msg.sender] = key;
         emit PublicKeyRegistered(msg.sender, key);
     }
