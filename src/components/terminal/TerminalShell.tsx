@@ -94,6 +94,7 @@ import {
   buildTokenArgCandidates,
   isTokenArgPosition
 } from "./autocomplete";
+import { resolveRpcAction } from "./rpc";
 import {
   formatProbeReport,
   probeCoreFunctions,
@@ -1605,223 +1606,20 @@ export default function TerminalShell({
           text: "Select network first using 'network <name>'."
         };
       const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
-      const chainProviders = rpcProviders[targetChain.id] || {};
-      const activeName = activeRpcProviders[targetChain.id] || "default";
-
-      if (!args[1]) {
-        const defaultUrl = targetChain.rpcUrls.default.http[0];
-        const allProviders = { default: defaultUrl, ...chainProviders };
-
-        const providerLines = Object.entries(allProviders).map(
-          ([name, url]) => {
-            const isActive = name === activeName;
-            return `${isActive ? "▶ [ACTIVE]" : "         "} ${name.toUpperCase()}:\n           ${url}`;
-          }
-        );
-
-        const helpText = [
-          `RPC Providers for ${targetChain.name}:`,
-          ...providerLines,
-          ``,
-          `Commands:`,
-          `• rpc use <name>`,
-          `• rpc add <name> <url>`,
-          `• rpc remove <name>`,
-          `• rpc alchemy <key>`,
-          `• rpc infura <key>`,
-          `• rpc quicknode <url>`
-        ].join("\n");
-
-        return { id: generateId(), type: "text", text: helpText };
+      const result = resolveRpcAction({
+        args,
+        chainId: targetChain.id,
+        chain: targetChain,
+        rpcProviders,
+        activeRpcProviders
+      });
+      if (result.kind === "state") {
+        setRpcProviders(result.rpcProviders);
+        setActiveRpcProviders(result.active);
+        savePreference("rpcProviders", result.rpcProviders);
+        savePreference("activeRpcProviders", result.active);
       }
-
-      const sub = args[1].toLowerCase();
-
-      if (sub === "use" || sub === "switch") {
-        const providerName = args[2]?.toLowerCase();
-        if (!providerName)
-          return {
-            id: generateId(),
-            type: "text",
-            text: "Usage: rpc use <providerName> (e.g., 'rpc use alchemy', 'rpc use default')"
-          };
-
-        if (providerName !== "default" && !chainProviders[providerName]) {
-          return {
-            id: generateId(),
-            type: "text",
-            text: `[!] Provider "${providerName}" not found for ${targetChain.name}. Configure it first.`
-          };
-        }
-
-        const updatedActive = {
-          ...activeRpcProviders,
-          [targetChain.id]: providerName
-        };
-        setActiveRpcProviders(updatedActive);
-        savePreference("activeRpcProviders", updatedActive);
-        return {
-          id: generateId(),
-          type: "text",
-          text: `[✓] Switched active RPC provider to "${providerName}" on ${targetChain.name}.`
-        };
-      }
-
-      if (sub === "add") {
-        const name = args[2]?.toLowerCase();
-        const url = args[3];
-        if (!name || !url || !url.startsWith("http")) {
-          return {
-            id: generateId(),
-            type: "text",
-            text: "Usage: rpc add <name> <url>"
-          };
-        }
-
-        const updatedChainProviders = { ...chainProviders, [name]: url };
-        const updatedAll = {
-          ...rpcProviders,
-          [targetChain.id]: updatedChainProviders
-        };
-        const updatedActive = { ...activeRpcProviders, [targetChain.id]: name };
-
-        setRpcProviders(updatedAll);
-        setActiveRpcProviders(updatedActive);
-        savePreference("rpcProviders", updatedAll);
-        savePreference("activeRpcProviders", updatedActive);
-
-        return {
-          id: generateId(),
-          type: "text",
-          text: `[✓] Added and activated RPC provider "${name}" for ${targetChain.name}.`
-        };
-      }
-
-      if (sub === "remove" || sub === "rm") {
-        const name = args[2]?.toLowerCase();
-        if (!name)
-          return {
-            id: generateId(),
-            type: "text",
-            text: "Usage: rpc remove <name>"
-          };
-        if (name === "default")
-          return {
-            id: generateId(),
-            type: "text",
-            text: "Cannot remove default provider."
-          };
-
-        if (!chainProviders[name]) {
-          return {
-            id: generateId(),
-            type: "text",
-            text: `[!] Provider "${name}" not found.`
-          };
-        }
-
-        const updatedChainProviders = { ...chainProviders };
-        delete updatedChainProviders[name];
-        const updatedAll = {
-          ...rpcProviders,
-          [targetChain.id]: updatedChainProviders
-        };
-
-        const updatedActive = { ...activeRpcProviders };
-        if (activeName === name) {
-          updatedActive[targetChain.id] = "default";
-        }
-
-        setRpcProviders(updatedAll);
-        setActiveRpcProviders(updatedActive);
-        savePreference("rpcProviders", updatedAll);
-        savePreference("activeRpcProviders", updatedActive);
-
-        return {
-          id: generateId(),
-          type: "text",
-          text: `[✓] Removed RPC provider "${name}". Active provider reverted to default if needed.`
-        };
-      }
-
-      let newUrl = "";
-      let providerKey = sub;
-
-      if (sub === "alchemy") {
-        const key = args[2];
-        if (!key)
-          return {
-            id: generateId(),
-            type: "text",
-            text: "Usage: rpc alchemy <apiKey>"
-          };
-        const subDomain = getAlchemySubdomain(targetChain.id);
-        if (!subDomain)
-          return {
-            id: generateId(),
-            type: "text",
-            text: `[!] Alchemy preset not available for ${targetChain.name}. Use 'rpc add custom <url>'.`
-          };
-        newUrl = `https://${subDomain}.g.alchemy.com/v2/${key}`;
-      } else if (sub === "infura") {
-        const key = args[2];
-        if (!key)
-          return {
-            id: generateId(),
-            type: "text",
-            text: "Usage: rpc infura <apiKey>"
-          };
-        const subDomain = getInfuraSubdomain(targetChain.id);
-        if (!subDomain)
-          return {
-            id: generateId(),
-            type: "text",
-            text: `[!] Infura preset not available for ${targetChain.name}. Use 'rpc add custom <url>'.`
-          };
-        newUrl = `https://${subDomain}.infura.io/v3/${key}`;
-      } else if (sub === "quicknode") {
-        const endpoint = args[2];
-        if (!endpoint)
-          return {
-            id: generateId(),
-            type: "text",
-            text: "Usage: rpc quicknode <endpointUrlOrKey>"
-          };
-        newUrl = endpoint.startsWith("http") ? endpoint : `https://${endpoint}`;
-      } else if (args[1].startsWith("http")) {
-        newUrl = args[1];
-        providerKey = "custom";
-      } else {
-        return {
-          id: generateId(),
-          type: "text",
-          text: "Usage:\n• rpc\n• rpc use <name>\n• rpc add <name> <url>\n• rpc remove <name>\n• rpc alchemy <key>\n• rpc infura <key>\n• rpc quicknode <url>"
-        };
-      }
-
-      const updatedChainProviders = {
-        ...chainProviders,
-        [providerKey]: newUrl
-      };
-      const updatedAll = {
-        ...rpcProviders,
-        [targetChain.id]: updatedChainProviders
-      };
-      const updatedActive = {
-        ...activeRpcProviders,
-        [targetChain.id]: providerKey
-      };
-
-      setRpcProviders(updatedAll);
-      setActiveRpcProviders(updatedActive);
-      savePreference("rpcProviders", updatedAll);
-      savePreference("activeRpcProviders", updatedActive);
-
-      return {
-        id: generateId(),
-        type: "text",
-        text: `[✓] Configured and activated RPC provider "${providerKey}" for ${targetChain.name}:\n${newUrl}`
-      };
+      return { id: generateId(), type: "text", text: result.text };
     },
     register: async (args) => {
       if (!activeChainId)
@@ -3724,45 +3522,6 @@ export default function TerminalShell({
       return { id: generateId(), type: "text", text: "Rain toggled." };
     }
   };
-
-  // Helper functions for common RPC providers
-  function getAlchemySubdomain(chainId: number): string | null {
-    switch (chainId) {
-      case 1:
-        return "eth-mainnet";
-      case 11155111:
-        return "eth-sepolia";
-      case 42161:
-        return "arb-mainnet";
-      case 10:
-        return "opt-mainnet";
-      case 137:
-        return "polygon-mainnet";
-      case 8453:
-        return "base-mainnet";
-      default:
-        return null;
-    }
-  }
-
-  function getInfuraSubdomain(chainId: number): string | null {
-    switch (chainId) {
-      case 1:
-        return "mainnet";
-      case 11155111:
-        return "sepolia";
-      case 42161:
-        return "arbitrum-mainnet";
-      case 10:
-        return "optimism-mainnet";
-      case 137:
-        return "polygon-mainnet";
-      case 8453:
-        return "base-mainnet";
-      default:
-        return null;
-    }
-  }
 
   // Assign Command Aliases
   commands.nets = commands.networks;
