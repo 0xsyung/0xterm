@@ -23,15 +23,18 @@ export default defineConfig({
         "src/**/*.test.{ts,tsx}",
       ],
       thresholds: {
-        // Ratchet — measured 2026-09-09 after chat key binding (#C-1):
-        // Lines 27.13%, Statements 27.72%, Functions 23.75%, Branches 22.5%.
+        // Ratchet — measured 2026-09-09 under CI (Node 24, npm ci) after chat
+        // key binding (#C-1): Lines 23.87%, Statements 24.7%, Functions 22.67%,
+        // Branches 19.92%. NOTE: v8 coverage yields different numbers under
+        // Node 24 (CI) than Node 20 (local) — measure with `npx vitest run
+        // --coverage` under the CI Node before ratcheting.
         // Hard-fail at floor(measured) so CI stays green while TerminalShell.tsx
         // (~4.3k lines, 0% covered) is still in the include set. Climb toward
         // 90% is tracked in issue #37.
-        lines: 27,
-        statements: 27,
-        functions: 23,
-        branches: 22,
+        lines: 23,
+        statements: 24,
+        functions: 22,
+        branches: 19,
       },
     },
   },
