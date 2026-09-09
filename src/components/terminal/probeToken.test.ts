@@ -79,12 +79,34 @@ describe("probeCoreFunctions", () => {
     expect(res.checks).toHaveLength(2);
   });
 
-  it("probes ownerOf twice then balanceOf for erc721", async () => {
-    const client = mockClient({ readContract: async () => "0x" });
+  it("counts ownerOf as verified when ANY candidate tokenId succeeds", async () => {
+    const client = mockClient({
+      readContract: async (args: any) => {
+        if (args.functionName === "ownerOf" && args.args[0] === 0n) throw new Error("reverted");
+        return "0x";
+      }
+    });
     const res = await probeCoreFunctions(client, ADDR, true);
-    expect(res.verified).toHaveLength(3);
-    expect(res.verified[0]).toContain("ownerOf(0)");
-    expect(res.verified[1]).toContain("ownerOf(1)");
+    expect(res.verified).toContain("ownerOf(tokenId) → address");
+    expect(res.verified).toHaveLength(2); // ownerOf + balanceOf
+    expect(res.checks).toHaveLength(0);
+  });
+
+  it("tries multiple tokenIds before giving up on ownerOf", async () => {
+    const calls: any[] = [];
+    const client = mockClient({
+      readContract: async (args: any) => {
+        calls.push(args.functionName + ":" + args.args[0]);
+        if (args.functionName === "ownerOf") throw new Error("reverted");
+        throw new Error("reverted");
+      }
+    });
+    const res = await probeCoreFunctions(client, ADDR, true);
+    expect(calls).toContain("ownerOf:0");
+    expect(calls).toContain("ownerOf:1");
+    expect(calls).toContain("ownerOf:2");
+    expect(res.verified).not.toContain("ownerOf(tokenId) → address");
+    expect(res.checks).toContain("ownerOf(tokenId) → address");
   });
 
   it("handles a fully non-callable contract", async () => {
@@ -134,11 +156,19 @@ describe("formatProbeReport", () => {
 
   it("reports not-a-contract when no core functions pass", () => {
     const lines = formatProbeReport({ ...base, checks: ["totalSupply() → uint256", "balanceOf(address) → uint256", "allowance(address,address) → uint256"] });
-    expect(lines.join("\n")).toContain("does not look like a ERC-20 contract");
+    expect(lines.join("\n")).toContain("does not look like an ERC-20 contract");
   });
 
   it("uses ERC-721 wording for nft", () => {
-    const lines = formatProbeReport({ ...base, isErc721: true, verified: ["ownerOf(0) → address", "ownerOf(1) → address", "balanceOf(address) → uint256"] });
+    const lines = formatProbeReport({ ...base, isErc721: true, verified: ["ownerOf(tokenId) → address", "balanceOf(address) → uint256"] });
     expect(lines.join("\n")).toContain("appears to be a valid ERC-721 (NFT) contract");
+  });
+
+  it("does NOT fail a valid NFT when balanceOf(contract) is zero", () => {
+    // Many legit collections have no mints to the contract address, so
+    // balanceOf(contract) == 0. ownerOf working must still judge it valid.
+    const lines = formatProbeReport({ ...base, isErc721: true, verified: ["ownerOf(tokenId) → address"], checks: ["balanceOf(address) → uint256"] });
+    expect(lines.join("\n")).toContain("appears to be a valid ERC-721 (NFT) contract");
+    expect(lines.join("\n")).not.toContain("does not look like");
   });
 });
