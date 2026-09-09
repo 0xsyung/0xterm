@@ -108,7 +108,7 @@ import {
   deriveKeysFromSignature,
   deriveAesKey,
   encryptMessage,
-  decryptMessage,
+  decryptMessageCompat,
   hexToBytes,
   bytesToHex,
   chatKeyFingerprint,
@@ -3336,8 +3336,7 @@ export default function TerminalShell({
               const iv = hexToBytes(m.iv as string);
               const ct = hexToBytes(m.ciphertext as string);
               const senderPub = hexToBytes(m.senderKey as string);
-              const aesKey = await deriveAesKey(myPair.privateKey, senderPub, myPair.publicKey);
-              const text = await decryptMessage(aesKey, { iv, ciphertext: ct });
+              const text = await decryptMessageCompat(myPair.privateKey, senderPub, myPair.publicKey, { iv, ciphertext: ct });
               messages.push({
                 from: m.from as string,
                 timestamp: Number(m.timestamp),

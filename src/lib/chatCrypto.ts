@@ -124,6 +124,39 @@ export async function decryptMessage(key: CryptoKey, payload: EncryptedPayload):
   return new TextDecoder().decode(pt);
 }
 
+/**
+ * Legacy pre-C-1 key derivation: raw `SHA-256(ECDH shared secret)` with no
+ * domain separation. Kept ONLY to read messages sent before the finding-C-1
+ * fix (they carry no version marker, so we must try it as a fallback). Never
+ * use it to ENCRYPT — new messages always use the domain-separated deriveAesKey.
+ */
+async function legacyAesKey(privateKey: bigint, peerPublicKey: Uint8Array): Promise<CryptoKey> {
+  const shared = secp256k1.getSharedSecret(privateKey, peerPublicKey); // 32 bytes
+  const h = await crypto.subtle.digest("SHA-256", toArrayBuffer(shared));
+  return crypto.subtle.importKey("raw", h, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+/**
+ * Decrypt a message regardless of when it was sent: tries the current
+ * domain-separated KDF first, then the legacy pre-C-1 raw KDF (for messages
+ * written before the fix). Throws only if BOTH fail (genuinely wrong key /
+ * tampered data).
+ */
+export async function decryptMessageCompat(
+  privateKey: bigint,
+  peerPublicKey: Uint8Array,
+  myPublicKey: Uint8Array,
+  payload: EncryptedPayload
+): Promise<string> {
+  const current = await deriveAesKey(privateKey, peerPublicKey, myPublicKey);
+  try {
+    return await decryptMessage(current, payload);
+  } catch {
+    const legacy = await legacyAesKey(privateKey, peerPublicKey);
+    return decryptMessage(legacy, payload);
+  }
+}
+
 // --- byte helpers ---------------------------------------------------------
 
 /** Encode bytes as 0x-prefixed hex (matches the on-chain ABI encoding). */

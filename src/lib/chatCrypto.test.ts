@@ -13,6 +13,7 @@ import {
   deriveAesKey,
   encryptMessage,
   decryptMessage,
+  decryptMessageCompat,
   chatKeyFingerprint,
   splitSignature,
   hexToBytes,
@@ -147,5 +148,56 @@ describe("splitSignature", () => {
     expect(parsed.v).toBe(28);
     expect(parsed.r).toBe("0x" + "ab".repeat(32));
     expect(parsed.s).toBe("0x" + "ab".repeat(32));
+  });
+});
+
+describe("decryptMessageCompat (legacy pre-C-1 fallback)", () => {
+  it("decrypts messages written with the legacy raw KDF", async () => {
+    const aPriv = key();
+    const aPub = pubOf(aPriv);
+    const bPriv = key();
+    const bPub = pubOf(bPriv);
+
+    // Replicate the old pre-C-1 encryption path: raw SHA-256(ECDH shared).
+    const shared = secp256k1.getSharedSecret(bPriv, aPub);
+    const sharedBuf = new Uint8Array(shared).buffer;
+    const h = await crypto.subtle.digest("SHA-256", sharedBuf);
+    const legacyKey = await crypto.subtle.importKey("raw", new Uint8Array(h), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+    const pt = "old message, pre-fix";
+    const { iv, ciphertext } = await encryptMessage(legacyKey, pt);
+
+    // Bob's view decrypts it even though it was made with the old KDF.
+    const dec = await decryptMessageCompat(bPriv, aPub, bPub, { iv, ciphertext });
+    expect(dec).toBe(pt);
+  });
+
+  it("still decrypts messages written with the current domain-separated KDF", async () => {
+    const aPriv = key();
+    const aPub = pubOf(aPriv);
+    const bPriv = key();
+    const bPub = pubOf(bPriv);
+
+    const aesFromA = await deriveAesKey(aPriv, bPub, aPub);
+    const pt = "new message, post-fix";
+    const { iv, ciphertext } = await encryptMessage(aesFromA, pt);
+
+    const dec = await decryptMessageCompat(bPriv, aPub, bPub, { iv, ciphertext });
+    expect(dec).toBe(pt);
+  });
+
+  it("throws when BOTH KDFs fail (genuinely wrong key)", async () => {
+    const aPriv = key();
+    const aPub = pubOf(aPriv);
+    const bPriv = key();
+    const bPub = pubOf(bPriv);
+    const strangerPriv = key();
+    const strangerPub = pubOf(strangerPriv);
+
+    const aesFromA = await deriveAesKey(aPriv, bPub, aPub);
+    const { iv, ciphertext } = await encryptMessage(aesFromA, "for bob only");
+
+    await expect(
+      decryptMessageCompat(strangerPriv, aPub, strangerPub, { iv, ciphertext })
+    ).rejects.toThrow();
   });
 });
