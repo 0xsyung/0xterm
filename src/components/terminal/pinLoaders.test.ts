@@ -12,8 +12,7 @@ vi.mock("../../lib/chatCrypto", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/chatCrypto")>();
   return {
     ...actual,
-    deriveAesKey: vi.fn(async () => ({}) as CryptoKey),
-    decryptMessage: vi.fn(async () => "hello there")
+    decryptMessageCompat: vi.fn(async () => "hello there")
   };
 });
 
@@ -126,8 +125,8 @@ describe("fetchChatThread", () => {
   });
 
   it("marks messages decryptFailed when decryption throws", async () => {
-    const { decryptMessage } = await import("../../lib/chatCrypto");
-    vi.mocked(decryptMessage).mockRejectedValueOnce(new Error("bad tag"));
+    const { decryptMessageCompat } = await import("../../lib/chatCrypto");
+    vi.mocked(decryptMessageCompat).mockRejectedValueOnce(new Error("bad tag"));
     const client = mockClient(async (args: any) => {
       if (args.functionName === "threadCount") return 1n;
       if (args.functionName === "getThread") return RAW;
