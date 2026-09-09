@@ -25,9 +25,11 @@ import {
   createPublicClient,
   http,
   encodeFunctionData,
+  encodePacked,
   toHex,
   parseAbi,
   namehash,
+  keccak256,
   type Address,
   type Chain
 } from "viem";
@@ -108,6 +110,8 @@ import {
   decryptMessage,
   hexToBytes,
   bytesToHex,
+  chatKeyFingerprint,
+  splitSignature,
   KEY_MESSAGE
 } from "../../lib/chatCrypto";
 import type {
@@ -126,6 +130,18 @@ import type { ChatMessage } from "./widgets/ChatWidget";
 import type { BillboardPost } from "./widgets/BillboardWidget";
 
 const MAX_LOGS = 100;
+
+// Peer-key continuity (finding C-1): load the persisted map of peer address →
+// last-seen registered chat key. SSR-safe (TerminalShell is a client component,
+// but guard anyway for build-time module evaluation).
+function loadPeerKeyCache(): Record<string, string> {
+  try {
+    if (typeof window === "undefined") return {};
+    return JSON.parse(window.localStorage.getItem("0xterm.chat.peerKeys") || "{}");
+  } catch {
+    return {};
+  }
+}
 
 // --- Click-to-Copy Address Component ---
 function CopyableAddress({
@@ -900,6 +916,24 @@ export default function TerminalShell({
   // The messaging key pair derives from a wallet signature on KEY_MESSAGE. We
   // cache the derived pair in a ref so repeated chat/inbox calls don't re-sign.
   const chatKeyCache = useRef<import("../../lib/chatCrypto").ChatKeyPair | null>(null);
+
+  // Per-peer registered-key continuity (finding C-1). We cache the last key we
+  // saw for each peer address this session; if a peer's registered key changes
+  // between contacts, we surface a visible warning (key-rotation attack / squat).
+  // Persisted via localStorage so the continuity check survives reloads.
+  const peerKeyCache = useRef<Record<string, string>>(loadPeerKeyCache());
+
+  const rememberPeerKey = (peerAddr: string, keyHex: string) => {
+    const k = peerAddr.toLowerCase();
+    const prev = peerKeyCache.current[k];
+    peerKeyCache.current[k] = keyHex;
+    try {
+      localStorage.setItem("0xterm.chat.peerKeys", JSON.stringify(peerKeyCache.current));
+    } catch {
+      // storage unavailable — continuity still works for this session
+    }
+    return prev;
+  };
 
   const getChatKeyPair = async (): Promise<import("../../lib/chatCrypto").ChatKeyPair> => {
     if (!isConnected || !address) throw new Error("Connect a wallet to use chat.");
@@ -3347,7 +3381,9 @@ export default function TerminalShell({
         const client = getClient(chain);
 
         // register my own key so the recipient can reply via address lookup —
-        // only once; subsequent chats skip the write (key unchanged)
+        // only once; subsequent chats skip the write (key unchanged).
+        // setPublicKey now requires proof-of-possession: a signature over
+        // keccak(abi.encodePacked(chainid, me, key)) by my wallet (finding C-1).
         const myRegistered = (await client.readContract({
           address: contract as Address,
           abi: chatAbi,
@@ -3355,11 +3391,21 @@ export default function TerminalShell({
           args: [address as Address]
         })) as `0x${string}`;
         if (!myRegistered || myRegistered === "0x" || myRegistered === "0x0") {
+          const popDigest = keccak256(
+            encodePacked(
+              ["uint256", "address", "bytes"],
+              [BigInt(chain.id), getAddress(address) as Address, bytesToHex(myPair.publicKey)]
+            )
+          );
+          // sign the raw digest (raw: Hex → no personal-sign prefix, so the
+          // contract's ecrecover over the raw keccak matches).
+          const popSig = await signMessageAsync({ message: { raw: popDigest } });
+          const { v, r, s } = splitSignature(popSig);
           await writeContractAsync({
             address: contract as Address,
             abi: chatAbi,
             functionName: "setPublicKey",
-            args: [bytesToHex(myPair.publicKey)]
+            args: [bytesToHex(myPair.publicKey), v, r, s]
           });
         }
 
@@ -3378,8 +3424,13 @@ export default function TerminalShell({
             text: `[!] ${recipient} hasn't registered a chat key yet. Ask them to send their first chat message, then retry.`
           };
 
-        const aesKey = await deriveAesKey(myPair.privateKey, hexToBytes(peerKey));
+        const aesKey = await deriveAesKey(myPair.privateKey, hexToBytes(peerKey), myPair.publicKey);
         const { iv, ciphertext } = await encryptMessage(aesKey, message);
+
+        // continuity: if this peer's registered key changed since we last
+        // contacted them, warn BEFORE sending (finding C-1).
+        const prevPeerKey = rememberPeerKey(recipient, peerKey);
+        const keyChanged = !!prevPeerKey && prevPeerKey.toLowerCase() !== peerKey.toLowerCase();
         const fee = await client.readContract({
           address: contract as Address,
           abi: chatAbi,
@@ -3399,7 +3450,7 @@ export default function TerminalShell({
           value: fee
         });
 
-        return [
+        const replies: LogEntry[] = [
           {
             id: generateId(),
             type: "text",
@@ -3411,6 +3462,15 @@ export default function TerminalShell({
             text: `   tx: ${hash}`
           }
         ];
+        if (keyChanged) {
+          replies.splice(1, 0, {
+            id: generateId(),
+            type: "text",
+            warn: true,
+            text: `⚠ ${recipient}'s chat key changed since your last contact (KEY ${chatKeyFingerprint(hexToBytes(peerKey))}). Verify this is the same person before sharing anything sensitive.`
+          });
+        }
+        return replies;
       } catch (err: any) {
         return {
           id: generateId(),
@@ -3478,7 +3538,7 @@ export default function TerminalShell({
               const iv = hexToBytes(m.iv as string);
               const ct = hexToBytes(m.ciphertext as string);
               const senderPub = hexToBytes(m.senderKey as string);
-              const aesKey = await deriveAesKey(myPair.privateKey, senderPub);
+              const aesKey = await deriveAesKey(myPair.privateKey, senderPub, myPair.publicKey);
               const text = await decryptMessage(aesKey, { iv, ciphertext: ct });
               messages.push({
                 from: m.from as string,
@@ -3498,10 +3558,21 @@ export default function TerminalShell({
             }
           }
           const peerLabel = (await ensNameFor(sender)) || undefined;
+          // continuity: the sender's registered key is their message senderKey
+          // (from the on-chain registry). Record it; flag if it changed since we
+          // last saw this peer (finding C-1 — a swapped/squatted key shows up).
+          let peerFingerprint: string | undefined;
+          let keyChanged = false;
+          const rawSenderKey = msgs.length > 0 ? (msgs[0].senderKey as string) : undefined;
+          if (rawSenderKey) {
+            peerFingerprint = chatKeyFingerprint(hexToBytes(rawSenderKey));
+            const prev = rememberPeerKey(sender, rawSenderKey);
+            keyChanged = !!prev && prev.toLowerCase() !== rawSenderKey.toLowerCase();
+          }
           threads.push({
             id: generateId(),
             type: "chat",
-            payload: { messages, peer: sender, self: address, peerLabel }
+            payload: { messages, peer: sender, self: address, peerLabel, peerFingerprint, keyChanged }
           });
         }
         // render oldest thread first (by its first message)

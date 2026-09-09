@@ -23,7 +23,9 @@ export default function ChatWidget({
   theme,
   peerLabel,
   onPin,
-  pinned
+  pinned,
+  peerFingerprint,
+  keyChanged
 }: {
   messages: ChatMessage[];
   peer: string;
@@ -32,6 +34,11 @@ export default function ChatWidget({
   peerLabel?: string;
   onPin?: () => void;
   pinned?: boolean;
+  // security: short fingerprint of the peer's registered chat key, plus a flag
+  // when that key changed since our last contact (finding C-1 — makes a swapped
+  // key visible instead of silently accepted).
+  peerFingerprint?: string;
+  keyChanged?: boolean;
 }) {
   const shortPeer = `${peer.slice(0, 6)}…${peer.slice(-4)}`;
   const label = peerLabel || shortPeer;
@@ -74,6 +81,20 @@ export default function ChatWidget({
         </span>
         <span className="uppercase text-[10px]">encrypted on-chain</span>
       </div>
+      {peerFingerprint && (
+        <div
+          className={`text-[10px] ${theme.muted} flex items-center gap-1`}
+          title="Public-key fingerprint — verify with your peer before trusting"
+        >
+          KEY {peerFingerprint}
+        </div>
+      )}
+      {keyChanged && (
+        <div className={`text-[10px] text-red-400 border border-red-400/40 rounded px-2 py-1`}>
+          ⚠ peer&apos;s chat key changed since last contact — verify this is the
+          same person before sharing anything sensitive
+        </div>
+      )}
       {messages.length === 0 ? (
         <div className={`${theme.text}/50`}>
           No messages in this conversation.
