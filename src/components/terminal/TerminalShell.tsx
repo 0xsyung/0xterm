@@ -3261,7 +3261,7 @@ export default function TerminalShell({
           }
         ];
         if (keyChanged) {
-          replies.splice(1, 0, {
+          replies.unshift({
             id: generateId(),
             type: "text",
             warn: true,
