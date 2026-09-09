@@ -96,10 +96,26 @@ export const probeCoreFunctions = async (
     // Only view functions can be probed read-only. safeTransferFrom /
     // transferFrom are writes: they revert on eth_call against a real NFT
     // (no approval), so they always false-negative — skip them. ownerOf is
-    // the strongest signal; try tokenId 0 then 1 so an unminted first token
-    // doesn't false-negative.
-    await probe("ownerOf", [0n], "ownerOf(0) → address");
-    await probe("ownerOf", [1n], "ownerOf(1) → address");
+    // the strongest signal; probe a few tokenIds and count ANY success so an
+    // unminted tokenId (or a collection whose IDs start elsewhere) doesn't
+    // false-negative.
+    let ownerOk = false;
+    for (const tid of [0n, 1n, 2n]) {
+      try {
+        await client.readContract({
+          address,
+          abi: erc721Abi,
+          functionName: "ownerOf",
+          args: [tid]
+        });
+        ownerOk = true;
+        break;
+      } catch {
+        // try next candidate
+      }
+    }
+    if (ownerOk) verified.push("ownerOf(tokenId) → address");
+    else checks.push("ownerOf(tokenId) → address");
     await probe("balanceOf", [address], "balanceOf(address) → uint256");
   } else {
     // Only view functions can be probed read-only. transfer / transferFrom
@@ -157,7 +173,11 @@ export type ProbeReportInput = {
 
 export const formatProbeReport = (p: ProbeReportInput): string[] => {
   const okCount = p.verified.length;
-  const allCore = okCount === 3;
+  // ERC-721: ownerOf succeeding is the authoritative signal — balanceOf(addr)
+  // is 0 for many legit collections (no mints to the contract address), so it
+  // must NOT be able to flip a valid NFT to "not a contract".
+  const nftOwnerOk = p.isErc721 && p.verified.some((v) => v.startsWith("ownerOf"));
+  const allCore = p.isErc721 ? nftOwnerOk : okCount === 3;
 
   const resultLines = [
     `Interface check for ${p.address} on ${p.chainName}:`,
@@ -181,7 +201,7 @@ export const formatProbeReport = (p: ProbeReportInput): string[] => {
     );
   } else {
     resultLines.push(
-      `[✗] ${p.address} does not look like a ${p.isErc721 ? "ERC-721" : "ERC-20"} contract.`
+      `[✗] ${p.address} does not look like ${p.isErc721 ? "an ERC-721" : "an ERC-20"} contract.`
     );
   }
 
