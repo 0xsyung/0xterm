@@ -87,6 +87,10 @@ export function splitSignature(sig: string): { v: number; r: `0x${string}`; s: `
  * shown beside chat peers so a swapped/squatted key becomes visible. Stable
  * for a given key; truncated to a small alphabet so it reads like
  * `oH3m-X5qA` rather than raw hex.
+ *
+ * NOTE: CRC-32 is NOT cryptographic — an attacker can craft a colliding
+ * fingerprint. This is a casual out-of-band verification aid only; it is not
+ * a security boundary.
  */
 export function chatKeyFingerprint(publicKey: Uint8Array, length = 8): string {
   // crc32 of the key bytes → two 16-bit halves → base36 uppercase
