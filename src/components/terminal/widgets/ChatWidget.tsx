@@ -102,7 +102,8 @@ export default function ChatWidget({
       ) : (
         messages.map((m, i) => {
           const isSelf = self ? m.from.toLowerCase() === self.toLowerCase() : false;
-          const time = new Date(m.timestamp * 1000).toLocaleTimeString();
+          const dt = new Date(m.timestamp * 1000);
+          const time = `${dt.toLocaleDateString()} ${dt.toLocaleTimeString()}`;
           return (
             <div
               key={i}
