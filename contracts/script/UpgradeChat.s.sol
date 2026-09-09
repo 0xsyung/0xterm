@@ -32,5 +32,7 @@ contract UpgradeChat is Script {
         console.log("Chat upgraded. Proxy:", proxyAddr);
         console.log("New implementation at:", address(newImplContract));
         console.log("Owner:", Chat(proxyAddr).owner());
+
+        return address(newImplContract);
     }
 }
