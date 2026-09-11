@@ -10,7 +10,7 @@ import "../src/Chat.sol";
  * @dev Deploys the upgradeable Chat: a UUPS implementation + an ERC1967Proxy
  *      that owns the storage (chat history). The proxy is what callers talk to;
  *      its address differs per chain (plain CREATE), so wire the per-chain proxy
- *      address into the frontend CHAT_CONTRACT.
+ *      address into the frontend CHAT_PRESETS (legacy UUPS path). Prefer ChatFactory for user channels.
  *
  *      Upgrades later swap only the implementation via upgradeToAndCall() — the
  *      proxy (and therefore all chat history) stays put. See UpgradeChat.s.sol
@@ -32,7 +32,7 @@ contract DeployChat is Script {
         Chat impl = new Chat();
         ERC1967Proxy proxy = new ERC1967Proxy(
             address(impl),
-            abi.encodeCall(Chat.initialize, (INITIAL_FEE))
+            abi.encodeCall(Chat.initialize, (INITIAL_FEE, "lobby"))
         );
 
         vm.stopBroadcast();

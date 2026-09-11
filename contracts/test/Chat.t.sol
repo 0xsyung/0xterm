@@ -19,7 +19,7 @@ contract ChatTest is Test {
 
     function setUp() public {
         Chat impl = new Chat();
-        chat = Chat(address(new ERC1967Proxy(address(impl), abi.encodeCall(Chat.initialize, (FEE)))));
+        chat = Chat(address(new ERC1967Proxy(address(impl), abi.encodeCall(Chat.initialize, (FEE, "test")))));
         aliceKey = 0xA11CE;
         aliceAddr = vm.addr(aliceKey);
         bobKey = 0xB0B0;

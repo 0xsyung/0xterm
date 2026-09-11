@@ -67,4 +67,14 @@ describe("TerminalPrompt", () => {
     render(<TerminalPrompt {...makeProps()} />);
     expect(screen.queryByText(/CHOICES/)).toBeNull();
   });
+
+  it("shows CHAT: — when no active channel", () => {
+    render(<TerminalPrompt {...makeProps()} />);
+    expect(screen.getByText(/CHAT: —/)).toBeTruthy();
+  });
+
+  it("shows CHAT chip label when provided", () => {
+    render(<TerminalPrompt {...makeProps({ chatChannelLabel: "lobby" })} />);
+    expect(screen.getByText(/CHAT: lobby/)).toBeTruthy();
+  });
 });

@@ -102,13 +102,33 @@ export default function HelpManual({
           </div>
           <div>Resolve a name/address, or register/clear your record (one name per address, on the active network)</div>
           <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
+            channel | channel list | channels
+          </div>
+          <div>Show active chat channel, or list presets / saved / recent (active marked with ·)</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
+            channel use &lt;name|address&gt; | channel use &lt;chain&gt; &lt;address&gt;
+          </div>
+          <div>Switch the active channel (wrong-chain refuses send — type network first)</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
+            channel add &lt;chain&gt; &lt;address&gt; [name]
+          </div>
+          <div>Verify + save an existing Chat contract locally</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
+            channel remove &lt;name|address&gt;
+          </div>
+          <div>Drop a saved channel from the local list (presets stay)</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
+            channel deploy &lt;name&gt; [feeWei]
+          </div>
+          <div>EIP-1167 clone via ChatFactory on the active chain; sets active (default fee = Sepolia current)</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             chat &lt;address | ens.eth&gt; &lt;message&gt;
           </div>
-          <div>Send an encrypted 1:1 message (testnets only, tiny fee; your key auto-registers on first send)</div>
+          <div>Send an encrypted 1:1 message on the ACTIVE channel (testnets; key auto-registers on first send)</div>
           <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>inbox [&lt;address&gt;]</div>
-          <div>Read &amp; decrypt your chat threads (one per sender)</div>
+          <div>Read &amp; decrypt threads on the ACTIVE channel</div>
           <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>chatfee</div>
-          <div>Show current message fee on the active network</div>
+          <div>Show message fee on the ACTIVE channel</div>
           <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>
             board post &lt;content&gt;
           </div>

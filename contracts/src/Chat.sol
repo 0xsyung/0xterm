@@ -7,20 +7,15 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 
 /**
  * @title Chat
- * @dev Encrypted 1:1 messaging stored on-chain, behind a UUPS upgradeable proxy.
- *      The contract only ever holds opaque ciphertext (iv + encrypted bytes) — it
- *      can never read messages. Decryption happens in the browser via ECDH + AES-GCM.
+ * @dev Encrypted 1:1 messaging stored on-chain. Shared implementation is used
+ *      both behind a UUPS proxy (legacy/official) and as the target of EIP-1167
+ *      clones via ChatFactory (user channels). The contract only ever holds
+ *      opaque ciphertext (iv + encrypted bytes) — it can never read messages.
+ *      Decryption happens in the browser via ECDH + AES-GCM.
  *
- *      The PROXY owns the storage, so chat history (`inbox` / `sendersOf`) and
- *      the `messageCount` id-nonce survive logic upgrades. The implementation is
- *      deployed separately and the proxy delegates to it; upgradeToAndCall()
- *      swaps the implementation while keeping all history.
- *
- *      A tiny per-message fee (paid in the chain's native token) deters spam.
- *      Fees accumulate in the contract and are swept to the owner by withdraw();
- *      ownership is transferable via OwnableUpgradeable so the fee sink can be
- *      moved, and setFee() lets the owner tune the spam threshold without
- *      redeploying.
+ *      Each deployment has an immutable on-chain `name` set at initialize.
+ *      A tiny per-message fee (native token) deters spam; fees accumulate and
+ *      are swept to the owner by withdraw(). Ownership is transferable.
  */
 contract Chat is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     uint256 public fee;
@@ -51,6 +46,10 @@ contract Chat is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     // belongs to addr's owner.
     mapping(address => bytes) public keys;
 
+    // Human label set once at initialize (≤32 bytes). Appended at end of
+    // layout so a UUPS upgrade of an older proxy keeps prior slots intact.
+    string private _name;
+
     event MessageSent(
         address indexed from,
         address indexed to,
@@ -70,9 +69,17 @@ contract Chat is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         _disableInitializers();
     }
 
-    function initialize(uint256 initialFee) public initializer {
+    function initialize(uint256 initialFee, string calldata name_) public initializer {
+        uint256 len = bytes(name_).length;
+        require(len > 0 && len <= 32, "Chat: bad name");
         __Ownable_init(msg.sender);
         fee = initialFee;
+        _name = name_;
+    }
+
+    /// On-chain channel label set at initialize; immutable afterwards.
+    function name() external view returns (string memory) {
+        return _name;
     }
 
     /**

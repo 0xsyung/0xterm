@@ -23,7 +23,8 @@ export default function TerminalPrompt({
   isConnected,
   address,
   mounted,
-  isNarrow
+  isNarrow,
+  chatChannelLabel
 }: {
   theme: ThemeConfig;
   input: string;
@@ -39,6 +40,8 @@ export default function TerminalPrompt({
   address: string | undefined;
   mounted: boolean;
   isNarrow?: boolean;
+  /** Active chat channel chip label (name or short addr), or null → CHAT: — */
+  chatChannelLabel?: string | null;
 }) {
   const chainObj = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
   const activeDexObj = DEX_REGISTRY[activeChainId!]?.find(
@@ -85,6 +88,12 @@ export default function TerminalPrompt({
               DEX: {activeDexObj.name}
             </span>
           )}
+          <span
+            className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 ${theme.muted}`}
+            title="Active chat channel"
+          >
+            CHAT: {chatChannelLabel && chatChannelLabel !== "—" ? chatChannelLabel : "—"}
+          </span>
         </div>
       </div>
 

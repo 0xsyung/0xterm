@@ -519,12 +519,36 @@ export const COMMON_TOKENS: Record<number, Record<string, { address: Address; de
   }
 }
 
-// Chat — encrypted 1:1 messaging (testnets only). The contract stores
-// only `iv + ciphertext` blobs; messages are decrypted in the browser.
-// Fill with the deployed address from contracts/script/ChatDeploy.md.
-export const CHAT_CONTRACT: Record<number, Address> = {
-  11155111: '0x694eA7938238037731bD0F3a3aE9F6FD2C2097ce',
+// Chat channels (#58) — encrypted 1:1 messaging (testnets only).
+// Presets are convenience defaults (not a lock). User-deployed / added
+// addresses are first-class via channel* commands + localStorage.
+export type ChatPreset = {
+  address: Address
+  name: string
+  implementation?: Address
 }
+
+export const CHAT_PRESETS: Record<number, ChatPreset> = {
+  11155111: {
+    address: '0x694eA7938238037731bD0F3a3aE9F6FD2C2097ce',
+    name: 'lobby',
+  },
+}
+
+/** Shared Chat logic per chain (ChatFactory.implementation). Fill after DeployChatFactory. */
+export const CHAT_IMPLEMENTATION: Record<number, Address> = {
+  // 11155111: '0x…',
+}
+
+/** EIP-1167 factory per chain. Fill after DeployChatFactory. */
+export const CHAT_FACTORY: Record<number, Address> = {
+  // 11155111: '0x…',
+}
+
+/** @deprecated Prefer CHAT_PRESETS / active channel — kept for any stray imports. */
+export const CHAT_CONTRACT: Record<number, Address> = Object.fromEntries(
+  Object.entries(CHAT_PRESETS).map(([id, p]) => [Number(id), p.address])
+) as Record<number, Address>
 
 // 0xterm's own ENS registry + resolver (testnets only) — name ↔ address on
 // the ACTIVE chain. Mainnet keeps the canonical ENS (resolved via viem's v1
@@ -563,10 +587,18 @@ export const chatAbi = parseAbi([
   'function setPublicKey(bytes key, uint8 v, bytes32 r, bytes32 s)',
   'function getPublicKey(address who) view returns (bytes)',
   'function fee() view returns (uint256)',
+  'function name() view returns (string)',
   'function owner() view returns (address)',
   'function setFee(uint256 newFee)',
   'function withdraw(address to)',
   'function transferOwnership(address newOwner)',
+  'function initialize(uint256 initialFee, string name)',
+])
+
+export const chatFactoryAbi = parseAbi([
+  'function implementation() view returns (address)',
+  'function deploy(string name, uint256 initialFee) returns (address channel)',
+  'event ChannelCreated(address indexed channel, address indexed deployer, string name, uint256 fee)',
 ])
 
 export const resolveChain = (query?: string): Chain | undefined => {
