@@ -112,8 +112,8 @@ import { pinGridClass, useLayoutBand } from "./viewport";
 import {
   deriveKeysFromSignature,
   deriveAesKey,
+  decryptMessage,
   encryptMessage,
-  decryptMessageCompat,
   hexToBytes,
   bytesToHex,
   chatKeyFingerprint,
@@ -922,14 +922,20 @@ export default function TerminalShell({
     }
   }, [isConnected, address]);
 
-  // Helper to create public client using active custom RPC provider or fallback to default
+  // Helper to create public client using the active API-key RPC provider.
+  // No public RPC fallback: the chain's default public URL is unstable, so we
+  // require a configured provider (rpc alchemy <key> / rpc add <name> <url>).
   const getClient = (chain: Chain) => {
     const chainProviders = rpcProviders[chain.id] || {};
     const activeName = activeRpcProviders[chain.id] || "default";
     const activeUrl = chainProviders[activeName];
+    if (!activeUrl || activeName === "default")
+      throw new Error(
+        `[!] No API-key RPC provider configured for ${chain.name}. Run "rpc alchemy <KEY>" or "rpc add <name> <url>", then "rpc use <name>".`
+      );
     return createPublicClient({
       chain,
-      transport: activeUrl ? http(activeUrl) : http()
+      transport: http(activeUrl)
     });
   };
 
@@ -3562,7 +3568,8 @@ export default function TerminalShell({
               const iv = hexToBytes(m.iv as string);
               const ct = hexToBytes(m.ciphertext as string);
               const senderPub = hexToBytes(m.senderKey as string);
-              const text = await decryptMessageCompat(myPair.privateKey, senderPub, myPair.publicKey, { iv, ciphertext: ct });
+              const aes = await deriveAesKey(myPair.privateKey, senderPub, myPair.publicKey);
+              const text = await decryptMessage(aes, { iv, ciphertext: ct });
               messages.push({
                 from: m.from as string,
                 timestamp: Number(m.timestamp),

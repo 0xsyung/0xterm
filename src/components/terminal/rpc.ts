@@ -61,8 +61,9 @@ export const getInfuraSubdomain = (chainId: number): string | null => {
   }
 };
 
-// Build the `rpc` (no args) provider listing: the chain default plus any
-// configured custom providers, marking the active one.
+// Build the `rpc` (no args) provider listing: the chain default (marked
+// unavailable — public RPC is unstable, API key required) plus any configured
+// custom providers, marking the active one.
 export const buildRpcHelp = (
   chain: Chain,
   chainProviders: Record<string, string>,
@@ -72,7 +73,9 @@ export const buildRpcHelp = (
   const allProviders = { default: defaultUrl, ...chainProviders };
   const providerLines = Object.entries(allProviders).map(([name, url]) => {
     const isActive = name === activeName;
-    return `${isActive ? "▶ [ACTIVE]" : "         "} ${name.toUpperCase()}:\n           ${url}`;
+    const isDefault = name === "default";
+    const defaultLabel = isDefault ? " ⚠ public (unstable — API key required)" : "";
+    return `${isActive ? "▶ [ACTIVE]" : "         "} ${name.toUpperCase()}${defaultLabel}:\n           ${url}`;
   });
   return [
     `RPC Providers for ${chain.name}:`,
@@ -106,9 +109,14 @@ export const resolveRpcAction = (input: RpcResolveInput): RpcActionResult => {
     if (!providerName)
       return {
         kind: "text",
-        text: "Usage: rpc use <providerName> (e.g., 'rpc use alchemy', 'rpc use default')"
+        text: "Usage: rpc use <providerName> (e.g., 'rpc use alchemy')"
       };
-    if (providerName !== "default" && !chainProviders[providerName])
+    if (providerName === "default")
+      return {
+        kind: "text",
+        text: `[!] The default provider is the unstable public RPC. Configure an API-key provider first: rpc alchemy <KEY> or rpc add <name> <url>.`
+      };
+    if (!chainProviders[providerName])
       return {
         kind: "text",
         text: `[!] Provider "${providerName}" not found for ${chain.name}. Configure it first.`
