@@ -5,7 +5,72 @@
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 import { describe, expect, it } from "vitest";
-import { migrateCustomTokens, pricePinKey } from "./helpers";
+import {
+  isPinnableLog,
+  isPinnableManifest,
+  migrateCustomTokens,
+  pricePinKey
+} from "./helpers";
+
+describe("isPinnableLog", () => {
+  it("allows live monitors (price / balance / portfolio)", () => {
+    expect(
+      isPinnableLog({ type: "component", componentData: { kind: "price" } })
+    ).toBe(true);
+    expect(isPinnableLog({ type: "balance" })).toBe(true);
+    expect(isPinnableLog({ type: "portfolio" })).toBe(true);
+  });
+
+  it("rejects non-live log kinds", () => {
+    for (const type of [
+      "networks",
+      "chat",
+      "billboard",
+      "createpool",
+      "initialize",
+      "addliq",
+      "help",
+      "dexes",
+      "input",
+      "text"
+    ]) {
+      expect(isPinnableLog({ type })).toBe(false);
+    }
+  });
+
+  it("rejects component logs that are not price", () => {
+    expect(isPinnableLog({ type: "component" })).toBe(false);
+    expect(isPinnableLog({ type: "component", componentData: { kind: "swap" } })).toBe(false);
+    expect(isPinnableLog({ type: "component", componentData: undefined })).toBe(false);
+  });
+});
+
+describe("isPinnableManifest", () => {
+  it("allows price / balance / portfolio manifests", () => {
+    expect(isPinnableManifest({ kind: "component", componentData: { kind: "price" } })).toBe(true);
+    expect(isPinnableManifest({ kind: "balance" })).toBe(true);
+    expect(isPinnableManifest({ kind: "portfolio" })).toBe(true);
+  });
+
+  it("rejects manifests for non-live kinds", () => {
+    expect(isPinnableManifest({ kind: "networks" })).toBe(false);
+    expect(isPinnableManifest({ kind: "chat" })).toBe(false);
+    expect(isPinnableManifest({ kind: "billboard" })).toBe(false);
+    expect(isPinnableManifest({ kind: "swap" })).toBe(false);
+  });
+
+  it("rejects price-kind manifests missing price data (legacy widget-unavailable)", () => {
+    expect(isPinnableManifest({ kind: "component", title: "USDC/WETH" })).toBe(false);
+    expect(isPinnableManifest({ kind: "component", componentData: {} })).toBe(false);
+  });
+
+  it("rejects falsy / kindless input", () => {
+    expect(isPinnableManifest(null)).toBe(false);
+    expect(isPinnableManifest(undefined)).toBe(false);
+    expect(isPinnableManifest({ id: "x" })).toBe(false);
+    expect(isPinnableManifest({})).toBe(false);
+  });
+});
 
 describe("pricePinKey", () => {
   it("returns null for non-price payloads", () => {

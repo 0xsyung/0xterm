@@ -70,7 +70,12 @@ import {
   billboardAbi
 } from "./constants";
 import { formatViemError } from "../../lib/viemError";
-import { migrateCustomTokens, pricePinKey } from "./helpers";
+import {
+  isPinnableLog,
+  isPinnableManifest,
+  migrateCustomTokens,
+  pricePinKey
+} from "./helpers";
 import { detectTokenType } from "./tokenType";
 import { getNativePriceUsd } from "./pricing";
 import { getPoolPriceRatio } from "./poolPrice";
@@ -424,6 +429,8 @@ export default function TerminalShell({
   // Toggle a log entry between the main feed and the pinned column. `refresh`
   // is the live-data loader (only set for widgets with a live source).
   const onPin = (log: LogEntry) => {
+    // Only live monitors are pinnable (issue #35); ignore stray calls.
+    if (!isPinnableLog(log)) return;
     setPinned((prev) => {
       if (prev.some((p) => p.id === log.id)) {
         const next = prev.filter((p) => p.id !== log.id);
@@ -854,8 +861,9 @@ export default function TerminalShell({
             setActiveRpcProviders(prefs.activeRpcProviders);
 
           if (Array.isArray(prefs.pinned) && prefs.pinned.length > 0) {
-            setPinned(prefs.pinned);
-            rehydratePinRefresh(prefs.pinned);
+            const clean = prefs.pinned.filter(isPinnableManifest);
+            setPinned(clean);
+            rehydratePinRefresh(clean);
           }
 
           if (Array.isArray(prefs.logs)) {
@@ -2090,7 +2098,9 @@ export default function TerminalShell({
         }
 
         if (Array.isArray(data.pinned)) {
-          const cleaned = data.pinned.filter((p: any) => p && p.id && p.kind);
+          const cleaned = data.pinned.filter(
+            (p: any) => p && p.id && p.kind && isPinnableManifest(p)
+          );
           setPinned(cleaned);
           rehydratePinRefresh(cleaned);
           savePreference("pinned", cleaned);

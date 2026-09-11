@@ -44,19 +44,24 @@ describe("PinnedPanel", () => {
     expect(screen.getByText(/1 USDC =/)).toBeTruthy();
   });
 
-  it("renders a help pin", () => {
-    const helpPin: PinnedManifest = { id: "h1", kind: "help", title: "help" };
-    render(<PinnedPanel pinned={[helpPin]} theme={theme} {...noops} />);
-    expect(screen.getByText(/SYSTEM COMMAND MANUAL/)).toBeTruthy();
+  it("renders a balance pin", () => {
+    const balancePin: PinnedManifest = {
+      id: "b1",
+      kind: "balance",
+      title: "BALANCE USDC"
+    };
+    render(<PinnedPanel pinned={[balancePin]} theme={theme} {...noops} />);
+    expect(screen.getByText("BALANCE USDC")).toBeTruthy();
   });
 
-  it("renders multiple pins with their titles", () => {
-    const pins: PinnedManifest[] = [
-      { id: "n1", kind: "networks", title: "networks" },
-      { id: "h2", kind: "help", title: "help" }
-    ];
-    render(<PinnedPanel pinned={pins} theme={theme} {...noops} />);
-    expect(screen.getByText(/AVAILABLE NETWORKS REGISTRY/)).toBeTruthy();
-    expect(screen.getByText(/SYSTEM COMMAND MANUAL/)).toBeTruthy();
+  it("renders a portfolio pin", () => {
+    const portfolioPin: PinnedManifest = {
+      id: "pf1",
+      kind: "portfolio",
+      title: "PORTFOLIO",
+      payload: { holdings: [] }
+    };
+    render(<PinnedPanel pinned={[portfolioPin]} theme={theme} {...noops} />);
+    expect(screen.getAllByText("PORTFOLIO").length).toBeGreaterThan(0);
   });
 });

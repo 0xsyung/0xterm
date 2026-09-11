@@ -8,6 +8,33 @@ import type { Address } from "viem";
 import type { CustomTokenEntry, CustomTokensMap } from "./types";
 
 /**
+ * Pin allowlist (issue #35): only live, glanceable monitors can be pinned.
+ * Price is a `component` kind carrying `componentData.kind === "price"`;
+ * all other component kinds (swap/pool/deploy/export) and non-live log
+ * kinds (networks/chat/billboard/...) are stripped.
+ */
+export const PINNABLE_KINDS = new Set(["balance", "portfolio"]);
+
+export const isPinnableLog = (log: {
+  type: string;
+  componentData?: { kind?: string };
+}): boolean => {
+  if (log.type === "component") return log.componentData?.kind === "price";
+  return PINNABLE_KINDS.has(log.type);
+};
+
+export const isPinnableManifest = (m: unknown): boolean => {
+  if (!m || typeof m !== "object") return false;
+  const kind = (m as { kind?: string }).kind;
+  if (!kind) return false;
+  if (kind === "component") {
+    const cd = (m as { componentData?: { kind?: string } }).componentData;
+    return cd?.kind === "price";
+  }
+  return PINNABLE_KINDS.has(kind);
+};
+
+/**
  * Stable dedupe key for a pinned price widget. Returns null when the payload
  * is not a price kind or lacks the parts needed to address it.
  */

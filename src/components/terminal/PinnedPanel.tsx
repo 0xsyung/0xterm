@@ -5,15 +5,8 @@
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 import React from "react";
-import HelpManual from "./widgets/HelpManual";
-import NetworksList from "./widgets/NetworksList";
-import CreatePoolWidget from "./widgets/CreatePoolWidget";
-import InitializePoolWidget from "./widgets/InitializePoolWidget";
-import AddLiquidityWidget from "./widgets/AddLiquidityWidget";
 import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
-import ChatWidget from "./widgets/ChatWidget";
-import BillboardWidget from "./widgets/BillboardWidget";
 import PriceCard from "./widgets/PriceCard";
 import type { PinnedManifest, ThemeConfig } from "./types";
 
@@ -122,31 +115,12 @@ function renderPinned(p: PinnedManifest, theme: any) {
   }
   const payload = p.payload || {};
   switch (p.kind) {
-    case "help":
-      return <HelpManual theme={theme} />;
-    case "networks":
-      return <NetworksList theme={theme} />;
-    case "createpool":
-      return <CreatePoolWidget {...payload} theme={theme} />;
-    case "initialize":
-      return <InitializePoolWidget {...payload} theme={theme} />;
-    case "addliq":
-      return <AddLiquidityWidget {...payload} theme={theme} />;
+    // Only live monitors are pinnable (issue #35): price (above), balance,
+    // portfolio. Non-live kinds are dropped on load/import and never render.
     case "balance":
       return <BalanceWidget {...payload} theme={theme} />;
     case "portfolio":
       return <PortfolioWidget {...payload} theme={theme} />;
-    case "chat":
-      return <ChatWidget {...payload} theme={theme} />;
-    case "billboard":
-      return (
-        <BillboardWidget
-          posts={payload.posts || []}
-          total={payload.total || 0}
-          pageSize={payload.pageSize || 5}
-          theme={theme}
-        />
-      );
     default:
       return <div className={`${theme.text}/90 whitespace-pre-wrap`}>{payload.text}</div>;
   }
