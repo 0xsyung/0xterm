@@ -7,7 +7,8 @@
 import type { Address, PublicClient } from "viem";
 import { billboardAbi, chatAbi } from "./constants";
 import {
-  decryptMessageCompat,
+  deriveAesKey,
+  decryptMessage,
   hexToBytes,
   type ChatKeyPair
 } from "../../lib/chatCrypto";
@@ -111,7 +112,8 @@ export const fetchChatThread = async (
       const iv = hexToBytes(m.iv);
       const ct = hexToBytes(m.ciphertext);
       const senderPub = hexToBytes(m.senderKey);
-      const text = await decryptMessageCompat(myPair.privateKey, senderPub, myPair.publicKey, { iv, ciphertext: ct });
+      const aes = await deriveAesKey(myPair.privateKey, senderPub, myPair.publicKey);
+      const text = await decryptMessage(aes, { iv, ciphertext: ct });
       messages.push({
         from: m.from,
         timestamp: Number(m.timestamp),
