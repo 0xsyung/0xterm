@@ -259,9 +259,9 @@ export default function SocialPanel({
             )}
             {isConnected && !channelLabel && (
               <div className={theme.muted}>
-                No chat channel on this network. Deploy or select one with{" "}
-                <span className={theme.primary}>channel</span> / use a testnet
-                with a chat contract.
+                No active chat channel. Type{" "}
+                <span className={theme.primary}>channel list</span> or{" "}
+                <span className={theme.primary}>channel deploy &lt;name&gt;</span>.
               </div>
             )}
             {isConnected && channelLabel && inboxLoading && !senders && (

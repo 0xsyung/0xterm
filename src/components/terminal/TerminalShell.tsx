@@ -32,7 +32,8 @@ import {
   keccak256,
   type Address,
   type Chain,
-  type PublicClient
+  type PublicClient,
+  decodeEventLog
 } from "viem";
 import { useAppKit } from "@reown/appkit/react";
 
@@ -63,8 +64,11 @@ import {
   resolveChain,
   IMPLEMENTATION_ADDRESSES,
   DEXSCREENER_CHAIN,
-  CHAT_CONTRACT,
+  CHAT_PRESETS,
+  CHAT_FACTORY,
+  CHAT_IMPLEMENTATION,
   chatAbi,
+  chatFactoryAbi,
   ENS_CONTRACT,
   ensRegistryAbi,
   BILLBOARD_CONTRACT,
@@ -134,6 +138,29 @@ import { trackEvent } from "../../lib/analytics";
 import DeployWidget from "./widgets/DeployWidget";
 import PinnedPanel from "./PinnedPanel";
 import SocialPanel from "./SocialPanel";
+import {
+  DEFAULT_CHAT_FEE_WEI,
+  NO_ACTIVE_CHANNEL_MSG,
+  activeChannelChipLabel,
+  activeChannelSuccessMsg,
+  bootActiveChannel,
+  channelId,
+  exportChannelsPayload,
+  formatChannelLabel,
+  getActiveChannel,
+  importChannelsPayload,
+  listChannelsOrdered,
+  loadChannelStore,
+  notChatContractMsg,
+  resolveChannelUse,
+  saveChannelStore,
+  savedChannelSuccessMsg,
+  shortAddress,
+  verifyChatContract,
+  wrongChainMsg,
+  type ChatChannel,
+  type ChannelStore,
+} from "./chatChannels";
 import type { ChatMessage } from "./widgets/ChatWidget";
 import type { BillboardPost } from "./widgets/BillboardWidget";
 import {
@@ -288,6 +315,27 @@ export default function TerminalShell({
   // Custom user-registered tokens, flat list per chain so multiple tokens can
   // share a symbol. `id` is the stable uniqueness key.
   const [customTokens, setCustomTokens] = useState<CustomTokensMap>({});
+
+  // Chat channels (#58): saved list + active id (presets live in constants).
+  const [channelStore, setChannelStore] = useState<ChannelStore>(() =>
+    typeof window !== "undefined"
+      ? loadChannelStore(window.localStorage)
+      : { channels: [], activeId: null }
+  );
+
+  const persistChannels = (next: ChannelStore) => {
+    setChannelStore(next);
+    if (typeof window !== "undefined") saveChannelStore(window.localStorage, next);
+  };
+
+  const activeChatChannel: ChatChannel | null = (() => {
+    const boot = bootActiveChannel(channelStore, activeChainId);
+    // Prefer explicit activeId; bootActiveChannel already does restore→preset→null
+    return boot;
+  })();
+
+  const allChannelsForLabel = listChannelsOrdered(channelStore);
+  const chatChipLabel = activeChannelChipLabel(activeChatChannel, allChannelsForLabel);
 
   const theme = THEMES[resolveThemeKey(currentThemeKey)];
 
@@ -684,7 +732,7 @@ export default function TerminalShell({
     } else if (log.type === "chat") {
       base.title = "CHAT";
       base.chainId = activeChainId || undefined;
-      base.contract = (CHAT_CONTRACT[activeChainId || 0] as string) || undefined;
+      base.contract = activeChatContractOnChain(activeChainId) || undefined;
       base.peer = p.peer;
       if (address && base.chainId && base.contract && base.peer) {
         const chain = SUPPORTED_CHAINS.find((c) => c.id === base.chainId)!;
@@ -974,8 +1022,25 @@ export default function TerminalShell({
     return pair;
   };
 
-  const chatContractAddress = (chainId: number): string | null =>
-    CHAT_CONTRACT[chainId] || null;
+  /** Active channel contract only — fail closed when none / wrong chain. */
+  const activeChatContractOnChain = (
+    chainId: number | null | undefined
+  ): string | null => {
+    const ch = activeChatChannel;
+    if (!ch) return null;
+    if (chainId == null || ch.chainId !== chainId) return null;
+    return ch.address;
+  };
+
+  const requireActiveChatOnWalletChain = (
+    chainId: number | null | undefined
+  ): { contract: string } | { error: string } => {
+    const ch = activeChatChannel;
+    if (!ch) return { error: NO_ACTIVE_CHANNEL_MSG };
+    if (chainId == null) return { error: "[!] Set a network first (network <name|id>)." };
+    if (ch.chainId !== chainId) return { error: wrongChainMsg(ch) };
+    return { contract: ch.address };
+  };
 
   // ENS resolves on the ACTIVE chain. Mainnet uses viem's canonical v1
   // universal resolver; testnets use 0xterm's own ENS contract (ENS_CONTRACT),
@@ -1470,7 +1535,7 @@ export default function TerminalShell({
   const catchUpChatBaseline = async () => {
     if (!isConnected || !address) return;
     const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
-    const contract = chain ? chatContractAddress(chain.id) : null;
+    const contract = activeChatContractOnChain(chain?.id);
     if (!chain || !contract) {
       chatBaseline.current = {};
       return;
@@ -1563,7 +1628,7 @@ export default function TerminalShell({
     const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
     if (!chain) return;
 
-    const chatContract = chatContractAddress(chain.id);
+    const chatContract = activeChatContractOnChain(chain.id);
     const boardContract = BILLBOARD_CONTRACT[chain.id] || null;
     const me = getAddress(address);
     let client: PublicClient | null = null;
@@ -2274,7 +2339,8 @@ export default function TerminalShell({
         wallet: address,
         preferences: prefs,
         customTokens: tokens,
-        pinned: pinned.map(({ payload, component, ...rest }) => rest)
+        pinned: pinned.map(({ payload, component, ...rest }) => rest),
+        chatChannels: exportChannelsPayload(channelStore)
       };
 
       const exportWidget = (
@@ -2344,6 +2410,11 @@ export default function TerminalShell({
           setPinned(cleaned);
           rehydratePinRefresh(cleaned);
           savePreference("pinned", cleaned);
+        }
+
+        if (data.chatChannels) {
+          const next = importChannelsPayload(data.chatChannels, channelStore);
+          persistChannels(next);
         }
 
         if (Array.isArray(data.preferences?.logs)) {
@@ -3416,13 +3487,10 @@ export default function TerminalShell({
       const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
       if (!chain)
         return { id: generateId(), type: "text", text: "[!] Set a network first (network <name|id>)." };
-      const contract = chatContractAddress(chain.id);
-      if (!contract)
-        return {
-          id: generateId(),
-          type: "text",
-          text: `[!] No chat contract deployed on ${chain.name}. Testnets only — see contracts/script/ChatDeploy.md.`
-        };
+      const req = requireActiveChatOnWalletChain(chain.id);
+      if ("error" in req)
+        return { id: generateId(), type: "text", text: req.error };
+      const contract = req.contract;
 
       try {
         const myPair = await getChatKeyPair();
@@ -3534,13 +3602,10 @@ export default function TerminalShell({
       const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
       if (!chain)
         return { id: generateId(), type: "text", text: "[!] Set a network first." };
-      const contract = chatContractAddress(chain.id);
-      if (!contract)
-        return {
-          id: generateId(),
-          type: "text",
-          text: `[!] No chat contract deployed on ${chain.name}. Testnets only.`
-        };
+      const req = requireActiveChatOnWalletChain(chain.id);
+      if ("error" in req)
+        return { id: generateId(), type: "text", text: req.error };
+      const contract = req.contract;
 
       // Read YOUR inbox by default; pass an address to read a peer's view of
       // their own threads. In practice reading your own inbox is the main path.
@@ -3658,9 +3723,10 @@ export default function TerminalShell({
       const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
       if (!chain)
         return { id: generateId(), type: "text", text: "[!] Set a network first." };
-      const contract = chatContractAddress(chain.id);
-      if (!contract)
-        return { id: generateId(), type: "text", text: `[!] No chat contract on ${chain.name}.` };
+      const req = requireActiveChatOnWalletChain(chain.id);
+      if ("error" in req)
+        return { id: generateId(), type: "text", text: req.error };
+      const contract = req.contract;
       try {
         const fee = await getClient(chain).readContract({
           address: contract as Address,
@@ -3852,6 +3918,349 @@ export default function TerminalShell({
   commands.net = commands.network;
   commands.initpool = commands.initialize;
   commands.findpool = commands.getpool;
+
+  commands.channel = async (args) => {
+    const sub = (args[1] || "").toLowerCase();
+    const cmd0 = (args[0] || "").toLowerCase();
+    const all = listChannelsOrdered(channelStore);
+    const active = activeChatChannel;
+
+    if (cmd0 === "channels" || sub === "list") {
+      if (all.length === 0) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "No channels saved. type channel deploy <name> · channel add <addr>"
+        };
+      }
+      const lines = all.map((ch) => {
+        const id = channelId(ch.chainId, ch.address);
+        const on =
+          channelStore.activeId === id ||
+          (!channelStore.activeId &&
+            active &&
+            channelId(active.chainId, active.address) === id);
+        const mark = on ? "· " : "  ";
+        const name = formatChannelLabel(ch, { disambiguate: true, all });
+        const meta = `${SUPPORTED_CHAINS.find((c) => c.id === ch.chainId)?.name || ch.chainId} · ${shortAddress(ch.address)}`;
+        const tag = ch.source === "preset" ? " [preset]" : ch.source === "recent" ? " [recent]" : "";
+        return `${mark}${name}${tag}\n     ${meta}`;
+      });
+      return {
+        id: generateId(),
+        type: "text",
+        text: `Channels (${all.length}):\n${lines.join("\n")}`
+      };
+    }
+
+    if (!sub) {
+      if (!active) {
+        return { id: generateId(), type: "text", text: NO_ACTIVE_CHANNEL_MSG };
+      }
+      const label = formatChannelLabel(active, { disambiguate: true, all });
+      return {
+        id: generateId(),
+        type: "text",
+        text: `Active channel: ${label}\n  chain: ${active.chainId} (${SUPPORTED_CHAINS.find((c) => c.id === active.chainId)?.name || "?"})\n  address: ${active.address}\n  type channel list · channel use <name|address> · channel deploy <name>`
+      };
+    }
+
+    if (sub === "use") {
+      const a = args[2];
+      const b = args[3];
+      if (!a) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: channel use <name|address> | channel use <chain> <address>"
+        };
+      }
+      let explicitChain: number | undefined;
+      let query = a;
+      if (b && (resolveChain(a) || /^\d+$/.test(a))) {
+        const chain =
+          resolveChain(a) || SUPPORTED_CHAINS.find((c) => c.id === Number(a));
+        if (!chain) {
+          return { id: generateId(), type: "text", text: `[!] Unknown chain "${a}".` };
+        }
+        explicitChain = chain.id;
+        query = b;
+      }
+      const resolved = resolveChannelUse(
+        query,
+        channelStore,
+        activeChainId,
+        explicitChain
+      );
+      if (!resolved.ok) {
+        if (resolved.reason === "choices" && resolved.choices?.length) {
+          const labels = resolved.choices.map(
+            (ch) =>
+              `${formatChannelLabel(ch, { disambiguate: true, all: resolved.choices! })} (${shortAddress(ch.address)})`
+          );
+          setSuggestions(
+            resolved.choices.map((ch) => `channel use ${ch.address}`)
+          );
+          setSuggestionIdx(0);
+          return {
+            id: generateId(),
+            type: "text",
+            text: `${resolved.message}\n${labels.map((l, i) => `  ${i + 1}. ${l}`).join("\n")}`
+          };
+        }
+        return { id: generateId(), type: "text", text: resolved.message };
+      }
+      const ch = resolved.channel;
+      if (activeChainId != null && ch.chainId !== activeChainId) {
+        const netName =
+          SUPPORTED_CHAINS.find((c) => c.id === ch.chainId)?.name || String(ch.chainId);
+        setSuggestions([`network ${netName}`, "cancel"]);
+        setSuggestionIdx(0);
+        return { id: generateId(), type: "text", text: wrongChainMsg(ch) };
+      }
+      const id = channelId(ch.chainId, ch.address);
+      const exists = channelStore.channels.some(
+        (c) => channelId(c.chainId, c.address) === id
+      );
+      const nextChannels = exists
+        ? channelStore.channels
+        : [...channelStore.channels, { ...ch, source: ch.source || "saved" }];
+      persistChannels({ channels: nextChannels, activeId: id });
+      return { id: generateId(), type: "text", text: activeChannelSuccessMsg(ch) };
+    }
+
+    if (sub === "add") {
+      const chainArg = args[2];
+      const addrArg = args[3];
+      const nameArg = args.slice(4).join(" ").trim();
+      if (!chainArg || !addrArg) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: channel add <chain> <address> [name]"
+        };
+      }
+      const chain =
+        resolveChain(chainArg) ||
+        SUPPORTED_CHAINS.find((c) => c.id === Number(chainArg));
+      if (!chain) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] Unknown chain "${chainArg}".`
+        };
+      }
+      if (!/^0x[0-9a-fA-F]{40}$/.test(addrArg)) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] Invalid address "${addrArg}".`
+        };
+      }
+      const addr = getAddress(addrArg);
+      try {
+        const client = getClient(chain);
+        const verified = await verifyChatContract(client, addr);
+        if (!verified.ok) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: notChatContractMsg(addr)
+          };
+        }
+        const ch: ChatChannel = {
+          chainId: chain.id,
+          address: addr,
+          name: nameArg || verified.name || "",
+          source: "saved"
+        };
+        const id = channelId(ch.chainId, ch.address);
+        const filtered = channelStore.channels.filter(
+          (c) => channelId(c.chainId, c.address) !== id
+        );
+        persistChannels({
+          channels: [...filtered, ch],
+          activeId: channelStore.activeId
+        });
+        return {
+          id: generateId(),
+          type: "text",
+          text: savedChannelSuccessMsg(ch)
+        };
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] channel add failed: ${err.message || err}`
+        };
+      }
+    }
+
+    if (sub === "remove") {
+      const q = args.slice(2).join(" ").trim();
+      if (!q) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: channel remove <name|address>"
+        };
+      }
+      const resolved = resolveChannelUse(q, channelStore, activeChainId);
+      if (!resolved.ok) {
+        return { id: generateId(), type: "text", text: resolved.message };
+      }
+      const ch = resolved.channel;
+      if (ch.source === "preset") {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] Cannot remove preset channel ${formatChannelLabel(ch)}. Use channel use to switch away.`
+        };
+      }
+      const id = channelId(ch.chainId, ch.address);
+      const nextChannels = channelStore.channels.filter(
+        (c) => channelId(c.chainId, c.address) !== id
+      );
+      const nextActive =
+        channelStore.activeId === id ? null : channelStore.activeId;
+      persistChannels({ channels: nextChannels, activeId: nextActive });
+      return {
+        id: generateId(),
+        type: "text",
+        text: `[✓] Removed ${formatChannelLabel(ch)} from local list.`
+      };
+    }
+
+    if (sub === "deploy") {
+      if (!isConnected || !address) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "[!] Connect a wallet to deploy a channel."
+        };
+      }
+      const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!chain) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "[!] Set a network first (network <name|id>)."
+        };
+      }
+      const factory = CHAT_FACTORY[chain.id];
+      if (!factory) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] No chat factory on ${chain.name}. Operator must deploy via contracts/script/DeployChatFactory.s.sol and set CHAT_FACTORY.`
+        };
+      }
+      const name_ = args[2] || "";
+      const feeArg = args[3];
+      if (!name_ || name_.length > 32) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: channel deploy <name> [feeWei]  (name 1–32 bytes)"
+        };
+      }
+      let fee = DEFAULT_CHAT_FEE_WEI;
+      if (feeArg) {
+        try {
+          fee = BigInt(feeArg);
+        } catch {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] Invalid feeWei "${feeArg}".`
+          };
+        }
+      }
+      try {
+        const hash = await writeContractAsync({
+          address: factory as Address,
+          abi: chatFactoryAbi,
+          functionName: "deploy",
+          args: [name_, fee]
+        });
+        const client = getClient(chain);
+        const receipt = await client.waitForTransactionReceipt({ hash });
+        let channelAddr: Address | null = null;
+        for (const log of receipt.logs) {
+          try {
+            const decoded = decodeEventLog({
+              abi: chatFactoryAbi,
+              data: log.data,
+              topics: log.topics
+            });
+            if (decoded.eventName === "ChannelCreated") {
+              channelAddr = (decoded.args as { channel: Address }).channel;
+              break;
+            }
+          } catch {
+            // not our event
+          }
+        }
+        if (!channelAddr) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[✓] Deploy tx sent but channel address not found in logs.\n   tx: ${hash}`
+          };
+        }
+        const impl = CHAT_IMPLEMENTATION[chain.id];
+        const ch: ChatChannel = {
+          chainId: chain.id,
+          address: getAddress(channelAddr),
+          name: name_,
+          implementation: impl ? (impl as Address) : undefined,
+          source: "saved"
+        };
+        const id = channelId(ch.chainId, ch.address);
+        const filtered = channelStore.channels.filter(
+          (c) => channelId(c.chainId, c.address) !== id
+        );
+        persistChannels({ channels: [...filtered, ch], activeId: id });
+        const explorer = chain.blockExplorers?.default?.url;
+        const replies: LogEntry[] = [
+          { id: generateId(), type: "text", text: activeChannelSuccessMsg(ch) },
+          {
+            id: generateId(),
+            type: "text",
+            text: `   address: ${ch.address}`
+          },
+          { id: generateId(), type: "text", text: `   tx: ${hash}` }
+        ];
+        if (explorer) {
+          replies.push({
+            id: generateId(),
+            type: "text",
+            text: `   explorer: ${explorer}/address/${ch.address}`
+          });
+        }
+        replies.push({
+          id: generateId(),
+          type: "text",
+          text: `type chat <to> "…" to register on this channel`
+        });
+        return replies;
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] channel deploy failed: ${err.message || err}`
+        };
+      }
+    }
+
+    return {
+      id: generateId(),
+      type: "text",
+      text: "Usage: channel | channel list | channel use <name|address> | channel add <chain> <address> [name] | channel remove <name|address> | channel deploy <name> [feeWei]"
+    };
+  };
+  commands.channels = commands.channel;
+
   commands.provideliq = commands.addliq;
   commands.bal = commands.balance;
   commands.liquidity = commands.pool;
@@ -4279,18 +4688,15 @@ export default function TerminalShell({
               inboxUnread={inboxUnread}
               boardUnread={boardUnread}
               channelLabel={
-                (() => {
-                  const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
-                  const addr = chain ? chatContractAddress(chain.id) : null;
-                  if (!addr) return null;
-                  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-                })()
+                activeChatChannel
+                  ? activeChannelChipLabel(activeChatChannel, allChannelsForLabel)
+                  : null
               }
               isConnected={!!isConnected && !!address}
               loadSenders={async () => {
                 if (!isConnected || !address) return [];
                 const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
-                const contract = chain ? chatContractAddress(chain.id) : null;
+                const contract = activeChatContractOnChain(chain?.id);
                 if (!chain || !contract) return [];
                 const me = getAddress(address);
                 const client = getClient(chain);
@@ -4318,7 +4724,7 @@ export default function TerminalShell({
               loadThread={async (peer) => {
                 if (!isConnected || !address) throw new Error("Connect a wallet.");
                 const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
-                const contract = chain ? chatContractAddress(chain.id) : null;
+                const contract = activeChatContractOnChain(chain?.id);
                 if (!chain || !contract) throw new Error("No chat channel.");
                 const me = getAddress(address);
                 const refreshed = await fetchChatThread(
@@ -4400,6 +4806,7 @@ export default function TerminalShell({
           address={address}
           mounted={mounted}
           isNarrow={narrow}
+          chatChannelLabel={chatChipLabel}
         />
       </div>
     </div>
