@@ -4,6 +4,15 @@
 never sees plaintext — it holds `iv + ciphertext` blobs. A tiny per-message
 fee deters spam; fees accumulate in the contract and are swept to the owner.
 
+**Channels (#58).** User-facing deploys use **EIP-1167 clones** via
+`ChatFactory` (`DeployChatFactory.s.sol`): one shared implementation per
+chain, cheap `channel deploy <name>` from the terminal. Wire addresses into
+frontend `CHAT_IMPLEMENTATION` / `CHAT_FACTORY`. Presets live in
+`CHAT_PRESETS` (legacy official room may still be a UUPS proxy).
+
+Each clone is `initialize(initialFee, name)` once — `name()` is immutable.
+Default fee when omitted in the UI = `0.0001` native (100000000000000 wei).
+
 **Per-thread storage.** History is keyed `inbox[recipient][sender]` — one
 conversation per `(recipient, sender)` pair, so reading a thread is a single
 `getThread` call (no scanning the whole inbox). `getSenders(recipient)` lists
@@ -17,12 +26,9 @@ on-chain registry, no out-of-band key exchange. Registration is one
 `setPublicKey` tx, triggered automatically the first time a user sends a
 `chat` message (subsequent sends skip it — the key is already registered).
 
-**Upgradeable (UUPS proxy).** `Chat` runs behind an `ERC1967Proxy`. The proxy
-owns the storage (all chat history); the logic lives in a separate
-implementation contract. Upgrading later only swaps the implementation via
-`UpgradeChat.s.sol` — the proxy address (and therefore every message) never
-moves. The proxy address differs per chain, so wire the per-chain proxy
-address into the frontend `CHAT_CONTRACT`.
+**Legacy UUPS path.** `DeployChat.s.sol` still deploys implementation +
+`ERC1967Proxy` for an operator-owned official room if needed. Prefer the
+factory for user channels. Wire presets into `CHAT_PRESETS`.
 
 ## 1. Prerequisites
 
