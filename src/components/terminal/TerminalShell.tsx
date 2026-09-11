@@ -31,7 +31,8 @@ import {
   namehash,
   keccak256,
   type Address,
-  type Chain
+  type Chain,
+  type PublicClient
 } from "viem";
 import { useAppKit } from "@reown/appkit/react";
 
@@ -1565,7 +1566,24 @@ export default function TerminalShell({
     const chatContract = chatContractAddress(chain.id);
     const boardContract = BILLBOARD_CONTRACT[chain.id] || null;
     const me = getAddress(address);
-    const client = getClient(chain);
+    let client: PublicClient | null = null;
+    try {
+      client = getClient(chain);
+    } catch {
+      // No API-key RPC provider configured (#stability). Social polls are
+      // noise without an RPC; surface the setup hint once instead of throwing.
+      setLogs((prev) =>
+        [
+          ...prev,
+          {
+            id: generateId(),
+            type: "text",
+            text: `[!] Social preview needs an API-key RPC provider. Run "rpc alchemy <KEY>" or "rpc add <name> <url>", then "rpc use <name>".`
+          } as LogEntry
+        ].slice(-MAX_LOGS)
+      );
+      return;
+    }
 
     const checkInbox = async () => {
       if (
@@ -1708,7 +1726,7 @@ export default function TerminalShell({
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [isConnected, address, activeChainId]);
+  }, [isConnected, address, activeChainId, rpcProviders, activeRpcProviders]);
 
   // COMMAND REGISTRY
   type CommandHandler = (
