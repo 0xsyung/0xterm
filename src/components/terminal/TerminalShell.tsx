@@ -132,8 +132,20 @@ import PortfolioWidget, { type SnapshotHolding } from "./widgets/PortfolioWidget
 import { trackEvent } from "../../lib/analytics";
 import DeployWidget from "./widgets/DeployWidget";
 import PinnedPanel from "./PinnedPanel";
+import SocialPanel from "./SocialPanel";
 import type { ChatMessage } from "./widgets/ChatWidget";
 import type { BillboardPost } from "./widgets/BillboardWidget";
+import {
+  applyPostCountPoll,
+  applyThreadPoll,
+  loadPrimaryTab,
+  persistPrimaryTab,
+  shouldRunSocialPoll,
+  SOCIAL_POLL_MS,
+  type PrimaryTab,
+  type SocialSubTab,
+  type ThreadCounts
+} from "./socialUnread";
 
 const MAX_LOGS = 100;
 
@@ -1412,44 +1424,176 @@ export default function TerminalShell({
       handleThemeSwitch
     });
 
-  // --- new-message poller ----------------------------------------------
-  // Background check every 60s for unread chat messages. When a new message is
-  // found it prints a notification (no pause — running `inbox` is just a manual
-  // fetch; the poller keeps going and only reports genuinely new messages).
-  const chatBaseline = useRef<Record<string, number>>({});
-
+  // --- Social primary tab + unread poller (#63) ------------------------
+  // Badge is the source of truth; optional 🔔 log line stays secondary.
+  // First snapshot establishes baseline (badge 0). Polls pause while hidden.
+  const [primaryTab, setPrimaryTab] = useState<PrimaryTab>(() =>
+    typeof window !== "undefined" ? loadPrimaryTab(window.localStorage) : "terminal"
+  );
+  const [socialSubTab, setSocialSubTab] = useState<SocialSubTab>("inbox");
+  const [inboxUnread, setInboxUnread] = useState(0);
+  const [boardUnread, setBoardUnread] = useState(0);
+  const chatBaseline = useRef<ThreadCounts | null>(null);
+  const boardBaseline = useRef<number | null>(null);
+  const inboxUnreadRef = useRef(0);
+  const boardUnreadRef = useRef(0);
   useEffect(() => {
+    inboxUnreadRef.current = inboxUnread;
+  }, [inboxUnread]);
+  useEffect(() => {
+    boardUnreadRef.current = boardUnread;
+  }, [boardUnread]);
+  const primaryTabRef = useRef(primaryTab);
+  const socialSubTabRef = useRef(socialSubTab);
+  useEffect(() => {
+    primaryTabRef.current = primaryTab;
+  }, [primaryTab]);
+  useEffect(() => {
+    socialSubTabRef.current = socialSubTab;
+  }, [socialSubTab]);
+
+  const handlePrimaryTabChange = (tab: PrimaryTab) => {
+    setPrimaryTab(tab);
+    persistPrimaryTab(
+      typeof window !== "undefined" ? window.localStorage : null,
+      tab
+    );
+  };
+
+  const catchUpChatBaseline = async () => {
     if (!isConnected || !address) return;
     const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
     const contract = chain ? chatContractAddress(chain.id) : null;
-    if (!chain || !contract) return;
+    if (!chain || !contract) {
+      chatBaseline.current = {};
+      return;
+    }
+    try {
+      const me = getAddress(address);
+      const client = getClient(chain);
+      const senders = (await client.readContract({
+        address: contract as Address,
+        abi: chatAbi,
+        functionName: "getSenders",
+        args: [me]
+      })) as readonly Address[];
+      const fresh: ThreadCounts = {};
+      for (const s of senders) {
+        fresh[s.toLowerCase()] = Number(
+          await client.readContract({
+            address: contract as Address,
+            abi: chatAbi,
+            functionName: "threadCount",
+            args: [me, s]
+          })
+        );
+      }
+      chatBaseline.current = fresh;
+    } catch {
+      // fail soft
+    }
+  };
 
+  const catchUpBoardBaseline = async () => {
+    const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+    const contract = chain ? BILLBOARD_CONTRACT[chain.id] : null;
+    if (!chain || !contract) {
+      boardBaseline.current = 0;
+      return;
+    }
+    try {
+      const total = Number(
+        await getClient(chain).readContract({
+          address: contract as Address,
+          abi: billboardAbi,
+          functionName: "postCount"
+        })
+      );
+      boardBaseline.current = total;
+    } catch {
+      // fail soft
+    }
+  };
+
+  const handleSocialSubTabChange = (tab: SocialSubTab) => {
+    setSocialSubTab(tab);
+    if (tab === "inbox") {
+      setInboxUnread(0);
+      void catchUpChatBaseline();
+    } else {
+      setBoardUnread(0);
+      void catchUpBoardBaseline();
+    }
+  };
+
+  // Opening Social clears the visible sub-tab badge + catches up baseline.
+  const prevPrimaryRef = useRef(primaryTab);
+  useEffect(() => {
+    const prev = prevPrimaryRef.current;
+    prevPrimaryRef.current = primaryTab;
+    if (prev !== "social" && primaryTab === "social") {
+      if (socialSubTab === "inbox") {
+        setInboxUnread(0);
+        void catchUpChatBaseline();
+      } else {
+        setBoardUnread(0);
+        void catchUpBoardBaseline();
+      }
+    }
+  }, [primaryTab, socialSubTab]);
+
+  useEffect(() => {
+    // Chain / wallet identity change: drop prior-chain baselines so the next
+    // poll re-establishes with badge 0 (no false positives / skipped first snapshot).
+    chatBaseline.current = null;
+    boardBaseline.current = null;
+    setInboxUnread(0);
+    setBoardUnread(0);
+    inboxUnreadRef.current = 0;
+    boardUnreadRef.current = 0;
+
+    if (!isConnected || !address) return;
+    const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+    if (!chain) return;
+
+    const chatContract = chatContractAddress(chain.id);
+    const boardContract = BILLBOARD_CONTRACT[chain.id] || null;
     const me = getAddress(address);
     const client = getClient(chain);
 
-    const check = async () => {
+    const checkInbox = async () => {
+      if (
+        !shouldRunSocialPoll({
+          documentHidden: typeof document !== "undefined" && document.hidden,
+          hasChannel: !!chatContract,
+          surface: "inbox"
+        })
+      ) {
+        return;
+      }
       try {
         const senders = (await client.readContract({
-          address: contract as Address,
+          address: chatContract as Address,
           abi: chatAbi,
           functionName: "getSenders",
           args: [me]
         })) as readonly Address[];
 
-        const fresh: Record<string, number> = {};
+        const fresh: ThreadCounts = {};
         let newest: Address | null = null;
         let newestCount = 0;
         for (const s of senders) {
           const count = Number(
             await client.readContract({
-              address: contract as Address,
+              address: chatContract as Address,
               abi: chatAbi,
               functionName: "threadCount",
               args: [me, s]
             })
           );
           fresh[s.toLowerCase()] = count;
-          if (count > 0 && count > (chatBaseline.current[s.toLowerCase()] || 0)) {
+          const prev = chatBaseline.current?.[s.toLowerCase()] ?? 0;
+          if (count > 0 && count > prev) {
             if (!newest || count > newestCount) {
               newest = s;
               newestCount = count;
@@ -1457,35 +1601,107 @@ export default function TerminalShell({
           }
         }
 
-        // First run: just record the baseline, don't notify.
-        if (Object.keys(chatBaseline.current).length === 0 && Object.keys(fresh).length > 0) {
+        // Already viewing Inbox on Social — catch up baseline, keep badge clear.
+        if (
+          primaryTabRef.current === "social" &&
+          socialSubTabRef.current === "inbox"
+        ) {
           chatBaseline.current = fresh;
+          setInboxUnread(0);
           return;
         }
 
-        if (newest) {
-          chatBaseline.current = fresh;
-          setLogs((prev) =>
-            [
-              ...prev,
-              {
-                id: generateId(),
-                type: "text",
-                text: `🔔 New encrypted message from ${newest.slice(0, 6)}…${newest.slice(-4)} — run "inbox" to read it.`
-              } as LogEntry
-            ].slice(-MAX_LOGS)
-          );
-        } else {
-          chatBaseline.current = fresh;
+        const result = applyThreadPoll(
+          chatBaseline.current,
+          fresh,
+          inboxUnreadRef.current
+        );
+        chatBaseline.current = result.baseline;
+        if (result.established) {
+          setInboxUnread(0);
+          return;
+        }
+        if (result.delta > 0) {
+          setInboxUnread(result.unread);
+          // Secondary log notify (badge is source of truth).
+          if (newest) {
+            setLogs((prev) =>
+              [
+                ...prev,
+                {
+                  id: generateId(),
+                  type: "text",
+                  text: `🔔 New encrypted message from ${newest.slice(0, 6)}…${newest.slice(-4)} — open Social / Inbox or run "inbox".`
+                } as LogEntry
+              ].slice(-MAX_LOGS)
+            );
+          }
         }
       } catch {
         // network/contract hiccup — ignore, try again next tick
       }
     };
 
+    const checkBoard = async () => {
+      if (
+        !shouldRunSocialPoll({
+          documentHidden: typeof document !== "undefined" && document.hidden,
+          surface: "board"
+        }) ||
+        !boardContract
+      ) {
+        return;
+      }
+      try {
+        const total = Number(
+          await client.readContract({
+            address: boardContract as Address,
+            abi: billboardAbi,
+            functionName: "postCount"
+          })
+        );
+        if (
+          primaryTabRef.current === "social" &&
+          socialSubTabRef.current === "board"
+        ) {
+          boardBaseline.current = total;
+          setBoardUnread(0);
+          return;
+        }
+
+        const result = applyPostCountPoll(
+          boardBaseline.current,
+          total,
+          boardUnreadRef.current
+        );
+        boardBaseline.current = result.baseline;
+        if (result.established) {
+          setBoardUnread(0);
+          return;
+        }
+        if (result.delta > 0) {
+          setBoardUnread(result.unread);
+        }
+      } catch {
+        // fail soft
+      }
+    };
+
+    const check = () => {
+      void checkInbox();
+      void checkBoard();
+    };
+
     check();
-    const id = setInterval(check, 60_000);
-    return () => clearInterval(id);
+    const id = setInterval(check, SOCIAL_POLL_MS);
+    const onVis = () => {
+      if (typeof document !== "undefined" && !document.hidden) check();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [isConnected, address, activeChainId]);
 
   // COMMAND REGISTRY
@@ -3402,6 +3618,7 @@ export default function TerminalShell({
           );
         }
         chatBaseline.current = fresh;
+        setInboxUnread(0);
 
         return threads;
       } catch (err: any) {
@@ -3539,6 +3756,8 @@ export default function TerminalShell({
           return page.map((p) => ({ ...p, timestamp: Number(p.timestamp) }));
         };
 
+        boardBaseline.current = postTotal;
+        setBoardUnread(0);
         return {
           id: generateId(),
           type: "billboard",
@@ -4016,6 +4235,9 @@ export default function TerminalShell({
         onThemeChange={handleThemeSwitch}
         onCommand={handleCommand}
         chainName={SUPPORTED_CHAINS.find((c) => c.id === activeChainId)?.name}
+        primaryTab={primaryTab}
+        onPrimaryTabChange={handlePrimaryTabChange}
+        socialBadge={inboxUnread + boardUnread}
       />
 
       {/* TERMINAL CONTENT CONTAINER */}
@@ -4023,34 +4245,110 @@ export default function TerminalShell({
         className={`flex-1 flex flex-col pl-[calc(0.75rem_+_env(safe-area-inset-left))] pr-[calc(0.75rem_+_env(safe-area-inset-right))] md:pl-[calc(1.5rem_+_env(safe-area-inset-left))] md:pr-[calc(1.5rem_+_env(safe-area-inset-right))] pb-[calc(1.5rem_+_env(safe-area-inset-bottom))] ${HEADER_PAD[theme.headerStyle]} overflow-hidden relative z-10`}
         onClick={() => inputRef.current?.focus()}
       >
-        {/* Log + pin: band-driven — stack (phone/short-landscape) vs two-column (tablet/desktop). Never overlay. */}
-        <div className={pinGridClass(band, pinned.length > 0)}>
-          <div
-            ref={logContainerRef}
-            className="h-full min-h-0 min-w-0 overflow-y-auto pt-2 pr-2 whitespace-pre-wrap"
-          >
-            <div className="min-h-full flex flex-col justify-end space-y-2.5">
-              <TerminalLogList
-                logs={logs}
-                theme={theme}
-                activeChainId={activeChainId}
-                onPin={onPin}
-                pinnedIds={new Set(pinned.map((p) => p.id))}
-              />
-            </div>
+        {primaryTab === "social" ? (
+          <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
+            <SocialPanel
+              theme={theme}
+              subTab={socialSubTab}
+              onSubTabChange={handleSocialSubTabChange}
+              inboxUnread={inboxUnread}
+              boardUnread={boardUnread}
+              channelLabel={
+                (() => {
+                  const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+                  const addr = chain ? chatContractAddress(chain.id) : null;
+                  if (!addr) return null;
+                  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+                })()
+              }
+              isConnected={!!isConnected && !!address}
+              loadSenders={async () => {
+                if (!isConnected || !address) return [];
+                const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+                const contract = chain ? chatContractAddress(chain.id) : null;
+                if (!chain || !contract) return [];
+                const me = getAddress(address);
+                const client = getClient(chain);
+                const senders = (await client.readContract({
+                  address: contract as Address,
+                  abi: chatAbi,
+                  functionName: "getSenders",
+                  args: [me]
+                })) as readonly Address[];
+                const out = [];
+                for (const s of senders) {
+                  const count = Number(
+                    await client.readContract({
+                      address: contract as Address,
+                      abi: chatAbi,
+                      functionName: "threadCount",
+                      args: [me, s]
+                    })
+                  );
+                  const label = (await ensNameFor(s)) || undefined;
+                  out.push({ peer: s, count, label });
+                }
+                return out;
+              }}
+              loadThread={async (peer) => {
+                if (!isConnected || !address) throw new Error("Connect a wallet.");
+                const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+                const contract = chain ? chatContractAddress(chain.id) : null;
+                if (!chain || !contract) throw new Error("No chat channel.");
+                const me = getAddress(address);
+                const refreshed = await fetchChatThread(
+                  getClient(chain),
+                  contract as Address,
+                  me,
+                  peer,
+                  { getChatKeyPair, ensNameFor }
+                );
+                // Social view skips key-change warn when we lack the raw key here
+                // (inbox command still surfaces continuity warnings in the log).
+                return {
+                  ...refreshed,
+                  peerFingerprint: undefined as string | undefined,
+                  keyChanged: false
+                };
+              }}
+              loadBoard={async () => {
+                const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+                const contract = chain ? BILLBOARD_CONTRACT[chain.id] : null;
+                if (!chain || !contract) return null;
+                return fetchBillboard(getClient(chain), contract as Address, 5);
+              }}
+            />
           </div>
+        ) : (
+          /* Log + pin: band-driven — stack (phone/short-landscape) vs two-column (tablet/desktop). Never overlay. */
+          <div className={pinGridClass(band, pinned.length > 0)}>
+            <div
+              ref={logContainerRef}
+              className="h-full min-h-0 min-w-0 overflow-y-auto pt-2 pr-2 whitespace-pre-wrap"
+            >
+              <div className="min-h-full flex flex-col justify-end space-y-2.5">
+                <TerminalLogList
+                  logs={logs}
+                  theme={theme}
+                  activeChainId={activeChainId}
+                  onPin={onPin}
+                  pinnedIds={new Set(pinned.map((p) => p.id))}
+                />
+              </div>
+            </div>
 
-          <PinnedPanel
-            pinned={pinned}
-            theme={theme}
-            refreshing={refreshingId}
-            countdowns={countdowns}
-            onRefresh={onRefreshPinned}
-            onMinimize={onMinimize}
-            onUnpin={onUnpin}
-            stacked={band === "stack"}
-          />
-        </div>
+            <PinnedPanel
+              pinned={pinned}
+              theme={theme}
+              refreshing={refreshingId}
+              countdowns={countdowns}
+              onRefresh={onRefreshPinned}
+              onMinimize={onMinimize}
+              onUnpin={onUnpin}
+              stacked={band === "stack"}
+            />
+          </div>
+        )}
 
         {/* TWO-LINE PROMPT LAYOUT */}
         <TerminalPrompt

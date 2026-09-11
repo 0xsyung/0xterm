@@ -119,6 +119,13 @@ export default function HelpManual({
           <div>List the latest public posts (default 5, max 50)</div>
           <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>boardfee</div>
           <div>Show current post fee on the active network</div>
+          <div className={`font-bold ${theme.primary} md:whitespace-nowrap break-words`}>Social tab</div>
+          <div>
+            Header TERMINAL | SOCIAL switch — Inbox + Board live here (not pinnable).
+            Unread badges poll ~60s. Commands <span className="font-bold">inbox</span> /{" "}
+            <span className="font-bold">chat</span> / <span className="font-bold">board</span> /{" "}
+            <span className="font-bold">channel*</span> still work from the prompt on either tab.
+          </div>
       </div>
       <div
         className={`border-t ${theme.border} pt-2 mt-1 text-[10px] opacity-60`}
