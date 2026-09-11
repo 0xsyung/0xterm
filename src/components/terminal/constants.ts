@@ -537,12 +537,12 @@ export const CHAT_PRESETS: Record<number, ChatPreset> = {
 
 /** Shared Chat logic per chain (ChatFactory.implementation). Fill after DeployChatFactory. */
 export const CHAT_IMPLEMENTATION: Record<number, Address> = {
-  // 11155111: '0x…',
+  11155111: "0xAbf5351054f1B1F555843A53bf925e8442b4AAaC",
 }
 
 /** EIP-1167 factory per chain. Fill after DeployChatFactory. */
 export const CHAT_FACTORY: Record<number, Address> = {
-  // 11155111: '0x…',
+  11155111: "0x06b5e40A916A78f3F3dB24597f4579C4dA92c479",
 }
 
 /** @deprecated Prefer CHAT_PRESETS / active channel — kept for any stray imports. */
