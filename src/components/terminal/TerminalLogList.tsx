@@ -83,26 +83,29 @@ function renderLog(
       </div>
     );
   }
+  // Only live monitors are pinnable (issue #35): price / balance / portfolio.
+  // Networks, tx-flow widgets (createpool/initialize/addliq), chat and board
+  // are not — they get no onPin so PinButton self-hides.
   if (log.type === "networks")
-    return <NetworksList theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
+    return <NetworksList theme={theme} />;
   if (log.type === "createpool")
-    return <CreatePoolWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
+    return <CreatePoolWidget {...log.payload} theme={theme} />;
   if (log.type === "initialize")
-    return <InitializePoolWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
+    return <InitializePoolWidget {...log.payload} theme={theme} />;
   if (log.type === "addliq")
-    return <AddLiquidityWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
+    return <AddLiquidityWidget {...log.payload} theme={theme} />;
   if (log.type === "balance")
     return <BalanceWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   if (log.type === "portfolio")
     return <PortfolioWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   if (log.type === "chat")
-    return <ChatWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
+    return <ChatWidget {...log.payload} theme={theme} />;
   if (log.type === "billboard")
-    return <BillboardWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
+    return <BillboardWidget {...log.payload} theme={theme} />;
 
-  // Plain text / component logs. Only real widgets (log.component / price
-  // data, e.g. the price widget) get a pin — bare text lines (banners, tx
-  // hashes, errors) have nothing to pin.
+  // Plain text / component logs. Only the price widget is pinnable — bare
+  // text lines (banners, tx hashes, errors) and non-live component widgets
+  // (swap/pool/deploy/export) have nothing to pin (issue #35).
   return (
     <div className="relative group">
       <div className={log.warn ? theme.warn : `${theme.text}/90`}>
@@ -113,7 +116,7 @@ function renderLog(
           log.component
         )}
       </div>
-      {(log.component || log.componentData) && !isPinned && (
+      {log.componentData?.kind === "price" && !isPinned && (
         <PinButton
           onPin={() => onPin(log)}
           theme={theme}
