@@ -1543,6 +1543,15 @@ export default function TerminalShell({
   }, [primaryTab, socialSubTab]);
 
   useEffect(() => {
+    // Chain / wallet identity change: drop prior-chain baselines so the next
+    // poll re-establishes with badge 0 (no false positives / skipped first snapshot).
+    chatBaseline.current = null;
+    boardBaseline.current = null;
+    setInboxUnread(0);
+    setBoardUnread(0);
+    inboxUnreadRef.current = 0;
+    boardUnreadRef.current = 0;
+
     if (!isConnected || !address) return;
     const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
     if (!chain) return;

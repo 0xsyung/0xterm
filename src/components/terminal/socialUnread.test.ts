@@ -44,6 +44,26 @@ describe("applyThreadPoll", () => {
   });
 });
 
+describe("identity / chain switch", () => {
+  it("nulling baselines after chain switch re-establishes with badge 0", () => {
+    // Prior chain left a baseline + unread; identity change nulls both.
+    let chatBaseline: Record<string, number> | null = { "0xold": 5 };
+    let boardBaseline: number | null = 10;
+    let inboxUnread = 3;
+    let boardUnread = 2;
+    chatBaseline = null;
+    boardBaseline = null;
+    inboxUnread = 0;
+    boardUnread = 0;
+    const chat = applyThreadPoll(chatBaseline, { "0xnew": 99 }, inboxUnread);
+    const board = applyPostCountPoll(boardBaseline, 42, boardUnread);
+    expect(chat.established).toBe(true);
+    expect(chat.unread).toBe(0);
+    expect(board.established).toBe(true);
+    expect(board.unread).toBe(0);
+  });
+});
+
 describe("applyPostCountPoll", () => {
   it("first poll establishes baseline → badge 0", () => {
     const r = applyPostCountPoll(null, 10, 0);
