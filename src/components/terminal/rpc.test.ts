@@ -62,7 +62,12 @@ describe("buildRpcHelp", () => {
   it("marks the default provider as active when it is active", () => {
     const help = buildRpcHelp(CHAIN, {}, "default");
     expect(help).toContain("RPC Providers for Base:");
-    expect(help).toContain("▶ [ACTIVE] DEFAULT:");
+    expect(help).toContain("▶ [ACTIVE] DEFAULT");
+  });
+
+  it("labels the default provider as unstable public RPC", () => {
+    const help = buildRpcHelp(CHAIN, {}, "default");
+    expect(help).toContain("⚠ public (unstable — API key required)");
   });
 });
 
@@ -87,6 +92,17 @@ describe("resolveRpcAction", () => {
       kind: "state",
       text: `[✓] Switched active RPC provider to "alchemy" on ${CHAIN.name}.`,
       active: { [CHAIN_ID]: "alchemy" }
+    });
+  });
+
+  it("rejects switching to the default (public) provider", () => {
+    const res = resolveRpcAction({
+      ...withProviders({ alchemy: "https://alchemy.example" }),
+      args: ["rpc", "use", "default"]
+    });
+    expect(res).toEqual({
+      kind: "text",
+      text: `[!] The default provider is the unstable public RPC. Configure an API-key provider first: rpc alchemy <KEY> or rpc add <name> <url>.`
     });
   });
 
