@@ -23,15 +23,15 @@ export default defineConfig({
         "src/**/*.test.{ts,tsx}",
       ],
       thresholds: {
-        // Ratchet — measured 2026-09-11 under CI Node after chat channels (#58):
-        // Lines 28.08%, Statements 28.92%, Functions 28.38%, Branches 23.23%.
+        // Ratchet — measured 2026-09-12 under CI Node after terminal modes (#54):
+        // Lines 29.06%, Statements 30.02%, Functions 30.65%, Branches 24.31%.
         // Hard-fail at floor(measured) so CI stays green while TerminalShell.tsx
         // / SocialPanel.tsx (0% covered) remain in the include set. Climb toward
         // 90% is tracked in issue #37.
-        lines: 28,
-        statements: 28,
-        functions: 28,
-        branches: 23,
+        lines: 29,
+        statements: 30,
+        functions: 30,
+        branches: 24,
       },
     },
   },

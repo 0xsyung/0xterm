@@ -162,6 +162,21 @@ import {
   type ChannelStore,
 } from "./chatChannels";
 import type { ChatMessage } from "./widgets/ChatWidget";
+import {
+  DEFAULT_MODE,
+  filterCommandsForMode,
+  homeModeForCommand,
+  isCommandAllowed,
+  isTerminalMode,
+  loadMode,
+  modeChoiceCommands,
+  modeStatusText,
+  modeSwitchAck,
+  resolveModeId,
+  saveMode,
+  wrongModeMessage,
+  type TerminalMode
+} from "./mode";
 import type { BillboardPost } from "./widgets/BillboardWidget";
 import {
   applyPostCountPoll,
@@ -441,6 +456,9 @@ export default function TerminalShell({
 
   // Autocomplete State
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [terminalMode, setTerminalMode] = useState<TerminalMode>(() =>
+    typeof window !== "undefined" ? loadMode(window.localStorage) : DEFAULT_MODE
+  );
   const [suggestionIdx, setSuggestionIdx] = useState(-1);
 
   // Pending interactive confirmation (e.g. register an unverified contract).
@@ -915,6 +933,15 @@ export default function TerminalShell({
             const themeKey = resolveThemeKey(prefs.theme);
             onThemeChange(themeKey);
             loadedDetails.push(`Theme: ${THEMES[themeKey].name}`);
+          }
+
+          if (prefs.mode && isTerminalMode(prefs.mode)) {
+            setTerminalMode(prefs.mode);
+            saveMode(
+              typeof window !== "undefined" ? window.localStorage : null,
+              prefs.mode
+            );
+            loadedDetails.push(`Mode: ${prefs.mode}`);
           }
 
           if (prefs.rpcProviders) setRpcProviders(prefs.rpcProviders);
@@ -1793,6 +1820,40 @@ export default function TerminalShell({
     };
   }, [isConnected, address, activeChainId, rpcProviders, activeRpcProviders]);
 
+
+  // —— Terminal modes (#54) — purpose lens; Stephy option A chrome (prompt chip only)
+  const applyTerminalMode = (next: TerminalMode, opts?: { silent?: boolean }) => {
+    setTerminalMode(next);
+    saveMode(typeof window !== "undefined" ? window.localStorage : null, next);
+    savePreference("mode", next);
+    // Clear CHOICES / pending token picks belonging to the old mode
+    if (pendingTokenPick) {
+      pendingTokenPick.resolve(null);
+      setPendingTokenPick(null);
+    }
+    setSuggestions([]);
+    setSuggestionIdx(-1);
+    if (!opts?.silent) {
+      setLogs((prev) =>
+        [
+          ...prev,
+          {
+            id: generateId(),
+            type: "text",
+            text: modeSwitchAck(next)
+          } as LogEntry
+        ].slice(-MAX_LOGS)
+      );
+    }
+  };
+
+  const openModeChoices = () => {
+    const choices = modeChoiceCommands();
+    setSuggestions(choices);
+    setSuggestionIdx(0);
+    inputRef.current?.focus();
+  };
+
   // COMMAND REGISTRY
   type CommandHandler = (
     args: string[],
@@ -1879,6 +1940,37 @@ export default function TerminalShell({
     },
     help: () => ({ id: generateId(), type: "help" }),
     "?": () => ({ id: generateId(), type: "help" }),
+    mode: (args) => {
+      const sub = (args[1] || "").toLowerCase();
+      if (!sub || sub === "list") {
+        return {
+          id: generateId(),
+          type: "text",
+          text: modeStatusText(terminalMode)
+        };
+      }
+      const next = resolveModeId(sub);
+      if (!next) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] Unknown mode "${args[1]}". Use invest | dev | forensic (aliases: trade/i, workshop/d, dig/trace/f).`
+        };
+      }
+      if (next === terminalMode) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: modeStatusText(terminalMode)
+        };
+      }
+      applyTerminalMode(next);
+      return null;
+    },
+    modes: (args) => {
+      // Alias of `mode list`
+      return commands.mode(["mode", "list"], "mode list");
+    },
     networks: () => ({ id: generateId(), type: "networks" }),
     tokens: (args) => buildTokens(args),
     network: async (args) => {
@@ -2330,6 +2422,8 @@ export default function TerminalShell({
       const prefs = localStorage.getItem(userKey)
         ? JSON.parse(localStorage.getItem(userKey)!)
         : {};
+      // Ensure live mode is in the export blob even if savePreference no-op'd earlier
+      prefs.mode = terminalMode;
       const tokens = localStorage.getItem(tokensKey)
         ? JSON.parse(localStorage.getItem(tokensKey)!)
         : {};
@@ -2384,6 +2478,9 @@ export default function TerminalShell({
           localStorage.setItem(userKey, JSON.stringify(data.preferences));
           if (data.preferences.theme) {
             onThemeChange(resolveThemeKey(data.preferences.theme));
+          }
+          if (data.preferences.mode && isTerminalMode(data.preferences.mode)) {
+            applyTerminalMode(data.preferences.mode, { silent: true });
           }
           if (data.preferences.rpcProviders)
             setRpcProviders(data.preferences.rpcProviders);
@@ -4306,6 +4403,25 @@ export default function TerminalShell({
       return;
     }
 
+    // Mode gate (#54) — fail closed before dispatch; offer CHOICES to switch
+    if (!isCommandAllowed(terminalMode, command)) {
+      const home = homeModeForCommand(command);
+      setLogs((prev) =>
+        [
+          ...prev,
+          {
+            id: generateId(),
+            type: "text",
+            warn: true,
+            text: wrongModeMessage(command)
+          } as LogEntry
+        ].slice(-MAX_LOGS)
+      );
+      setSuggestions([`mode ${home}`]);
+      setSuggestionIdx(0);
+      return;
+    }
+
     try {
       const result = await handler(args, trimmed);
       if (result !== null) {
@@ -4445,7 +4561,7 @@ export default function TerminalShell({
 
       if (isTypingCommand) {
         const val = input.trim().toLowerCase();
-        const matches = availableCommands
+        const matches = filterCommandsForMode(terminalMode, availableCommands)
           .filter((c) => c.startsWith(val))
           .sort();
 
@@ -4466,8 +4582,15 @@ export default function TerminalShell({
 
         let candidates: string[] = [];
 
-        // 1. Networks & Dexes
+        // 0. Mode switch (#54)
         if (
+          (command === "mode" || command === "modes") &&
+          currentArgIdx === 1
+        ) {
+          candidates = ["invest", "dev", "forensic", "list", "trade", "workshop", "dig", "trace"];
+
+          // 1. Networks & Dexes
+        } else if (
           (command === "network" || command === "net" || command === "nets") &&
           currentArgIdx === 1
         ) {
@@ -4764,6 +4887,7 @@ export default function TerminalShell({
                   activeChainId={activeChainId}
                   onPin={onPin}
                   pinnedIds={new Set(pinned.map((p) => p.id))}
+                  mode={terminalMode}
                 />
               </div>
             </div>
@@ -4807,6 +4931,8 @@ export default function TerminalShell({
           mounted={mounted}
           isNarrow={narrow}
           chatChannelLabel={chatChipLabel}
+          mode={terminalMode}
+          onModeChipTap={openModeChoices}
         />
       </div>
     </div>

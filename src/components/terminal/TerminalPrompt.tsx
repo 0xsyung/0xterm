@@ -8,6 +8,12 @@ import React from "react";
 import type { ThemeConfig } from "./types";
 import { SUPPORTED_CHAINS, DEX_REGISTRY } from "./constants";
 import { isCoarsePointer } from "./viewport";
+import {
+  DEFAULT_MODE,
+  MODE_BOOT_HINT,
+  MODE_LABEL,
+  type TerminalMode
+} from "./mode";
 
 export default function TerminalPrompt({
   theme,
@@ -24,7 +30,9 @@ export default function TerminalPrompt({
   address,
   mounted,
   isNarrow,
-  chatChannelLabel
+  chatChannelLabel,
+  mode = DEFAULT_MODE,
+  onModeChipTap
 }: {
   theme: ThemeConfig;
   input: string;
@@ -42,11 +50,22 @@ export default function TerminalPrompt({
   isNarrow?: boolean;
   /** Active chat channel chip label (name or short addr), or null → CHAT: — */
   chatChannelLabel?: string | null;
+  /** Purpose lens (#54) — prompt MODE chip only (Stephy option A). */
+  mode?: TerminalMode;
+  /** Tap MODE chip → CHOICES of three modes (no cycle-on-tap). */
+  onModeChipTap?: () => void;
 }) {
   const chainObj = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
   const activeDexObj = DEX_REGISTRY[activeChainId!]?.find(
     (d) => d.id === activeDexId
   );
+
+  const modeLabel = MODE_LABEL[mode];
+  const forensicChip = mode === "forensic";
+  // invest/dev: border+muted like WALLET/NET/CHAT; forensic: theme.warn text+border only
+  const modeChipClass = forensicChip
+    ? theme.warn
+    : `${theme.border} ${theme.muted}`;
 
   return (
     <div
@@ -54,7 +73,7 @@ export default function TerminalPrompt({
     >
       {/* LINE 1: Status Bar Metadata */}
       <div className="flex flex-wrap items-center justify-between text-[11px] gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {mounted && isConnected && address ? (
             <span
               className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 ${theme.primary}`}
@@ -81,6 +100,15 @@ export default function TerminalPrompt({
               NET: —
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => onModeChipTap?.()}
+            aria-label={`Mode ${modeLabel}. Tap to switch.`}
+            title="Switch mode"
+            className={`px-2 py-0.5 rounded border bg-current/10 inline-flex items-center justify-center pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] max-md:min-h-[44px] [@media(hover:none)]:min-h-[44px] [@media(hover:none)]:min-w-[44px] ${modeChipClass}`}
+          >
+            MODE: {modeLabel}
+          </button>
           {activeDexObj && (
             <span
               className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 ${theme.primary} hidden sm:inline-block`}
@@ -92,15 +120,18 @@ export default function TerminalPrompt({
             className={`px-2 py-0.5 rounded border ${theme.border} bg-current/10 ${theme.muted}`}
             title="Active chat channel"
           >
-            CHAT: {chatChannelLabel && chatChannelLabel !== "—" ? chatChannelLabel : "—"}
+            CHAT:{" "}
+            {chatChannelLabel && chatChannelLabel !== "—"
+              ? chatChannelLabel
+              : "—"}
           </span>
         </div>
       </div>
 
-      {/* Boot copy: teaching lives on the prompt, not in the log (#4). */}
+      {/* Boot copy: teaching lives on the prompt, not in the log (#4). Mode-aware (#54). */}
       <div className="text-[10px] leading-tight">
         <div className={theme.text}>0xTERM v1.5.0</div>
-        <div className={theme.muted}>type help · connect · networks · theme</div>
+        <div className={theme.muted}>{MODE_BOOT_HINT[mode]}</div>
       </div>
 
       {/* LINE 2: Interactive Input Field */}
