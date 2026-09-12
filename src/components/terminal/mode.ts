@@ -108,6 +108,9 @@ const COMMAND_AFFINITY: Record<string, CommandAffinity> = {
   wallet: "global",
   ipfs: "global",
   share: "global",
+  unshare: "global",
+  look: "global",
+  feed: "global",
 
   // —— invest ——
   price: "invest",
@@ -425,6 +428,36 @@ export const HELP_ROWS: HelpRow[] = [
   {
     command: "boardfee",
     description: "Show current post fee on the active network",
+    modes: ["global"]
+  },
+  {
+    command: "share portfolio",
+    description: "Publish portfolio summary for your address",
+    modes: ["global"]
+  },
+  {
+    command: "share pnl",
+    description: "Publish PnL vs your last snapshot",
+    modes: ["global"]
+  },
+  {
+    command: "share / share status",
+    description: "Show your share status",
+    modes: ["global"]
+  },
+  {
+    command: "unshare / share off",
+    description: "Revoke public share",
+    modes: ["global"]
+  },
+  {
+    command: "look <address|ens>",
+    description: "View someone's shared card",
+    modes: ["global"]
+  },
+  {
+    command: "feed [n]",
+    description: "Recent shares (default 10, max 50)",
     modes: ["global"]
   },
   {
