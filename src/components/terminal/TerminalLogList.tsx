@@ -18,19 +18,22 @@ import { DEX_REGISTRY } from "./constants";
 import PinButton from "./widgets/PinButton";
 import PriceCard from "./widgets/PriceCard";
 import type { LogEntry, DexProtocol } from "./types";
+import { DEFAULT_MODE, type TerminalMode } from "./mode";
 
 export default function TerminalLogList({
   logs,
   theme,
   activeChainId,
   onPin,
-  pinnedIds
+  pinnedIds,
+  mode = DEFAULT_MODE
 }: {
   logs: LogEntry[];
   theme: any;
   activeChainId: number | null;
   onPin: (log: LogEntry) => void;
   pinnedIds: Set<string>;
+  mode?: TerminalMode;
 }) {
   return (
     <>
@@ -38,7 +41,7 @@ export default function TerminalLogList({
         const isPinned = pinnedIds.has(log.id);
         return (
           <div key={log.id}>
-            {renderLog(log, theme, activeChainId, onPin, isPinned)}
+            {renderLog(log, theme, activeChainId, onPin, isPinned, mode)}
           </div>
         );
       })}
@@ -51,7 +54,8 @@ function renderLog(
   theme: any,
   activeChainId: number | null,
   onPin: (log: LogEntry) => void,
-  isPinned: boolean
+  isPinned: boolean,
+  mode: TerminalMode
 ) {
   if (log.type === "input") {
     return (
@@ -61,7 +65,7 @@ function renderLog(
     );
   }
   if (log.type === "help") {
-    return <HelpManual theme={theme} />;
+    return <HelpManual theme={theme} mode={mode} />;
   }
   if (log.type === "dexes") {
     const dexList = DEX_REGISTRY[activeChainId!] || [];
