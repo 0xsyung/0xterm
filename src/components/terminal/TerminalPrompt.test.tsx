@@ -77,4 +77,22 @@ describe("TerminalPrompt", () => {
     render(<TerminalPrompt {...makeProps({ chatChannelLabel: "lobby" })} />);
     expect(screen.getByText(/CHAT: lobby/)).toBeTruthy();
   });
+
+  it("shows MODE chip for invest by default", () => {
+    render(<TerminalPrompt {...makeProps()} />);
+    expect(screen.getByRole("button", { name: /Mode INVEST/i })).toBeTruthy();
+  });
+
+  it("shows forensic MODE chip and mode-aware boot copy", () => {
+    render(<TerminalPrompt {...makeProps({ mode: "forensic" })} />);
+    expect(screen.getByRole("button", { name: /Mode FORENSIC/i })).toBeTruthy();
+    expect(screen.getByText(/type help · mode · kyt · kya/)).toBeTruthy();
+  });
+
+  it("invokes onModeChipTap when MODE chip is pressed", () => {
+    const onModeChipTap = vi.fn();
+    render(<TerminalPrompt {...makeProps({ onModeChipTap })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Mode INVEST/i }));
+    expect(onModeChipTap).toHaveBeenCalledTimes(1);
+  });
 });
