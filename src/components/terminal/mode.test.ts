@@ -109,6 +109,10 @@ describe("isCommandAllowed — classification table", () => {
     "boardfee",
     "channel",
     "channels",
+    "share",
+    "unshare",
+    "look",
+    "feed",
     "clear",
     "rain"
   ];
@@ -194,6 +198,10 @@ describe("isCommandAllowed — classification table", () => {
     expect(classifyLiveVerb("kyt")).toBe("forensic");
     expect(classifyLiveVerb("is")).toBe("shared");
     expect(classifyLiveVerb("help")).toBe("global");
+    expect(classifyLiveVerb("share")).toBe("global");
+    expect(classifyLiveVerb("look")).toBe("global");
+    expect(classifyLiveVerb("feed")).toBe("global");
+    expect(classifyLiveVerb("unshare")).toBe("global");
   });
 });
 

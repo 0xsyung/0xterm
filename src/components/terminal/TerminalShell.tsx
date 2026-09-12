@@ -72,7 +72,9 @@ import {
   ENS_CONTRACT,
   ensRegistryAbi,
   BILLBOARD_CONTRACT,
-  billboardAbi
+  billboardAbi,
+  SHARE_CONTRACT,
+  shareAbi
 } from "./constants";
 import { formatViemError } from "../../lib/viemError";
 import {
@@ -91,6 +93,23 @@ import {
   buildThemeLog,
   buildTokensLog
 } from "./commands";
+import {
+  clampFeedCount,
+  decodeShareCard,
+  encodeShareCard,
+  formatShareAck,
+  formatUnshareAck,
+  lookUsage,
+  mergeShareCard,
+  noShareForMsg,
+  pnlSectionFromSnapshot,
+  portfolioSectionFromHoldings,
+  resolveShareContract,
+  shareUsage,
+  toFeedItem,
+  type FeedItem,
+  type ShareCardV1
+} from "./shareCard";
 import {
   fetchPortfolioHoldings as fetchPortfolioHoldingsImpl,
   fetchPortfolioSnapshot as fetchPortfolioSnapshotImpl,
@@ -4007,6 +4026,340 @@ export default function TerminalShell({
     rain: () => {
       onToggleRain();
       return { id: generateId(), type: "text", text: "Rain toggled." };
+    },
+    share: async (args) => {
+      const sub = (args[1] || "status").toLowerCase();
+      if (
+        sub !== "portfolio" &&
+        sub !== "pnl" &&
+        sub !== "status" &&
+        sub !== "off" &&
+        sub !== "unshare"
+      ) {
+        return { id: generateId(), type: "text", text: shareUsage() };
+      }
+
+      const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!chain) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "[!] Set a network first (network <name|id>)."
+        };
+      }
+      const resolved = resolveShareContract(chain.id, SHARE_CONTRACT);
+      if (!resolved.ok) {
+        return { id: generateId(), type: "text", warn: true, text: resolved.message };
+      }
+      const contract = resolved.address;
+      const client = getClient(chain);
+
+      const readOwn = async (): Promise<{
+        card: ShareCardV1 | null;
+        active: boolean;
+        updatedAt: number;
+      }> => {
+        if (!address) return { card: null, active: false, updatedAt: 0 };
+        const [bytes, isActive, ts] = (await client.readContract({
+          address: contract,
+          abi: shareAbi,
+          functionName: "get",
+          args: [address as Address]
+        })) as readonly [`0x${string}`, boolean, bigint];
+        const decoded =
+          bytes && bytes !== "0x" ? decodeShareCard(bytes) : null;
+        return {
+          card: decoded,
+          active: !!isActive,
+          updatedAt: Number(ts)
+        };
+      };
+
+      if (sub === "status") {
+        if (!isConnected || !address) {
+          return { id: generateId(), type: "text", text: "Wallet not connected." };
+        }
+        try {
+          const own = await readOwn();
+          if (!own.card || own.updatedAt === 0) {
+            return {
+              id: generateId(),
+              type: "text",
+              warn: true,
+              text: noShareForMsg(address)
+            };
+          }
+          return {
+            id: generateId(),
+            type: "share",
+            payload: {
+              card: { ...own.card, revoked: !own.active },
+              active: own.active,
+              explorerUrl: chain.blockExplorers?.default?.url || null,
+              hasActiveChannel: !!activeChatChannel
+            }
+          };
+        } catch (err: any) {
+          return {
+            id: generateId(),
+            type: "text",
+            warn: true,
+            text: `[!] share status failed: ${err.message || err}`
+          };
+        }
+      }
+
+      if (sub === "off" || sub === "unshare") {
+        if (!isConnected || !address) {
+          return { id: generateId(), type: "text", text: "Wallet not connected." };
+        }
+        try {
+          const hash = await writeContractAsync({
+            address: contract,
+            abi: shareAbi,
+            functionName: "unshare"
+          });
+          return [
+            { id: generateId(), type: "text", text: formatUnshareAck() },
+            { id: generateId(), type: "text", text: `   tx: ${hash}` }
+          ];
+        } catch (err: any) {
+          return {
+            id: generateId(),
+            type: "text",
+            warn: true,
+            text: `[!] unshare failed: ${err.message || err}`
+          };
+        }
+      }
+
+      if (!isConnected || !address) {
+        return { id: generateId(), type: "text", text: "Wallet not connected." };
+      }
+
+      try {
+        const ens = (await ensNameFor(address)) || "";
+        let existing: ShareCardV1 | null = null;
+        try {
+          existing = (await readOwn()).card;
+        } catch {
+          existing = null;
+        }
+
+        if (sub === "portfolio") {
+          const holdings = await fetchPortfolioHoldings(address as Address);
+          const portfolio = portfolioSectionFromHoldings(holdings);
+          const card = mergeShareCard(existing, {
+            owner: address as Address,
+            ens,
+            portfolio
+          });
+          const fee = (await client.readContract({
+            address: contract,
+            abi: shareAbi,
+            functionName: "fee"
+          })) as bigint;
+          const hash = await writeContractAsync({
+            address: contract,
+            abi: shareAbi,
+            functionName: "share",
+            args: [encodeShareCard(card)],
+            value: fee
+          });
+          return [
+            {
+              id: generateId(),
+              type: "text",
+              text: formatShareAck(address, ens)
+            },
+            { id: generateId(), type: "text", text: `   tx: ${hash}` }
+          ];
+        }
+
+        // share pnl
+        const snapRaw =
+          typeof window !== "undefined"
+            ? JSON.parse(
+                localStorage.getItem(`0xterm_user_${address.toLowerCase()}`) ||
+                  "{}"
+              ).portfolioSnapshot
+            : null;
+        if (!snapRaw) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: "No snapshot found. Run 'snapshot' first to establish a P/L baseline."
+          };
+        }
+        const holdings = await fetchPortfolioHoldings(address as Address);
+        const pnl = pnlSectionFromSnapshot(holdings, {
+          label: snapRaw.label || "snapshot",
+          timestamp: snapRaw.timestamp || Date.now(),
+          holdings: snapRaw.holdings || {}
+        });
+        const card = mergeShareCard(existing, {
+          owner: address as Address,
+          ens,
+          pnl
+        });
+        const fee = (await client.readContract({
+          address: contract,
+          abi: shareAbi,
+          functionName: "fee"
+        })) as bigint;
+        const hash = await writeContractAsync({
+          address: contract,
+          abi: shareAbi,
+          functionName: "share",
+          args: [encodeShareCard(card)],
+          value: fee
+        });
+        return [
+          {
+            id: generateId(),
+            type: "text",
+            text: formatShareAck(address, ens)
+          },
+          { id: generateId(), type: "text", text: `   tx: ${hash}` }
+        ];
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text: `[!] share failed: ${err.message || err}`
+        };
+      }
+    },
+    unshare: async () => commands.share(["share", "off"], "share off"),
+    look: async (args) => {
+      if (!args[1]) {
+        return { id: generateId(), type: "text", text: lookUsage() };
+      }
+      const query = args[1].trim();
+      const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!chain) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "[!] Set a network first (network <name|id>)."
+        };
+      }
+      const resolved = resolveShareContract(chain.id, SHARE_CONTRACT);
+      if (!resolved.ok) {
+        return { id: generateId(), type: "text", warn: true, text: resolved.message };
+      }
+      let owner: Address;
+      try {
+        owner = await resolveChatRecipient(query);
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text: `[!] ${err.message || err}`
+        };
+      }
+      try {
+        const [bytes, isActive, ts] = (await getClient(chain).readContract({
+          address: resolved.address,
+          abi: shareAbi,
+          functionName: "get",
+          args: [owner]
+        })) as readonly [`0x${string}`, boolean, bigint];
+        if (!bytes || bytes === "0x" || ts === 0n) {
+          return {
+            id: generateId(),
+            type: "text",
+            warn: true,
+            text: noShareForMsg(query)
+          };
+        }
+        const card = decodeShareCard(bytes);
+        if (!card) {
+          return {
+            id: generateId(),
+            type: "text",
+            warn: true,
+            text: noShareForMsg(query)
+          };
+        }
+        return {
+          id: generateId(),
+          type: "share",
+          payload: {
+            card: { ...card, owner, revoked: !isActive },
+            active: !!isActive,
+            explorerUrl: chain.blockExplorers?.default?.url || null,
+            hasActiveChannel: !!activeChatChannel
+          }
+        };
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text: `[!] look failed: ${err.message || err}`
+        };
+      }
+    },
+    feed: async (args) => {
+      const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!chain) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "[!] Set a network first (network <name|id>)."
+        };
+      }
+      const resolved = resolveShareContract(chain.id, SHARE_CONTRACT);
+      if (!resolved.ok) {
+        return { id: generateId(), type: "text", warn: true, text: resolved.message };
+      }
+      const n = clampFeedCount(args[1]);
+      try {
+        const client = getClient(chain);
+        const owners = (await client.readContract({
+          address: resolved.address,
+          abi: shareAbi,
+          functionName: "latest",
+          args: [BigInt(n), 0n]
+        })) as readonly Address[];
+        const items: FeedItem[] = [];
+        for (const owner of owners) {
+          const [bytes, isActive, ts] = (await client.readContract({
+            address: resolved.address,
+            abi: shareAbi,
+            functionName: "get",
+            args: [owner]
+          })) as readonly [`0x${string}`, boolean, bigint];
+          const card = bytes && bytes !== "0x" ? decodeShareCard(bytes) : null;
+          if (card) {
+            items.push(toFeedItem({ ...card, revoked: !isActive }, !!isActive));
+          } else if (ts !== 0n) {
+            items.push({
+              owner,
+              ens: "",
+              active: !!isActive,
+              updatedAt: Number(ts),
+              totalUsd: null,
+              pnlPct: null
+            });
+          }
+        }
+        return {
+          id: generateId(),
+          type: "feed",
+          payload: { items }
+        };
+      } catch (err: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text: `[!] feed failed: ${err.message || err}`
+        };
+      }
     }
   };
 
@@ -4622,6 +4975,8 @@ export default function TerminalShell({
           // 4c. Board subcommands
         } else if (command === "board" && currentArgIdx === 1) {
           candidates = ["post", "list"];
+        } else if (command === "share" && currentArgIdx === 1) {
+          candidates = ["portfolio", "pnl", "status", "off"];
 
           // 5. Register Command (Allows for optional symbol argument)
         } else if (
@@ -4888,6 +5243,27 @@ export default function TerminalShell({
                   onPin={onPin}
                   pinnedIds={new Set(pinned.map((p) => p.id))}
                   mode={terminalMode}
+                  hasActiveChannel={!!activeChatChannel}
+                  onFillPrompt={(text) => {
+                    setInput(text);
+                    inputRef.current?.focus();
+                  }}
+                  onRunCommand={(cmd) => {
+                    void handleCommand(cmd);
+                  }}
+                  onLogText={(text, warn) => {
+                    setLogs((prev) =>
+                      [
+                        ...prev,
+                        {
+                          id: generateId(),
+                          type: "text",
+                          warn: !!warn,
+                          text
+                        } as LogEntry
+                      ].slice(-MAX_LOGS)
+                    );
+                  }}
                 />
               </div>
             </div>

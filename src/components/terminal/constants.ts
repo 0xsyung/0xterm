@@ -579,6 +579,24 @@ export const billboardAbi = parseAbi([
   'function fee() view returns (uint256)',
 ])
 
+// Portfolio / PnL share index (testnets only) — one combined card per owner.
+// Fill with the deployed proxy address from
+// contracts/script/PortfolioShareDeploy.md. Empty until Sepolia is wired —
+// share / look / feed fail closed with a deploy tip (same posture as
+// CHAT_FACTORY before #68).
+export const SHARE_CONTRACT: Record<number, Address> = {
+  // 11155111: '<PortfolioShare proxy address on Sepolia>',
+}
+
+export const shareAbi = parseAbi([
+  'function share(bytes card) payable',
+  'function unshare()',
+  'function get(address owner) view returns (bytes card, bool active, uint256 updatedAt)',
+  'function latest(uint256 count, uint256 offset) view returns (address[] owners)',
+  'function ownerCount() view returns (uint256)',
+  'function fee() view returns (uint256)',
+])
+
 export const chatAbi = parseAbi([
   'function sendMessage(address to, bytes12 iv, bytes calldata senderKey, bytes calldata ciphertext) payable returns (bytes32 id)',
   'function getThread(address to, address from, uint256 start, uint256 count) view returns ((address from, uint256 timestamp, bytes12 iv, bytes senderKey, bytes ciphertext)[] msgs)',

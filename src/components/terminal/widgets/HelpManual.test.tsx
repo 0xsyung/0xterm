@@ -23,6 +23,8 @@ describe("HelpManual", () => {
     expect(screen.getByText("networks")).toBeTruthy();
     expect(screen.getByText("dexes")).toBeTruthy();
     expect(screen.getByText("export")).toBeTruthy();
+    expect(screen.getByText("look <address|ens>")).toBeTruthy();
+    expect(screen.getByText("feed [n]")).toBeTruthy();
     expect(screen.queryByText(/deploy <erc20/)).toBeNull();
   });
 

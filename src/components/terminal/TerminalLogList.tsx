@@ -14,7 +14,9 @@ import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
 import ChatWidget from "./widgets/ChatWidget";
 import BillboardWidget from "./widgets/BillboardWidget";
-import { DEX_REGISTRY } from "./constants";
+import ShareCard from "./widgets/ShareCard";
+import FeedList from "./widgets/FeedList";
+import { DEX_REGISTRY, SUPPORTED_CHAINS } from "./constants";
 import PinButton from "./widgets/PinButton";
 import PriceCard from "./widgets/PriceCard";
 import type { LogEntry, DexProtocol } from "./types";
@@ -26,7 +28,11 @@ export default function TerminalLogList({
   activeChainId,
   onPin,
   pinnedIds,
-  mode = DEFAULT_MODE
+  mode = DEFAULT_MODE,
+  onFillPrompt,
+  onRunCommand,
+  onLogText,
+  hasActiveChannel = false
 }: {
   logs: LogEntry[];
   theme: any;
@@ -34,14 +40,35 @@ export default function TerminalLogList({
   onPin: (log: LogEntry) => void;
   pinnedIds: Set<string>;
   mode?: TerminalMode;
+  onFillPrompt?: (text: string) => void;
+  onRunCommand?: (cmd: string) => void;
+  onLogText?: (text: string, warn?: boolean) => void;
+  hasActiveChannel?: boolean;
 }) {
+  const explorerUrl =
+    SUPPORTED_CHAINS.find((c) => c.id === activeChainId)?.blockExplorers
+      ?.default?.url || null;
   return (
     <>
       {logs.map((log) => {
         const isPinned = pinnedIds.has(log.id);
         return (
           <div key={log.id}>
-            {renderLog(log, theme, activeChainId, onPin, isPinned, mode)}
+            {renderLog(
+              log,
+              theme,
+              activeChainId,
+              onPin,
+              isPinned,
+              mode,
+              {
+                onFillPrompt,
+                onRunCommand,
+                onLogText,
+                hasActiveChannel,
+                explorerUrl
+              }
+            )}
           </div>
         );
       })}
@@ -55,7 +82,14 @@ function renderLog(
   activeChainId: number | null,
   onPin: (log: LogEntry) => void,
   isPinned: boolean,
-  mode: TerminalMode
+  mode: TerminalMode,
+  actions?: {
+    onFillPrompt?: (text: string) => void;
+    onRunCommand?: (cmd: string) => void;
+    onLogText?: (text: string, warn?: boolean) => void;
+    hasActiveChannel?: boolean;
+    explorerUrl?: string | null;
+  }
 ) {
   if (log.type === "input") {
     return (
@@ -106,6 +140,29 @@ function renderLog(
     return <ChatWidget {...log.payload} theme={theme} />;
   if (log.type === "billboard")
     return <BillboardWidget {...log.payload} theme={theme} />;
+  // Social-style cards are not pinnable (#35 / #62 Designer lock — no ▣).
+  if (log.type === "share")
+    return (
+      <ShareCard
+        {...log.payload}
+        theme={theme}
+        explorerUrl={log.payload?.explorerUrl ?? actions?.explorerUrl}
+        hasActiveChannel={
+          log.payload?.hasActiveChannel ?? !!actions?.hasActiveChannel
+        }
+        onFillPrompt={actions?.onFillPrompt}
+        onWarn={(text) => actions?.onLogText?.(text, true)}
+        onCopyAck={(text) => actions?.onLogText?.(text, false)}
+      />
+    );
+  if (log.type === "feed")
+    return (
+      <FeedList
+        items={log.payload?.items || []}
+        theme={theme}
+        onLook={(owner) => actions?.onRunCommand?.(`look ${owner}`)}
+      />
+    );
 
   // Plain text / component logs. Only the price widget is pinnable — bare
   // text lines (banners, tx hashes, errors) and non-live component widgets
