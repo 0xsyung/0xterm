@@ -317,7 +317,7 @@ export type HelpRow = {
  */
 export const HELP_ROWS: HelpRow[] = [
   {
-    command: "mode [invest|dig|forensic]",
+    command: "mode [invest|dev|forensic]",
     description:
       "Show or switch purpose mode (aliases: trade/i, workshop/d, dig/trace/f)",
     modes: ["global"]
