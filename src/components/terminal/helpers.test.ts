@@ -26,6 +26,8 @@ describe("isPinnableLog", () => {
       "networks",
       "chat",
       "billboard",
+      "share",
+      "feed",
       "createpool",
       "initialize",
       "addliq",
@@ -56,6 +58,8 @@ describe("isPinnableManifest", () => {
     expect(isPinnableManifest({ kind: "networks" })).toBe(false);
     expect(isPinnableManifest({ kind: "chat" })).toBe(false);
     expect(isPinnableManifest({ kind: "billboard" })).toBe(false);
+    expect(isPinnableManifest({ kind: "share" })).toBe(false);
+    expect(isPinnableManifest({ kind: "feed" })).toBe(false);
     expect(isPinnableManifest({ kind: "swap" })).toBe(false);
   });
 
