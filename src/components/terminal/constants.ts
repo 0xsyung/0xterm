@@ -585,7 +585,7 @@ export const billboardAbi = parseAbi([
 // share / look / feed fail closed with a deploy tip (same posture as
 // CHAT_FACTORY before #68).
 export const SHARE_CONTRACT: Record<number, Address> = {
-  // 11155111: '<PortfolioShare proxy address on Sepolia>',
+  11155111: "0x309fc3876f578aE89C7d383658d2d797AF4f652e",
 }
 
 export const shareAbi = parseAbi([
