@@ -19,6 +19,9 @@ import FeedList from "./widgets/FeedList";
 import { DEX_REGISTRY, SUPPORTED_CHAINS } from "./constants";
 import PinButton from "./widgets/PinButton";
 import PriceCard from "./widgets/PriceCard";
+import DigArtifactWidget from "./widgets/DigArtifactWidget";
+import DigAbiWidget from "./widgets/DigAbiWidget";
+import DigOpcodesWidget from "./widgets/DigOpcodesWidget";
 import type { LogEntry, DexProtocol } from "./types";
 import { DEFAULT_MODE, type TerminalMode } from "./mode";
 
@@ -164,12 +167,56 @@ function renderLog(
       />
     );
 
-  // Plain text / component logs. Only the price widget is pinnable — bare
-  // text lines (banners, tx hashes, errors) and non-live component widgets
-  // (swap/pool/deploy/export) have nothing to pin (issue #35).
+  if (log.type === "dig-editor") {
+    // Editor is NOT pinnable (#39 / #35). Component already on log.
+    return log.component || null;
+  }
+  if (log.type === "dig-artifact") {
+    const artifact = log.payload?.artifact;
+    if (!artifact) return null;
+    return (
+      <DigArtifactWidget
+        artifact={artifact}
+        theme={theme}
+        onPin={() => onPin(log)}
+        pinned={isPinned}
+      />
+    );
+  }
+  if (log.type === "dig-abi") {
+    return (
+      <DigAbiWidget
+        name={log.payload?.name || "Contract"}
+        abi={log.payload?.abi || []}
+        theme={theme}
+        onCopied={undefined}
+      />
+    );
+  }
+  if (log.type === "dig-opcodes") {
+    return (
+      <DigOpcodesWidget
+        name={log.payload?.name || "Contract"}
+        rows={log.payload?.rows || []}
+        truncated={!!log.payload?.truncated}
+        theme={theme}
+      />
+    );
+  }
+
+  // Plain text / component logs. Price + dig-artifact are pinnable (#35 / #39).
+  // Editor / opcodes / abi / non-live component widgets have nothing to pin.
   return (
     <div className="relative group">
-      <div className={log.warn ? theme.warn : `${theme.text}/90`}>
+      <div
+        className={
+          log.warn
+            ? theme.warn
+            : log.muted
+              ? theme.muted
+              : `${theme.text}/90`
+        }
+      >
         {log.text}
         {log.componentData?.kind === "price" ? (
           <PriceCard data={log.componentData} theme={theme} />

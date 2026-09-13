@@ -8,6 +8,7 @@ import React from "react";
 import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
 import PriceCard from "./widgets/PriceCard";
+import DigArtifactWidget from "./widgets/DigArtifactWidget";
 import type { PinnedManifest, ThemeConfig } from "./types";
 
 const REFRESH_INTERVAL = 60;
@@ -121,6 +122,12 @@ function renderPinned(p: PinnedManifest, theme: any) {
       return <BalanceWidget {...payload} theme={theme} />;
     case "portfolio":
       return <PortfolioWidget {...payload} theme={theme} />;
+    case "dig-artifact":
+      return payload.artifact ? (
+        <DigArtifactWidget artifact={payload.artifact} theme={theme} compact pinned />
+      ) : (
+        <div className={`${theme.text}/50`}>artifact unavailable</div>
+      );
     default:
       return <div className={`${theme.text}/90 whitespace-pre-wrap`}>{payload.text}</div>;
   }

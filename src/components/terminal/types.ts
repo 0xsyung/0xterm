@@ -28,10 +28,12 @@ export type ThemeMode =
 
 export type LogEntry = {
   id: string
-  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'chat' | 'billboard' | 'share' | 'feed' | 'component'
+  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'chat' | 'billboard' | 'share' | 'feed' | 'component' | 'dig-artifact' | 'dig-editor' | 'dig-abi' | 'dig-opcodes'
   text?: string
   // Render plain text in the theme's warn color (failures, read errors).
   warn?: boolean
+  // Soft/muted line (compiler warnings).
+  muted?: boolean
   payload?: any
   component?: React.ReactNode
   title?: string

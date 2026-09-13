@@ -13,12 +13,13 @@ import {
 } from "./helpers";
 
 describe("isPinnableLog", () => {
-  it("allows live monitors (price / balance / portfolio)", () => {
+  it("allows live monitors (price / balance / portfolio / dig-artifact)", () => {
     expect(
       isPinnableLog({ type: "component", componentData: { kind: "price" } })
     ).toBe(true);
     expect(isPinnableLog({ type: "balance" })).toBe(true);
     expect(isPinnableLog({ type: "portfolio" })).toBe(true);
+    expect(isPinnableLog({ type: "dig-artifact" })).toBe(true);
   });
 
   it("rejects non-live log kinds", () => {
@@ -34,7 +35,10 @@ describe("isPinnableLog", () => {
       "help",
       "dexes",
       "input",
-      "text"
+      "text",
+      "dig-editor",
+      "dig-abi",
+      "dig-opcodes"
     ]) {
       expect(isPinnableLog({ type })).toBe(false);
     }
@@ -48,10 +52,11 @@ describe("isPinnableLog", () => {
 });
 
 describe("isPinnableManifest", () => {
-  it("allows price / balance / portfolio manifests", () => {
+  it("allows price / balance / portfolio / dig-artifact manifests", () => {
     expect(isPinnableManifest({ kind: "component", componentData: { kind: "price" } })).toBe(true);
     expect(isPinnableManifest({ kind: "balance" })).toBe(true);
     expect(isPinnableManifest({ kind: "portfolio" })).toBe(true);
+    expect(isPinnableManifest({ kind: "dig-artifact" })).toBe(true);
   });
 
   it("rejects manifests for non-live kinds", () => {
