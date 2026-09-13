@@ -536,6 +536,21 @@ export const HELP_ROWS: HelpRow[] = [
     description: "Show portfolio P/L vs last snapshot",
     modes: ["invest"]
   },
+  {
+    command: "ticker",
+    description: "Watchlist board: USD / 24h% / vol (DexScreener)",
+    modes: ["invest"]
+  },
+  {
+    command: "ticker add <sym>",
+    description: "Add a symbol or token address to the ticker",
+    modes: ["invest"]
+  },
+  {
+    command: "ticker rm <sym>",
+    description: "Remove from the ticker",
+    modes: ["invest"]
+  },
 
   // dig (workshop — mode id dev)
   {

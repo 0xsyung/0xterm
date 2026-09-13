@@ -87,6 +87,21 @@ import {
 } from "./helpers";
 import { detectTokenType } from "./tokenType";
 import { getNativePriceUsd } from "./pricing";
+import { quoteDexScreenerPair } from "./dexscreener";
+import {
+  TICKER_REFRESH_SEC,
+  TICKER_WIDGET_ID,
+  applyTickerAdd,
+  applyTickerRm,
+  buildTickerRows,
+  migrateAnonTickerOnConnect,
+  parseTickerCommand,
+  readTickerPrefs,
+  refreshTickerRows,
+  rowsToPrefs,
+  writeTickerPrefs,
+  type TickerRow
+} from "./ticker";
 import { getPoolPriceRatio } from "./poolPrice";
 import { fetchBillboard, fetchChatThread } from "./pinLoaders";
 import {
@@ -416,6 +431,10 @@ export default function TerminalShell({
   // time a refresh closure is registered.
   const pinnedRefreshRef = useRef(pinnedRefresh);
   pinnedRefreshRef.current = pinnedRefresh;
+  const pinnedRef = useRef(pinned);
+  pinnedRef.current = pinned;
+  const pinRefreshSec = (id: string) =>
+    pinnedRef.current.find((x) => x.id === id)?.refreshSec ?? REFRESH_INTERVAL;
 
   // Run one refresh for a single pinned entry (auto-tick or manual button).
   const refreshPinned = (id: string) => {
@@ -442,13 +461,13 @@ export default function TerminalShell({
         setRefreshingId((cur) => (cur === id ? null : cur));
         // a completed refresh (auto or manual) restarts the countdown for the
         // refreshed widget, even if it was mid-flight / rehydrated without one
-        setCountdowns((c) => ({ ...c, [id]: REFRESH_INTERVAL }));
+        setCountdowns((c) => ({ ...c, [id]: pinRefreshSec(id) }));
       });
   };
 
   // Manual refresh button: refresh now and reset the countdown.
   const onRefreshPinned = (id: string) => {
-    setCountdowns((c) => ({ ...c, [id]: REFRESH_INTERVAL }));
+    setCountdowns((c) => ({ ...c, [id]: pinRefreshSec(id) }));
     refreshPinned(id);
   };
 
@@ -462,7 +481,7 @@ export default function TerminalShell({
         for (const [pid, secs] of Object.entries(prev)) {
           if (secs <= 1) {
             refreshPinned(pid);
-            next[pid] = REFRESH_INTERVAL;
+            next[pid] = pinRefreshSec(pid);
           } else {
             next[pid] = secs - 1;
           }
@@ -484,7 +503,7 @@ export default function TerminalShell({
       let changed = false;
       for (const id of ids) {
         if (next[id] === undefined) {
-          next[id] = REFRESH_INTERVAL;
+          next[id] = pinRefreshSec(id);
           changed = true;
         }
       }
@@ -656,47 +675,33 @@ export default function TerminalShell({
               return { componentData: { ...cd, rate } };
             };
           }
-        } else if (cd.mode === "api" && cd.tokenSymbol) {
+        } else if (cd.mode === "api" && cd.pairAddress && cd.chain) {
+          // #8 / #15: refresh by pair identity only — never search / pairs[0]
           refs[m.id] = async () => {
-            const q = `${cd.tokenSymbol} ${cd.quoteSymbol || ""}`;
-            const res = await fetch(
-              `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`
-            );
-            if (!res.ok) throw new Error(`DexScreener returned ${res.status}`);
-            const data = await res.json();
-            const pairs: any[] = data.pairs || [];
-            const chainSlug = m.chainId
-              ? DEXSCREENER_CHAIN[m.chainId]
-              : undefined;
-            const pair =
-              (cd.pairAddress &&
-                pairs.find(
-                  (p: any) =>
-                    p.pairAddress?.toLowerCase() === cd.pairAddress.toLowerCase()
-                )) ||
-              pairs.find(
-                (p: any) =>
-                  (!chainSlug || p.chainId.toLowerCase() === chainSlug) &&
-                  p.baseToken.symbol.toLowerCase() ===
-                    cd.tokenSymbol.toLowerCase() &&
-                  p.quoteToken.symbol.toLowerCase() ===
-                    cd.quoteSymbol.toLowerCase()
-              ) ||
-              pairs.find((p: any) => p.dexId === cd.dex) ||
-              pairs[0];
-            // #8 closed: pairAddress is canonical. DexId / pairs[0] fallbacks
-            // left as-is — this PR is layout only (#9). Do not reopen #8.
-            if (!pair) throw new Error("No fresh DexScreener data for this pair.");
+            const quoted = await quoteDexScreenerPair(cd.chain, cd.pairAddress);
+            if (!quoted) throw new Error("No fresh DexScreener data for this pair.");
             return {
               componentData: {
                 ...cd,
-                priceUsd: pair.priceUsd,
-                priceNative: pair.priceNative,
-                h24: pair.priceChange?.h24
+                priceUsd: quoted.pair.priceUsd,
+                priceNative: quoted.pair.priceNative,
+                h24: quoted.change24h ?? quoted.pair.priceChange?.h24
               }
             };
           };
         }
+        continue;
+      }
+      if (m.kind === "ticker") {
+        refs[m.id] = async () => {
+          const rows: TickerRow[] = (m.payload?.rows as TickerRow[]) || [];
+          const out = await refreshTickerRows(rows);
+          return {
+            rows: out.rows,
+            stale: out.stale,
+            symbols: m.payload?.symbols || rows.map((r) => r.symbol)
+          };
+        };
         continue;
       }
       if (!m.chainId || !address) continue;
@@ -875,49 +880,43 @@ export default function TerminalShell({
             });
           }
         }
-      } else {
-        // api mode: re-fetch DexScreener for the same pair. Persist the chain
-        // so refresh is scoped even if the user switches networks later.
+      } else if (cd.pairAddress && cd.chain) {
+        // #8 / #15: refresh by pair identity — never search / pairs[0]
         base.chainId = activeChainId || undefined;
         base.dexId = activeDexId || undefined;
         registerPinRefresh(log.id, async () => {
-          const q = `${cd.tokenSymbol} ${cd.quoteSymbol}`;
-          const res = await fetch(
-            `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`
-          );
-          if (!res.ok) throw new Error(`DexScreener returned ${res.status}`);
-          const data = await res.json();
-          const pairs: any[] = data.pairs || [];
-          const chainSlug = DEXSCREENER_CHAIN[activeChainId || 0];
-          const pair =
-            (cd.pairAddress &&
-              pairs.find(
-                (p: any) =>
-                  p.pairAddress?.toLowerCase() === cd.pairAddress.toLowerCase()
-              )) ||
-            pairs.find(
-              (p: any) =>
-                (!chainSlug || p.chainId.toLowerCase() === chainSlug) &&
-                p.baseToken.symbol.toLowerCase() ===
-                  cd.tokenSymbol.toLowerCase() &&
-                p.quoteToken.symbol.toLowerCase() ===
-                  cd.quoteSymbol.toLowerCase()
-            ) ||
-            pairs.find((p: any) => p.dexId === cd.dex) ||
-            pairs[0];
-          // #8 closed: pairAddress is canonical. DexId / pairs[0] fallbacks
-          // left as-is — this PR is layout only (#9). Do not reopen #8.
-          if (!pair) throw new Error("No fresh DexScreener data for this pair.");
+          const quoted = await quoteDexScreenerPair(cd.chain, cd.pairAddress);
+          if (!quoted) throw new Error("No fresh DexScreener data for this pair.");
           return {
             componentData: {
               ...cd,
-              priceUsd: pair.priceUsd,
-              priceNative: pair.priceNative,
-              h24: pair.priceChange?.h24
+              priceUsd: quoted.pair.priceUsd,
+              priceNative: quoted.pair.priceNative,
+              h24: quoted.change24h ?? quoted.pair.priceChange?.h24
             }
           };
         });
       }
+    } else if (log.type === "ticker") {
+      base.title = "TICKER";
+      base.widgetId = TICKER_WIDGET_ID;
+      base.pairOrSymbols = (log.payload?.symbols || []).join(",");
+      base.refreshSec = TICKER_REFRESH_SEC;
+      base.payload = {
+        rows: log.payload?.rows || [],
+        stale: !!log.payload?.stale,
+        symbols: log.payload?.symbols || []
+      };
+      registerPinRefresh(log.id, async () => {
+        const current = pinnedRef.current.find((x) => x.id === log.id);
+        const rows: TickerRow[] = (current?.payload?.rows as TickerRow[]) || (base.payload?.rows as TickerRow[]) || [];
+        const out = await refreshTickerRows(rows);
+        return {
+          rows: out.rows,
+          stale: out.stale,
+          symbols: current?.payload?.symbols || base.payload?.symbols || rows.map((r) => r.symbol)
+        };
+      });
     }
 
     return base;
@@ -939,7 +938,20 @@ export default function TerminalShell({
   // Persist pin manifests whenever they change (so they survive reload + export)
   useEffect(() => {
     if (!isConnected || !address) return;
-    const serializable = pinned.map(({ payload, component, ...rest }) => rest);
+    const serializable = pinned.map(({ payload, component, ...rest }) => {
+      // ticker (#15): persist row pair identities so refresh stays deterministic
+      if (rest.kind === "ticker" && payload) {
+        return {
+          ...rest,
+          payload: {
+            rows: payload.rows,
+            symbols: payload.symbols,
+            stale: !!payload.stale
+          }
+        };
+      }
+      return rest;
+    });
     savePreference("pinned", serializable);
   }, [pinned, isConnected, address]);
 
@@ -987,6 +999,9 @@ export default function TerminalShell({
         if (savedTokens) {
           setCustomTokens(migrateCustomTokens(JSON.parse(savedTokens)));
         }
+
+        // ticker (#15): copy anon → wallet once if wallet has no ticker yet
+        migrateAnonTickerOnConnect(localStorage, address);
 
         const saved = localStorage.getItem(storageKey);
         if (saved) {
@@ -3796,6 +3811,122 @@ export default function TerminalShell({
       };
     },
     pnl: async () => buildPnl(),
+    ticker: async (args) => {
+      const parsed = parseTickerCommand(args);
+      if (parsed.op === "usage") {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Usage: ticker [add|rm|ls] [symbol]"
+        };
+      }
+
+      const storage =
+        typeof window !== "undefined" ? window.localStorage : null;
+      const wallet = isConnected && address ? address : null;
+      let prefs = readTickerPrefs(storage, wallet);
+
+      if (parsed.op === "ls") {
+        return {
+          id: generateId(),
+          type: "text",
+          text: prefs.symbols.length
+            ? prefs.symbols.join(", ")
+            : "Ticker empty."
+        };
+      }
+
+      if (parsed.op === "add") {
+        const added = applyTickerAdd(prefs, parsed.symbol);
+        if (!added.ok) {
+          if (added.code === "TICKER_DUP") {
+            return {
+              id: generateId(),
+              type: "text",
+              text: "already on ticker"
+            };
+          }
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Ticker holds 12 symbols max in v1. ticker rm <sym> first."
+          };
+        }
+        prefs = added.prefs;
+        writeTickerPrefs(storage, prefs, wallet);
+      }
+
+      if (parsed.op === "rm") {
+        const before = prefs.symbols.length;
+        prefs = applyTickerRm(prefs, parsed.symbol);
+        writeTickerPrefs(storage, prefs, wallet);
+        if (prefs.symbols.length === before) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `· ${parsed.symbol} not on ticker`
+          };
+        }
+      }
+
+      // show / add / rm → board
+      try {
+        const built = await buildTickerRows(prefs, activeChainId);
+        writeTickerPrefs(storage, built.prefs, wallet);
+        const entries: LogEntry[] = [];
+        for (const msg of built.messages) {
+          if (/No DexScreener USD pair/.test(msg)) {
+            entries.push({
+              id: generateId(),
+              type: "text",
+              text: msg.startsWith("No ") ? msg : msg,
+              warn: true
+            });
+          } else if (/DexScreener returned|API fetch failed/.test(msg)) {
+            entries.push({
+              id: generateId(),
+              type: "text",
+              text: msg,
+              warn: true
+            });
+          }
+        }
+        if (parsed.op === "add") {
+          entries.push({
+            id: generateId(),
+            type: "text",
+            text: `[✓] added ${parsed.symbol}`
+          });
+        } else if (parsed.op === "rm") {
+          entries.push({
+            id: generateId(),
+            type: "text",
+            text: `[✓] removed ${parsed.symbol}`
+          });
+        }
+        entries.push({
+          id: generateId(),
+          type: "ticker",
+          title: "TICKER",
+          payload: {
+            rows: built.rows,
+            symbols: built.prefs.symbols,
+            stale: false
+          }
+        });
+        return entries;
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        return {
+          id: generateId(),
+          type: "text",
+          text: /fetch|network/i.test(msg)
+            ? "API fetch failed. Check ad-blocker vs api.dexscreener.com."
+            : msg,
+          warn: true
+        };
+      }
+    },
     pool: async (args) => {
       if (!activeChainId)
         return {
@@ -5688,6 +5819,7 @@ export default function TerminalShell({
                   onPin={onPin}
                   pinnedIds={new Set(pinned.map((p) => p.id))}
                   mode={terminalMode}
+                  narrow={narrow || band === "stack"}
                   hasActiveChannel={!!activeChatChannel}
                   onFillPrompt={(text) => {
                     setInput(text);

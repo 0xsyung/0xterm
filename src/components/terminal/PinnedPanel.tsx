@@ -11,6 +11,7 @@ import PriceCard from "./widgets/PriceCard";
 import DigArtifactWidget from "./widgets/DigArtifactWidget";
 import DigRunWidget from "./widgets/DigRunWidget";
 import DigDebugWidget from "./widgets/DigDebugWidget";
+import TickerWidget from "./widgets/TickerWidget";
 import type { PinnedManifest, ThemeConfig } from "./types";
 
 const REFRESH_INTERVAL = 60;
@@ -46,10 +47,11 @@ export default function PinnedPanel({
     >
       {pinned.map((p) => {
         const hasRefresh = countdowns && countdowns[p.id] !== undefined;
+        const defaultSec = p.refreshSec ?? REFRESH_INTERVAL;
         const secs =
           countdowns && countdowns[p.id] !== undefined
             ? countdowns[p.id]
-            : REFRESH_INTERVAL;
+            : defaultSec;
         const isRefreshing = refreshing === p.id;
         const minimized = !!p.minimized;
         return (
@@ -124,6 +126,20 @@ function renderPinned(p: PinnedManifest, theme: any) {
       return <BalanceWidget {...payload} theme={theme} />;
     case "portfolio":
       return <PortfolioWidget {...payload} theme={theme} />;
+    case "ticker":
+      return (
+        <TickerWidget
+          data={{
+            kind: "ticker",
+            widgetId: "ticker:watchlist",
+            rows: payload.rows || [],
+            stale: !!payload.stale,
+            symbols: payload.symbols
+          }}
+          theme={theme}
+          compact
+        />
+      );
     case "dig-artifact":
       return payload.artifact ? (
         <DigArtifactWidget artifact={payload.artifact} theme={theme} compact pinned />
