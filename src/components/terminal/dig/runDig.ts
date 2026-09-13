@@ -312,9 +312,10 @@ function openDebugSession(opts: {
     index,
     breakpoints: [],
     mapMismatch: opts.mapMismatch,
-    hasSourceMap,
-    sourceLines,
-    lineByPc
+    // mapMismatch → opcode-only even if a source map exists on the artifact
+    hasSourceMap: opts.mapMismatch ? false : hasSourceMap,
+    sourceLines: opts.mapMismatch ? undefined : sourceLines,
+    lineByPc: opts.mapMismatch ? {} : lineByPc
   };
   setDigDebugSession(session);
   return { kind: "debug", panel: panelFromSession(session) };
@@ -1043,7 +1044,25 @@ export async function runDig(
         );
         if (!traced.ok) {
           if (traced.code === "map_mismatch") {
-            return warn(DIG_ERROR.map_mismatch);
+            // Keep DEBUG card + warn; opcode-only (Stephy #41 blocker).
+            const fallback = getLastDigDebugTarget();
+            const steps = fallback?.steps?.length
+              ? fallback.steps
+              : [];
+            const status = fallback?.status === "REVERT" ? "REVERT" : "OK";
+            const active = getActiveDigDeployment();
+            const src = await loadDigSource();
+            return [
+              { kind: "text" as const, text: DIG_ERROR.map_mismatch, warn: true },
+              openDebugSession({
+                steps,
+                truncated: !!fallback?.truncated,
+                status: status as "OK" | "REVERT",
+                artifact: active?.artifact,
+                source: src?.content,
+                mapMismatch: true
+              })
+            ];
           }
           return warn(DIG_ERROR.debug_no_trace);
         }

@@ -25,7 +25,7 @@ import {
   type DigDebugSession,
   type DigTraceStep
 } from "./debug";
-import { resetDigSession, setDigDebugSession, getDigDebugSession } from "./session";
+import { resetDigSession, setDigDebugSession, getDigDebugSession, setLastDigDebugTarget } from "./session";
 import { runDig } from "./runDig";
 
 const dir = dirname(fileURLToPath(import.meta.url));
@@ -137,6 +137,22 @@ describe("dig debug fixture stepping", () => {
   });
 });
 
+
+  it("mapMismatch forces opcode-only panel (no source pane)", () => {
+    const s: DigDebugSession = {
+      ...sessionFromFixture(0),
+      hasSourceMap: true,
+      sourceLines: ["contract C {}", "  function f() {}"],
+      lineByPc: { 0: 0, 1: 1, 2: 1 },
+      mapMismatch: true
+    };
+    const panel = panelFromSession(s);
+    expect(panel.mapMismatch).toBe(true);
+    expect(panel.hasSourceMap).toBe(false);
+    expect(panel.sourceLines).toBeUndefined();
+    expect(panel.opcodeRows.length).toBeGreaterThan(0);
+  });
+
 describe("runDig debug verbs (session)", () => {
   beforeEach(() => {
     resetDigSession();
@@ -154,6 +170,36 @@ describe("runDig debug verbs (session)", () => {
   it("dig step without session → dig.no_tx", async () => {
     const r = await runDig(["dig", "step"]);
     expect(r).toMatchObject({ kind: "text", warn: true, text: DIG_ERROR.no_tx });
+  });
+
+  it("dig debug <hash> map_mismatch keeps DEBUG card + warn", async () => {
+    const built = buildTraceFromSteps(fixture.steps);
+    setLastDigDebugTarget({
+      kind: "send",
+      steps: built.steps,
+      truncated: false,
+      status: "OK"
+    });
+    const r = await runDig(["dig", "debug", "0x" + "cd".repeat(32)], {
+      isConnected: true,
+      debugTraceTransaction: async () => ({
+        ok: false as const,
+        code: "map_mismatch" as const
+      })
+    });
+    expect(Array.isArray(r)).toBe(true);
+    if (!Array.isArray(r)) throw new Error("expected array");
+    expect(r[0]).toMatchObject({
+      kind: "text",
+      warn: true,
+      text: DIG_ERROR.map_mismatch
+    });
+    expect(r[1]).toMatchObject({ kind: "debug" });
+    if (r[1] && !Array.isArray(r[1]) && r[1].kind === "debug") {
+      expect(r[1].panel.mapMismatch).toBe(true);
+      expect(r[1].panel.hasSourceMap).toBe(false);
+      expect(r[1].panel.sourceLines).toBeUndefined();
+    }
   });
 
   it("dig debug <hash> without tracer → dig.debug_no_trace", async () => {

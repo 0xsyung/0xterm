@@ -208,7 +208,9 @@ export function panelFromSession(session: DigDebugSession): DigDebugPanelState {
     stack: [],
     memory: ""
   };
+  // Stephy #41: mapMismatch forces opcode-only (no source pane).
   const hasSource =
+    !session.mapMismatch &&
     session.hasSourceMap &&
     session.sourceLines &&
     session.sourceLines.length > 0 &&
