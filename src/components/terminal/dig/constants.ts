@@ -1,6 +1,6 @@
 /**
  * @file constants.ts
- * @description Dig workshop constants — solc pin, error copy, IDB keys (#39/#40)
+ * @description Dig workshop constants — solc pin, error copy, IDB keys (#39/#40/#41)
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
@@ -31,7 +31,7 @@ export const DIG_IDB_STORE = "dig";
 export const DIG_OPTIMIZER_ENABLED = false;
 export const DIG_OPTIMIZER_RUNS = 200;
 
-/** VM hardfork pin for dig env vm (#40). */
+/** VM hardfork pin for dig env vm (#40/#41). */
 export const DIG_VM_HARDFORK = "cancun" as const;
 
 /** Prefunded VM test account (session-only; no real keys). */
@@ -52,7 +52,14 @@ export const DIG_ERROR = {
   reverted: (reason: string) => `[!] dig.reverted — ${reason}.`,
   need_wallet: "[!] dig.need_wallet — connect or dig env vm.",
   reserved: (name: string) =>
-    `[!] dig.reserved — ${name} is the clone path. Rename the contract or use dig deploy <file:Contract>.`
+    `[!] dig.reserved — ${name} is the clone path. Rename the contract or use dig deploy <file:Contract>.`,
+  no_tx:
+    "[!] dig.no_tx — no tx to debug. Type dig send or dig debug <txhash>.",
+  debug_no_trace:
+    "[!] dig.debug_no_trace — RPC has no debug_traceTransaction.",
+  map_mismatch:
+    "[!] dig.map_mismatch — artifact does not match code at address.",
+  debug_too_long: "[!] dig.debug_too_long — trace capped."
 } as const;
 
 export const DIG_RESERVED_DEPLOY = ["erc20", "erc721"] as const;
@@ -76,7 +83,18 @@ export const DIG_SUBCOMMANDS = [
   "send",
   "logs",
   "gas",
-  "receipt"
+  "receipt",
+  "debug",
+  "step",
+  "over",
+  "out",
+  "back",
+  "br",
+  "op",
+  "stack",
+  "mem",
+  "stor",
+  "vars"
 ] as const;
 
 export type DigSubcommand = (typeof DIG_SUBCOMMANDS)[number];

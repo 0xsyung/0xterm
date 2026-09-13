@@ -644,6 +644,16 @@ export const HELP_ROWS: HelpRow[] = [
     modes: ["dev"]
   },
   {
+    command: "dig debug [tx]",
+    description: "Step-debug last (or given) transaction",
+    modes: ["dev"]
+  },
+  {
+    command: "dig step / dig stack / dig stor",
+    description: "Walk EVM state",
+    modes: ["dev"]
+  },
+  {
     command: "compile",
     description: "Alias → dig compile",
     modes: ["dev"]

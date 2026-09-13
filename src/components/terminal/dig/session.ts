@@ -1,6 +1,6 @@
 /**
  * @file session.ts
- * @description Dig run session state — env, deployments, last receipt (#40)
+ * @description Dig run + debug session state (#40/#41)
  * Session-only (memory). VM state lives in vm.ts and is also session-only.
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
@@ -9,6 +9,7 @@ import type { Address } from "viem";
 import type { DigAbiItem, DigContractArtifact } from "./artifact";
 import type { DigEnvKind } from "./constants";
 import type { DigDecodedEvent } from "./encode";
+import type { DigDebugSession, DigTraceStep } from "./debug";
 
 export type DigDeployment = {
   name: string;
@@ -46,12 +47,25 @@ export type DigRunPanelState = {
   warnLine?: string;
 };
 
+/** Last VM send/deploy eligible for `dig debug` without a hash (#41). */
+export type DigLastDebugTarget = {
+  kind: "send" | "deploy";
+  steps: DigTraceStep[];
+  truncated: boolean;
+  status: "OK" | "REVERT";
+  artifact?: DigContractArtifact;
+  source?: string;
+  runtimeBytecode?: string;
+};
+
 type DigSession = {
   env: DigEnvKind;
   deployments: DigDeployment[];
   active?: DigDeployment;
   lastReceipt?: DigReceiptSnapshot;
   lastPanel?: DigRunPanelState;
+  lastDebugTarget?: DigLastDebugTarget;
+  debug?: DigDebugSession;
 };
 
 const g = globalThis as unknown as { __oxtermDigSession?: DigSession };
@@ -117,9 +131,24 @@ export function setLastDigPanel(p: DigRunPanelState | undefined): void {
   session().lastPanel = p;
 }
 
+export function getLastDigDebugTarget(): DigLastDebugTarget | undefined {
+  return session().lastDebugTarget;
+}
+
+export function setLastDigDebugTarget(t: DigLastDebugTarget | undefined): void {
+  session().lastDebugTarget = t;
+}
+
+export function getDigDebugSession(): DigDebugSession | undefined {
+  return session().debug;
+}
+
+export function setDigDebugSession(d: DigDebugSession | undefined): void {
+  session().debug = d;
+}
+
 export function envLabel(env: DigEnvKind, chainName?: string): string {
   if (env === "vm") return "VM · not a live chain";
   if (env === "injected") return chainName ? `INJECTED · ${chainName}` : "INJECTED";
   return chainName ? `LOCAL · ${chainName}` : "LOCAL";
 }
-

@@ -1,6 +1,6 @@
 /**
  * @file index.ts
- * @description Dig workshop public exports (#39/#40)
+ * @description Dig workshop public exports (#39/#40/#41)
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
@@ -15,6 +15,7 @@ export * from "./args";
 export * from "./encode";
 export * from "./gas";
 export * from "./session";
+export * from "./debug";
 export { compileDigSource, ensureSolcLoaded } from "./solc";
 export type { DigCompileResult } from "./solc";
 export {

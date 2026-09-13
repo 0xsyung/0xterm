@@ -1,6 +1,6 @@
 /**
  * @file runDig.ts
- * @description Dig command router — compile (#39) + run/deploy/call (#40)
+ * @description Dig command router — compile (#39) + run (#40) + debug (#41)
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
@@ -44,7 +44,6 @@ import {
   decodeDigReturn,
   encodeDigCall,
   encodeDigDeploy,
-  findAbiFunction,
   formatReturnValues,
   isViewLike,
   truncateAddress,
@@ -54,12 +53,15 @@ import { formatGas, formatGasEstimateLine } from "./gas";
 import {
   addDigDeployment,
   getActiveDigDeployment,
+  getDigDebugSession,
   getDigEnv,
+  getLastDigDebugTarget,
   getLastDigPanel,
   getLastDigReceipt,
   listDigDeployments,
-  setActiveDigDeployment,
+  setDigDebugSession,
   setDigEnv,
+  setLastDigDebugTarget,
   setLastDigPanel,
   setLastDigReceipt,
   envLabel,
@@ -67,6 +69,25 @@ import {
   type DigRunPanelState
 } from "./session";
 import { digVmHardforkLabel, digVmTestAccount, vmCall, vmDeploy } from "./vm";
+import {
+  addBreakpoint,
+  buildLineByPc,
+  buildTraceFromSteps,
+  clearBreakpoints,
+  currentStep,
+  formatMemSlice,
+  panelFromSession,
+  stepBack,
+  stepInto,
+  stepOut,
+  stepOver,
+  stepsFromStructLogs,
+  storageUpTo,
+  stackTop8,
+  type DigDebugPanelState,
+  type DigDebugSession,
+  type DigTraceStep
+} from "./debug";
 
 export type DigTextResult = {
   kind: "text";
@@ -151,6 +172,13 @@ export type DigFnResult = {
   write: string[];
 };
 
+export type DigDebugResult = {
+  kind: "debug";
+  panel: DigDebugPanelState;
+  /** When true, shell should remove the dig-debug card. */
+  stop?: boolean;
+};
+
 export type DigResult =
   | DigTextResult
   | DigEditorResult
@@ -163,6 +191,7 @@ export type DigResult =
   | DigConfirmResult
   | DigLsResult
   | DigFnResult
+  | DigDebugResult
   | DigResult[];
 
 export type DigRunContext = {
@@ -190,12 +219,19 @@ export type DigRunContext = {
     value?: bigint;
     account?: Address;
   }) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** debug_traceTransaction — fail closed when RPC refuses (#41). */
+  debugTraceTransaction?: (
+    txHash: `0x${string}`
+  ) => Promise<
+    | { ok: true; structLogs: unknown[]; mapMismatch?: boolean }
+    | { ok: false; code: "debug_no_trace" | "map_mismatch"; reason?: string }
+  >;
 };
 
 function usage(): DigTextResult {
   return {
     kind: "text",
-    text: "Usage: dig [new|open|edit|compile|ver|bytecode|abi|opcodes|artifact|deploy|env|at|ls|fn|call|send|logs|gas|receipt] …"
+    text: "Usage: dig [new|open|edit|compile|ver|bytecode|abi|opcodes|artifact|deploy|env|at|ls|fn|call|send|logs|gas|receipt|debug|step|over|out|back|br|op|stack|mem|stor|vars] …"
   };
 }
 
@@ -225,6 +261,79 @@ function panelFrom(
   setLastDigPanel(base);
   return base;
 }
+
+function rememberVmTrace(opts: {
+  kind: "send" | "deploy";
+  steps?: DigTraceStep[];
+  truncated?: boolean;
+  ok: boolean;
+  artifact?: DigDeployment["artifact"];
+  source?: string;
+}): void {
+  if (!opts.steps || opts.steps.length === 0) return;
+  const built = buildTraceFromSteps(opts.steps, {
+    status: opts.ok ? "OK" : "REVERT"
+  });
+  setLastDigDebugTarget({
+    kind: opts.kind,
+    steps: built.steps,
+    truncated: built.truncated || !!opts.truncated,
+    status: built.status,
+    artifact: opts.artifact,
+    source: opts.source,
+    runtimeBytecode: opts.artifact?.runtimeBytecode
+  });
+}
+
+function openDebugSession(opts: {
+  steps: DigTraceStep[];
+  truncated: boolean;
+  status: "OK" | "REVERT";
+  artifact?: DigDeployment["artifact"];
+  source?: string;
+  mapMismatch?: boolean;
+}): DigDebugResult {
+  const art = opts.artifact;
+  const { lineByPc, hasSourceMap } = buildLineByPc({
+    sourceMap: art?.deployedSourceMap || art?.sourceMap,
+    runtimeBytecode: art?.runtimeBytecode,
+    source: opts.source
+  });
+  const sourceLines = opts.source ? opts.source.split("\n") : undefined;
+  // Land on last step if REVERT so widget shows REVERT opcode
+  let index = 0;
+  if (opts.status === "REVERT" && opts.steps.length > 0) {
+    index = opts.steps.length - 1;
+  }
+  const session: DigDebugSession = {
+    steps: opts.steps,
+    truncated: opts.truncated,
+    status: opts.status,
+    index,
+    breakpoints: [],
+    mapMismatch: opts.mapMismatch,
+    // mapMismatch → opcode-only even if a source map exists on the artifact
+    hasSourceMap: opts.mapMismatch ? false : hasSourceMap,
+    sourceLines: opts.mapMismatch ? undefined : sourceLines,
+    lineByPc: opts.mapMismatch ? {} : lineByPc
+  };
+  setDigDebugSession(session);
+  return { kind: "debug", panel: panelFromSession(session) };
+}
+
+function requireDebug(): DigTextResult | DigDebugSession {
+  const s = getDigDebugSession();
+  if (!s || s.steps.length === 0) {
+    return warn(DIG_ERROR.no_tx);
+  }
+  return s;
+}
+
+function debugPanelResult(session: DigDebugSession): DigDebugResult {
+  setDigDebugSession(session);
+  return { kind: "debug", panel: panelFromSession(session) };
+}
+
 
 export async function runDig(
   args: string[],
@@ -461,7 +570,7 @@ export async function runDig(
     const parsed = extractDeployArgs(argv);
     if (parsed.error === "arg") return warn(DIG_ERROR.arg);
 
-    let contractArg = parsed.contractArg;
+    const contractArg = parsed.contractArg;
     // If first token looks like reserved name used as contract
     if (
       contractArg &&
@@ -510,9 +619,24 @@ export async function runDig(
     const value = parsed.valueWei ?? 0n;
 
     if (env === "vm") {
-      const res = await vmDeploy(encoded.data, value);
+      const src = await loadDigSource();
+      const res = await vmDeploy(encoded.data, value, { captureTrace: true });
+      rememberVmTrace({
+        kind: "deploy",
+        steps: res.trace,
+        truncated: res.truncated,
+        ok: res.ok,
+        artifact: art,
+        source: src?.content
+      });
       if (!res.ok) {
-        return warn(DIG_ERROR.vm_fail(res.reason));
+        const lines: DigMultiText["lines"] = [
+          { text: DIG_ERROR.vm_fail(res.reason), warn: true }
+        ];
+        if (res.truncated) {
+          lines.push({ text: DIG_ERROR.debug_too_long, warn: true });
+        }
+        return { kind: "multi-text", lines };
       }
       const addr = checksumAddr(res.createdAddress!);
       const events = decodeDigLogs(art.abi, res.logs);
@@ -717,16 +841,39 @@ export async function runDig(
     }
 
     if (env === "vm") {
+      const captureTrace = sub === "send";
+      const src = captureTrace ? await loadDigSource() : undefined;
       const res = await vmCall({
         to: active.address,
         data: encoded.data,
-        value
+        value,
+        captureTrace
       });
+      if (captureTrace) {
+        rememberVmTrace({
+          kind: "send",
+          steps: res.trace,
+          truncated: res.truncated,
+          ok: res.ok,
+          artifact: active.artifact,
+          source: src?.content
+        });
+      }
       if (!res.ok) {
-        // distinguish revert-ish
         const r = res.reason.toLowerCase();
-        if (r.includes("revert")) return warn(DIG_ERROR.reverted(res.reason));
-        return warn(DIG_ERROR.vm_fail(res.reason));
+        const msg = r.includes("revert")
+          ? DIG_ERROR.reverted(res.reason)
+          : DIG_ERROR.vm_fail(res.reason);
+        if (captureTrace && res.truncated) {
+          return {
+            kind: "multi-text",
+            lines: [
+              { text: msg, warn: true },
+              { text: DIG_ERROR.debug_too_long, warn: true }
+            ]
+          };
+        }
+        return warn(msg);
       }
       const events = decodeDigLogs(active.abi, res.logs);
       let returnValues: string | undefined;
@@ -868,6 +1015,229 @@ export async function runDig(
     });
     return { kind: "run", panel };
   }
+
+
+  // —— #41 debug surface ——
+  if (sub === "debug") {
+    const stop = (argv[2] || "").toLowerCase() === "stop";
+    if (stop) {
+      setDigDebugSession(undefined);
+      return { kind: "debug", panel: panelFromSession({
+        steps: [],
+        truncated: false,
+        status: "OK",
+        index: 0,
+        breakpoints: [],
+        hasSourceMap: false,
+        lineByPc: {}
+      }), stop: true };
+    }
+
+    const hashArg = argv[2];
+    if (hashArg && /^0x[0-9a-fA-F]{64}$/.test(hashArg)) {
+      if (!ctx.debugTraceTransaction) {
+        return warn(DIG_ERROR.debug_no_trace);
+      }
+      try {
+        const traced = await ctx.debugTraceTransaction(
+          hashArg as `0x${string}`
+        );
+        if (!traced.ok) {
+          if (traced.code === "map_mismatch") {
+            // Keep DEBUG card + warn; opcode-only (Stephy #41 blocker).
+            const fallback = getLastDigDebugTarget();
+            const steps = fallback?.steps?.length
+              ? fallback.steps
+              : [];
+            const status = fallback?.status === "REVERT" ? "REVERT" : "OK";
+            const active = getActiveDigDeployment();
+            const src = await loadDigSource();
+            return [
+              { kind: "text" as const, text: DIG_ERROR.map_mismatch, warn: true },
+              openDebugSession({
+                steps,
+                truncated: !!fallback?.truncated,
+                status: status as "OK" | "REVERT",
+                artifact: active?.artifact,
+                source: src?.content,
+                mapMismatch: true
+              })
+            ];
+          }
+          return warn(DIG_ERROR.debug_no_trace);
+        }
+        const rawSteps = stepsFromStructLogs(traced.structLogs);
+        const built = buildTraceFromSteps(rawSteps);
+        const active = getActiveDigDeployment();
+        const src = await loadDigSource();
+        const out: DigResult[] = [
+          openDebugSession({
+            steps: built.steps,
+            truncated: built.truncated,
+            status: built.status,
+            artifact: active?.artifact,
+            source: src?.content,
+            mapMismatch: traced.mapMismatch
+          })
+        ];
+        if (built.truncated) {
+          out.unshift({ kind: "text", text: DIG_ERROR.debug_too_long, warn: true });
+        }
+        if (traced.mapMismatch) {
+          out.unshift({
+            kind: "text",
+            text: DIG_ERROR.map_mismatch,
+            warn: true
+          });
+        }
+        return out.length === 1 ? out[0]! : out;
+      } catch {
+        return warn(DIG_ERROR.debug_no_trace);
+      }
+    }
+
+    if (hashArg && hashArg.toLowerCase() !== "stop") {
+      return warn("Usage: dig debug [txhash] | dig debug stop");
+    }
+
+    const target = getLastDigDebugTarget();
+    if (!target || target.steps.length === 0) {
+      return warn(DIG_ERROR.no_tx);
+    }
+    const out: DigResult[] = [
+      openDebugSession({
+        steps: target.steps,
+        truncated: target.truncated,
+        status: target.status,
+        artifact: target.artifact,
+        source: target.source
+      })
+    ];
+    if (target.truncated) {
+      out.unshift({ kind: "text", text: DIG_ERROR.debug_too_long, warn: true });
+    }
+    return out.length === 1 ? out[0]! : out;
+  }
+
+  if (
+    sub === "step" ||
+    sub === "over" ||
+    sub === "out" ||
+    sub === "back"
+  ) {
+    const s = requireDebug();
+    if ("kind" in s) return s;
+    let next = s;
+    if (sub === "step") next = stepInto(s);
+    else if (sub === "over") next = stepOver(s);
+    else if (sub === "out") next = stepOut(s);
+    else next = stepBack(s);
+    return debugPanelResult(next);
+  }
+
+  if (sub === "br") {
+    const s = requireDebug();
+    if ("kind" in s) return s;
+    const arg = (argv[2] || "").toLowerCase();
+    if (!arg) {
+      if (s.breakpoints.length === 0) {
+        return text("No breakpoints.", { muted: true });
+      }
+      return text(
+        s.breakpoints.map((pc) => `br pc=${pc}`).join("\n")
+      );
+    }
+    if (arg === "clear") {
+      return debugPanelResult(clearBreakpoints(s));
+    }
+    const pc = Number(arg);
+    if (!Number.isFinite(pc) || pc < 0) {
+      return warn("Usage: dig br <pc|line> | dig br clear");
+    }
+    return debugPanelResult(addBreakpoint(s, pc));
+  }
+
+  if (sub === "op") {
+    const s = requireDebug();
+    if ("kind" in s) return s;
+    const st = currentStep(s);
+    if (!st) return warn(DIG_ERROR.no_tx);
+    return text(`PC ${st.pc}  ${st.op}  gas ${st.gas}`);
+  }
+
+  if (sub === "stack") {
+    const s = requireDebug();
+    if ("kind" in s) return s;
+    const st = currentStep(s);
+    if (!st) return warn(DIG_ERROR.no_tx);
+    const top = stackTop8(st.stack);
+    if (top.length === 0) return text("STACK —", { muted: true });
+    return {
+      kind: "multi-text",
+      lines: [
+        { text: "STACK", muted: true },
+        ...top.map((w, i) => ({ text: `[${i}] ${w}` }))
+      ]
+    };
+  }
+
+  if (sub === "mem") {
+    const s = requireDebug();
+    if ("kind" in s) return s;
+    const st = currentStep(s);
+    if (!st) return warn(DIG_ERROR.no_tx);
+    const offset = argv[2] ? parseInt(argv[2], 10) : 0;
+    const len = argv[3] ? parseInt(argv[3], 10) : 64;
+    if (!Number.isFinite(offset) || !Number.isFinite(len)) {
+      return warn("Usage: dig mem [offset [len]]");
+    }
+    const hex = formatMemSlice(st.memory, offset, len);
+    return text(
+      `MEM @${offset} +${len}\n${hex}`
+    );
+  }
+
+  if (sub === "stor") {
+    const s = requireDebug();
+    if ("kind" in s) return s;
+    const map = storageUpTo(s.steps, s.index);
+    const slotArg = argv[2];
+    if (!slotArg) {
+      const keys = Object.keys(map);
+      if (keys.length === 0) {
+        return text("STOR — no SSTORE yet.", { muted: true });
+      }
+      return {
+        kind: "multi-text",
+        lines: [
+          { text: "STOR", muted: true },
+          ...keys.slice(0, 16).map((k) => ({ text: `${k} → ${map[k]}` }))
+        ]
+      };
+    }
+    const key = slotArg.startsWith("0x") ? slotArg.toLowerCase() : `0x${slotArg}`.toLowerCase();
+    const val = map[key];
+    if (val == null) {
+      return text(`STOR ${key} → —`, { muted: true });
+    }
+    return text(`STOR ${key} → ${val}`);
+  }
+
+  if (sub === "vars") {
+    const s = requireDebug();
+    if ("kind" in s) return s;
+    if (!s.hasSourceMap) {
+      return text("no source map", { muted: true });
+    }
+    const st = currentStep(s);
+    const line = st ? s.lineByPc[st.pc] : undefined;
+    if (line == null || !s.sourceLines) {
+      return text("no source map", { muted: true });
+    }
+    const srcLine = s.sourceLines[line] || "";
+    return text(`line ${line + 1}: ${srcLine.trim() || "—"}`);
+  }
+
 
   if (!(DIG_SUBCOMMANDS as readonly string[]).includes(sub)) {
     return usage();

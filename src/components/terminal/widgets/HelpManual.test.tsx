@@ -32,6 +32,7 @@ describe("HelpManual", () => {
     render(<HelpManual theme={theme} mode="dev" />);
     expect(screen.getByText("dig compile [Contract]")).toBeTruthy();
     expect(screen.getByText("dig deploy erc20|erc721 …")).toBeTruthy();
+    expect(screen.getByText("dig debug [tx]")).toBeTruthy();
     expect(screen.getByText(/is <erc20/)).toBeTruthy();
     expect(screen.queryByText("deploy <erc20|erc721> <name> <symbol> [decimals]")).toBeNull();
     expect(screen.queryByText(/swap <amt/)).toBeNull();
