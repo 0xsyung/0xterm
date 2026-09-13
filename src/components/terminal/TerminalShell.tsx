@@ -14,7 +14,9 @@ import {
   useDisconnect,
   useSwitchChain,
   useSignMessage,
-  useWriteContract
+  useWriteContract,
+  useWalletClient,
+  useSendTransaction
 } from "wagmi";
 import {
   formatEther,
@@ -159,9 +161,18 @@ import DigEditorWidget from "./widgets/DigEditorWidget";
 import DigArtifactWidget from "./widgets/DigArtifactWidget";
 import DigAbiWidget from "./widgets/DigAbiWidget";
 import DigOpcodesWidget from "./widgets/DigOpcodesWidget";
+import DigConfirmWidget from "./widgets/DigConfirmWidget";
+import { digRunPinTitle } from "./widgets/DigRunWidget";
 import { runDig, type DigResult } from "./dig/runDig";
 import { digArtifactPinTitle } from "./dig/artifact";
 import { DIG_ERROR } from "./dig/constants";
+import {
+  addDigDeployment,
+  setLastDigPanel,
+  setLastDigReceipt
+} from "./dig/session";
+import { decodeDigLogs } from "./dig/encode";
+import { formatGas } from "./dig/gas";
 import PinnedPanel from "./PinnedPanel";
 import SocialPanel from "./SocialPanel";
 import {
@@ -510,6 +521,8 @@ export default function TerminalShell({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { address, isConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
+  const { sendTransactionAsync } = useSendTransaction();
   const { connectors, connect } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChainAsync } = useSwitchChain();
@@ -754,6 +767,14 @@ export default function TerminalShell({
         base.payload = { artifact: art };
       } else {
         base.title = log.title || "ARTIFACT";
+      }
+    } else if (log.type === "dig-run") {
+      const panel = p.panel;
+      if (panel) {
+        base.title = digRunPinTitle(panel);
+        base.payload = { panel };
+      } else {
+        base.title = log.title || "RUN";
       }
     } else if (log.type === "balance") {
       base.title = `BALANCE${p.symbol ? ` ${p.symbol}` : ""}`;
@@ -1900,6 +1921,75 @@ export default function TerminalShell({
       return null;
     },
     dig: async (args) => {
+      const chainObj = activeChainId
+        ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
+        : undefined;
+      const digCtx = {
+        isConnected: !!isConnected,
+        address: address as Address | undefined,
+        chainId: activeChainId || undefined,
+        chainName: chainObj?.name,
+        chainCall: async ({
+          to,
+          data,
+          value,
+          account
+        }: {
+          to?: Address;
+          data: `0x${string}`;
+          value?: bigint;
+          account?: Address;
+        }) => {
+          if (!chainObj) throw new Error("Select network first.");
+          const client = getClient(chainObj);
+          const res = await client.call({
+            to,
+            data,
+            value,
+            account
+          });
+          return { returnData: (res.data || "0x") as `0x${string}` };
+        },
+        chainEstimateGas: async ({
+          to,
+          data,
+          value,
+          account
+        }: {
+          to?: Address;
+          data: `0x${string}`;
+          value?: bigint;
+          account?: Address;
+        }) => {
+          if (!chainObj) throw new Error("Select network first.");
+          const client = getClient(chainObj);
+          return await client.estimateGas({ to, data, value, account });
+        },
+        chainSimulate: async ({
+          to,
+          data,
+          value,
+          account
+        }: {
+          to?: Address;
+          data: `0x${string}`;
+          value?: bigint;
+          account?: Address;
+        }) => {
+          try {
+            if (!chainObj) return { ok: false as const, reason: "no network" };
+            const client = getClient(chainObj);
+            await client.call({ to, data, value, account });
+            return { ok: true as const };
+          } catch (e: any) {
+            const reason = formatViemError(e)
+              .replace(/^ERROR:\s*/, "")
+              .slice(0, 120);
+            return { ok: false as const, reason };
+          }
+        }
+      };
+
       const mapDig = (r: DigResult): LogEntry | LogEntry[] => {
         if (Array.isArray(r)) {
           return r.flatMap((x) => {
@@ -2023,6 +2113,149 @@ export default function TerminalShell({
             title: `DEPLOY ${r.name.toUpperCase()}`
           };
         }
+        if (r.kind === "run") {
+          return {
+            id: generateId(),
+            type: "dig-run",
+            title: digRunPinTitle(r.panel),
+            payload: { panel: r.panel }
+          };
+        }
+        if (r.kind === "ls") {
+          return {
+            id: generateId(),
+            type: "dig-ls",
+            payload: { rows: r.rows, emptyMuted: r.emptyMuted }
+          };
+        }
+        if (r.kind === "fn") {
+          return {
+            id: generateId(),
+            type: "dig-fn",
+            title: `FN ${r.name}`,
+            payload: { name: r.name, view: r.view, write: r.write }
+          };
+        }
+        if (r.kind === "confirm") {
+          const id = generateId();
+          const confirm = r;
+          return {
+            id,
+            type: "dig-confirm",
+            title: "CONFIRM",
+            component: (
+              <DigConfirmWidget
+                theme={theme}
+                to={confirm.to}
+                dataSummary={confirm.dataSummary}
+                value={confirm.value}
+                gasEstimate={confirm.gasEstimate}
+                onCancel={() => {
+                  setLogs((prev) => prev.filter((l) => l.id !== id));
+                }}
+                onConfirm={async () => {
+                  try {
+                    if (!walletClient && !sendTransactionAsync) {
+                      setLogs((prev) =>
+                        [
+                          ...prev.filter((l) => l.id !== id),
+                          {
+                            id: generateId(),
+                            type: "text" as const,
+                            text: DIG_ERROR.need_wallet,
+                            warn: true
+                          }
+                        ].slice(-MAX_LOGS)
+                      );
+                      return;
+                    }
+                    const hash = await sendTransactionAsync({
+                      to:
+                        confirm.intent === "deploy"
+                          ? undefined
+                          : (confirm.to as Address),
+                      data: confirm.data,
+                      value: confirm.value,
+                      gas: confirm.gasEstimate
+                    });
+                    const client = chainObj ? getClient(chainObj) : null;
+                    const receipt = client
+                      ? await client.waitForTransactionReceipt({ hash })
+                      : null;
+                    const addr =
+                      (receipt?.contractAddress as Address | undefined) ||
+                      (confirm.intent === "send" ? confirm.to : undefined);
+                    const logsDecoded = receipt
+                      ? decodeDigLogs(
+                          confirm.abi,
+                          receipt.logs.map((l) => ({
+                            topics: l.topics as `0x${string}`[],
+                            data: l.data as `0x${string}`
+                          }))
+                        )
+                      : [];
+                    if (confirm.intent === "deploy" && addr) {
+                      addDigDeployment({
+                        name: confirm.contractName,
+                        address: addr,
+                        env: "injected",
+                        chainId: activeChainId || undefined,
+                        chainName: chainObj?.name,
+                        abi: confirm.abi,
+                        artifact: confirm.artifact
+                      });
+                    }
+                    const gasUsed = receipt?.gasUsed ?? confirm.gasEstimate;
+                    const panel = {
+                      name: confirm.contractName,
+                      address: (addr || confirm.to) as Address,
+                      env: "injected" as const,
+                      chainName: chainObj?.name,
+                      lastFn: confirm.fn || "constructor",
+                      argsSummary: confirm.dataSummary,
+                      events: logsDecoded,
+                      gasLabel: "GAS USED" as const,
+                      gas: formatGas(gasUsed)
+                    };
+                    setLastDigPanel(panel);
+                    setLastDigReceipt({
+                      status:
+                        receipt?.status === "reverted" ? "reverted" : "success",
+                      gasUsed,
+                      contractAddress: addr,
+                      logs: logsDecoded,
+                      txHash: hash,
+                      fn: confirm.fn || "constructor"
+                    });
+                    setLogs((prev) =>
+                      [
+                        ...prev.filter((l) => l.id !== id),
+                        {
+                          id: generateId(),
+                          type: "dig-run" as const,
+                          title: digRunPinTitle(panel),
+                          payload: { panel }
+                        }
+                      ].slice(-MAX_LOGS)
+                    );
+                  } catch (e: any) {
+                    setLogs((prev) =>
+                      [
+                        ...prev.filter((l) => l.id !== id),
+                        {
+                          id: generateId(),
+                          type: "text" as const,
+                          text: `[!] dig.reverted — ${formatViemError(e).replace(/^ERROR:\s*/, "").slice(0, 120)}.`,
+                          warn: true
+                        }
+                      ].slice(-MAX_LOGS)
+                    );
+                  }
+                }}
+              />
+            )
+          };
+        }
         return {
           id: generateId(),
           type: "text",
@@ -2030,7 +2263,7 @@ export default function TerminalShell({
           warn: true
         };
       };
-      const result = await runDig(args);
+      const result = await runDig(args, digCtx);
       return mapDig(result);
     },
     help: () => ({ id: generateId(), type: "help" }),
@@ -4863,7 +5096,22 @@ export default function TerminalShell({
       const result = await handler(args, trimmed);
       if (result !== null) {
         const newEntries = Array.isArray(result) ? result : [result];
-        setLogs((prev) => [...prev, ...newEntries].slice(-MAX_LOGS));
+        setLogs((prev) => {
+          // dig-run: update-in-place when the latest widget (skip trailing input) is already dig-run (#40)
+          if (
+            newEntries.length === 1 &&
+            newEntries[0]?.type === "dig-run"
+          ) {
+            let i = prev.length - 1;
+            while (i >= 0 && prev[i]?.type === "input") i--;
+            if (i >= 0 && prev[i]?.type === "dig-run") {
+              const updated = [...prev];
+              updated[i] = { ...newEntries[0], id: prev[i]!.id };
+              return updated.slice(-MAX_LOGS);
+            }
+          }
+          return [...prev, ...newEntries].slice(-MAX_LOGS);
+        });
       }
     } catch (err: any) {
       setLogs((prev) =>
@@ -5126,7 +5374,16 @@ export default function TerminalShell({
             "abi",
             "opcodes",
             "artifact",
-            "deploy"
+            "deploy",
+            "env",
+            "at",
+            "ls",
+            "fn",
+            "call",
+            "send",
+            "logs",
+            "gas",
+            "receipt"
           ];
         } else if (
           command === "dig" &&
@@ -5134,6 +5391,12 @@ export default function TerminalShell({
           rawArgs[1]?.toLowerCase() === "deploy"
         ) {
           candidates = ["erc20", "erc721"];
+        } else if (
+          command === "dig" &&
+          currentArgIdx === 2 &&
+          rawArgs[1]?.toLowerCase() === "env"
+        ) {
+          candidates = ["vm", "injected", "local"];
         } else if (
           command === "dig" &&
           currentArgIdx === 2 &&

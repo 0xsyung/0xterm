@@ -594,6 +594,56 @@ export const HELP_ROWS: HelpRow[] = [
     modes: ["dev"]
   },
   {
+    command: "dig deploy [Contract]",
+    description: "Deploy last compiled contract (VM or wallet)",
+    modes: ["dev"]
+  },
+  {
+    command: "dig env [vm|injected|local]",
+    description: "Run environment (default vm — not a live chain)",
+    modes: ["dev"]
+  },
+  {
+    command: "dig at <address> [Contract]",
+    description: "Attach last compile ABI to an address",
+    modes: ["dev"]
+  },
+  {
+    command: "dig ls",
+    description: "List session deploys / attachments",
+    modes: ["dev"]
+  },
+  {
+    command: "dig fn [Contract]",
+    description: "List ABI functions (VIEW / WRITE)",
+    modes: ["dev"]
+  },
+  {
+    command: "dig call <fn>",
+    description: "Read a function (eth_call / VM)",
+    modes: ["dev"]
+  },
+  {
+    command: "dig send <fn>",
+    description: "State-changing call (sim + sign on chain)",
+    modes: ["dev"]
+  },
+  {
+    command: "dig gas <fn>",
+    description: "Estimate gas for a function",
+    modes: ["dev"]
+  },
+  {
+    command: "dig logs",
+    description: "Events from last receipt",
+    modes: ["dev"]
+  },
+  {
+    command: "dig receipt",
+    description: "Last tx status / gas / events",
+    modes: ["dev"]
+  },
+  {
     command: "compile",
     description: "Alias → dig compile",
     modes: ["dev"]

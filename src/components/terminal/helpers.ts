@@ -10,10 +10,10 @@ import type { CustomTokenEntry, CustomTokensMap } from "./types";
 /**
  * Pin allowlist (issue #35): only live, glanceable monitors can be pinned.
  * Price is a `component` kind carrying `componentData.kind === "price"`;
- * dig-artifact is the #39 workshop exception. Editor / opcodes / abi are not
+ * dig-artifact (#39) and dig-run (#40) are workshop exceptions. Editor / opcodes / abi are not
  * pinnable. Other component kinds (swap/pool/deploy/export) are stripped.
  */
-export const PINNABLE_KINDS = new Set(["balance", "portfolio", "dig-artifact"]);
+export const PINNABLE_KINDS = new Set(["balance", "portfolio", "dig-artifact", "dig-run"]);
 
 export const isPinnableLog = (log: {
   type: string;
