@@ -28,7 +28,7 @@ export type ThemeMode =
 
 export type LogEntry = {
   id: string
-  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'chat' | 'billboard' | 'share' | 'feed' | 'component' | 'dig-artifact' | 'dig-editor' | 'dig-abi' | 'dig-opcodes' | 'dig-run' | 'dig-debug' | 'dig-confirm' | 'dig-ls' | 'dig-fn'
+  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'chat' | 'billboard' | 'share' | 'feed' | 'component' | 'ticker' | 'dig-artifact' | 'dig-editor' | 'dig-abi' | 'dig-opcodes' | 'dig-run' | 'dig-debug' | 'dig-confirm' | 'dig-ls' | 'dig-fn'
   text?: string
   // Render plain text in the theme's warn color (failures, read errors).
   warn?: boolean
@@ -81,6 +81,10 @@ export type PinnedManifest = {
   dexId?: string;
   payload?: any;
   minimized?: boolean;
+  // ticker (#15): stable watchlist id + per-pin refresh cadence (15s)
+  widgetId?: string;
+  pairOrSymbols?: string;
+  refreshSec?: number;
   // transient: the live React element for component-kind pins (price/swap/
   // pool/deploy/export). Not serialized — stripped before persist/export.
   component?: React.ReactNode;

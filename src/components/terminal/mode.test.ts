@@ -265,6 +265,7 @@ describe("helpRowsForMode", () => {
   it("invest includes swap, excludes dig/is", () => {
     const cmds = helpRowsForMode("invest").map((r) => r.command);
     expect(cmds.some((c) => c.startsWith("swap"))).toBe(true);
+    expect(cmds.some((c) => c === "ticker" || c.startsWith("ticker "))).toBe(true);
     expect(cmds.some((c) => c.startsWith("dig"))).toBe(false);
     expect(cmds.some((c) => c.startsWith("is "))).toBe(false);
     expect(cmds.some((c) => c.startsWith("mode"))).toBe(true);
