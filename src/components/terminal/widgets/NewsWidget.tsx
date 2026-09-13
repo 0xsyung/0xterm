@@ -120,6 +120,9 @@ export default function NewsWidget({
         }
       }}
       onKeyDown={onKeyDown}
+      // Keep focus on widget — TerminalShell content onClick focuses the prompt.
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
     >
       <PinButton
         onPin={onPin}
@@ -169,8 +172,9 @@ export default function NewsWidget({
                 key={it.id}
                 type="button"
                 onMouseDown={(e) => {
-                  // Select without stealing Enter-open semantics from parent key handler.
+                  // Select + keep focus: stop bubble to shell prompt-focus onClick.
                   e.preventDefault();
+                  e.stopPropagation();
                   setActiveIdx(idx);
                   setFocused(true);
                   rootRef.current?.focus();

@@ -4,7 +4,7 @@
  * @description Render smoke for news board chrome (#14)
  */
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { THEMES } from "../constants";
 import NewsWidget from "./NewsWidget";
 import { NEWS_FOOTER_BASE } from "../newsAllowlist";
@@ -76,4 +76,45 @@ describe("NewsWidget", () => {
     );
     expect(screen.getByText("Fetching headlines…")).toBeTruthy();
   });
+
+  it("stops mouse events from bubbling (shell prompt-focus steal)", () => {
+    const { container } = render(
+      <NewsWidget
+        data={{
+          kind: "news",
+          widgetId: "news:all",
+          tag: "",
+          items: [
+            {
+              id: "n1",
+              sourceId: "decrypt",
+              title: "Hello",
+              url: "https://decrypt.co/1",
+              publishedAt: Date.now()
+            }
+          ],
+          fetchedAt: Date.now()
+        }}
+        theme={theme}
+      />
+    );
+    const root = container.querySelector("[tabindex=\"0\"]") as HTMLElement;
+    expect(root).toBeTruthy();
+    const bubble = { click: false, down: false };
+    const onBubbleClick = () => {
+      bubble.click = true;
+    };
+    const onBubbleDown = () => {
+      bubble.down = true;
+    };
+    document.body.addEventListener("click", onBubbleClick);
+    document.body.addEventListener("mousedown", onBubbleDown);
+    fireEvent.mouseDown(root);
+    fireEvent.click(root);
+    document.body.removeEventListener("click", onBubbleClick);
+    document.body.removeEventListener("mousedown", onBubbleDown);
+    expect(bubble.click).toBe(false);
+    expect(bubble.down).toBe(false);
+  });
+
 });
