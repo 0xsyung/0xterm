@@ -551,6 +551,21 @@ export const HELP_ROWS: HelpRow[] = [
     description: "Remove from the ticker",
     modes: ["invest"]
   },
+  {
+    command: "news",
+    description: "Latest headlines (allowlisted RSS; titles only)",
+    modes: ["invest"]
+  },
+  {
+    command: "news <tag>",
+    description: "Filter headlines (e.g. `news btc`)",
+    modes: ["invest"]
+  },
+  {
+    command: "news more",
+    description: "Next page of the current news view",
+    modes: ["invest"]
+  },
 
   // dig (workshop — mode id dev)
   {

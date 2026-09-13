@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Cointelegraph.com News</title>
+    <link>https://cointelegraph.com</link>
+    <description>Cointelegraph covers fintech</description>
+    <item>
+      <title>Bitcoin hits &lt;b&gt;new&lt;/b&gt; ATH amid &amp;quot;ETF&amp;quot; inflows</title>
+      <link>https://cointelegraph.com/news/bitcoin-ath</link>
+      <pubDate>Sun, 13 Sep 2026 11:09:54 +0000</pubDate>
+      <description>&lt;img src=x onerror=alert(1)&gt;&lt;p&gt;Should be ignored&lt;/p&gt;</description>
+      <content:encoded xmlns:content="http://purl.org/rss/1.0/modules/content/">&lt;script&gt;alert(1)&lt;/script&gt;Evil HTML</content:encoded>
+    </item>
+    <item>
+      <title>Ethereum upgrade timeline</title>
+      <link>javascript:alert(1)</link>
+      <pubDate>Sun, 13 Sep 2026 10:00:00 +0000</pubDate>
+      <description>bad link dropped</description>
+    </item>
+    <item>
+      <title>Solana DeFi volumes rise</title>
+      <guid>https://cointelegraph.com/news/solana-defi</guid>
+      <pubDate>Sun, 13 Sep 2026 09:00:00 +0000</pubDate>
+    </item>
+  </channel>
+</rss>
