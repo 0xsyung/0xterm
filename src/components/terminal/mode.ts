@@ -35,7 +35,7 @@ export const MODE_BLURB: Record<TerminalMode, string> = {
 /** Boot hint under the version line — mode once, no clutter. */
 export const MODE_BOOT_HINT: Record<TerminalMode, string> = {
   invest: "type help · mode · connect · price",
-  dev: "type help · mode · deploy · is",
+  dev: "type help · mode · dig · is",
   forensic: "type help · mode · kyt · kya"
 };
 
@@ -140,9 +140,9 @@ const COMMAND_AFFINITY: Record<string, CommandAffinity> = {
   will: "invest",
   arb: "invest",
 
-  // —— dev ——
-  deploy: "dev",
-  dev: "dev",
+  // —— dig (workshop verbs) ——
+  dig: "dev",
+  compile: "dev",
   solc: "dev",
 
   // —— forensic ——
@@ -267,10 +267,12 @@ export function homeModeForCommand(cmd: string): TerminalMode {
 }
 
 export function wrongModeMessage(cmd: string): string {
-  const home = homeModeForCommand(cmd);
+  const display = cmd.trim();
+  const verb = display.split(/\s+/)[0] || display;
+  const home = homeModeForCommand(verb);
   const label = MODE_LABEL[home];
   const article = /^[AEIOU]/i.test(label) ? "an" : "a";
-  return `[!] \`${cmd}\` is ${article} ${label} command. Type \`mode ${home}\` or \`help\`.`;
+  return `[!] \`${display}\` is ${article} ${label} command. Type \`mode ${home}\` or \`help\`.`;
 }
 
 export function modeSwitchAck(mode: TerminalMode): string {
@@ -535,10 +537,70 @@ export const HELP_ROWS: HelpRow[] = [
     modes: ["invest"]
   },
 
-  // dev
+  // dig (workshop — mode id dev)
   {
-    command: "deploy <erc20|erc721> <name> <symbol> [decimals]",
-    description: "Deploy token clone on the active testnet",
+    command: "dig",
+    description: "Last compile summary (version, contracts, errors)",
+    modes: ["dev"]
+  },
+  {
+    command: "dig new [Name]",
+    description: "Open empty Solidity editor (default Counter)",
+    modes: ["dev"]
+  },
+  {
+    command: "dig open",
+    description: "Pick a .sol file into the editor",
+    modes: ["dev"]
+  },
+  {
+    command: "dig edit",
+    description: "Reopen last source in the editor",
+    modes: ["dev"]
+  },
+  {
+    command: "dig compile [Contract]",
+    description: "Compile workspace Solidity (in-browser solc)",
+    modes: ["dev"]
+  },
+  {
+    command: "dig ver [0.8.37]",
+    description: "List or set solc version (wasm)",
+    modes: ["dev"]
+  },
+  {
+    command: "dig bytecode [Contract]",
+    description: "Show creation / runtime bytecode",
+    modes: ["dev"]
+  },
+  {
+    command: "dig abi [Contract]",
+    description: "Show ABI JSON (copyable)",
+    modes: ["dev"]
+  },
+  {
+    command: "dig opcodes [Contract]",
+    description: "Disassemble runtime bytecode (--all for full)",
+    modes: ["dev"]
+  },
+  {
+    command: "dig artifact",
+    description: "Pin-able compile artifact card",
+    modes: ["dev"]
+  },
+  {
+    command: "dig deploy erc20|erc721 …",
+    description: "Clone bundled token on the active testnet",
+    modes: ["dev"]
+  },
+  {
+    command: "compile",
+    description: "Alias → dig compile",
+    modes: ["dev"]
+  },
+  {
+    command: "solc",
+    description: "Alias → dig ver",
     modes: ["dev"]
   },
   {
