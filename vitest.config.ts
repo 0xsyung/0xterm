@@ -28,6 +28,7 @@ export default defineConfig({
         "src/components/terminal/widgets/DigOpcodesWidget.tsx",
         "src/components/terminal/widgets/DigRunWidget.tsx",
         "src/components/terminal/widgets/DigConfirmWidget.tsx",
+        "src/components/terminal/widgets/DigDebugWidget.tsx",
         // static marketing page — pure presentational, no logic to cover
         "src/app/page.tsx",
         // app entry — viewport/keyboard wiring, no testable logic (issue #49)
@@ -35,14 +36,13 @@ export default defineConfig({
         "src/**/*.test.{ts,tsx}",
       ],
       thresholds: {
-        // Ratchet — measured 2026-09-13 under CI Node after dig run (#40):
-        // Lines 33.81%, Statements 34.42%, Functions 35.54%, Branches 28.19%.
-        // Prior mistaken 62/62/60/48 floors used dig-local %; global include still
-        // has TerminalShell/SocialPanel at 0%. Hard-fail at floor(measured).
+        // Ratchet — measured 2026-09-13 under CI Node after dig debug (#41):
+        // Lines 34.53%, Statements 35.00%, Functions 37.21%, Branches 28.15%.
+        // Prior mistaken dig-local floors (lesson #73). Hard-fail at floor(measured).
         // Climb toward 90% is tracked in #37.
-        lines: 33,
-        statements: 34,
-        functions: 35,
+        lines: 34,
+        statements: 35,
+        functions: 37,
         branches: 28,
       },
     },

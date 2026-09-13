@@ -51,4 +51,23 @@ describe("dig vm Counter", () => {
     expect(decoded).toBe(1n);
     expect(s1.ok && s1.gasUsed > 0n).toBe(true);
   });
+
+  it("captureTrace records structLog-style steps on send", async () => {
+    const dep = await vmDeploy(fixture.creation);
+    expect(dep.ok).toBe(true);
+    if (!dep.ok) return;
+    const inc = encodeFunctionData({
+      abi: fixture.abi as any,
+      functionName: "increment"
+    });
+    const s1 = await vmCall({
+      to: dep.createdAddress!,
+      data: inc,
+      captureTrace: true
+    });
+    expect(s1.ok).toBe(true);
+    expect(s1.trace && s1.trace.length).toBeGreaterThan(10);
+    expect(s1.trace![0]!.op).toBeTruthy();
+    expect(s1.trace![0]!.pc).toBe(0);
+  });
 });

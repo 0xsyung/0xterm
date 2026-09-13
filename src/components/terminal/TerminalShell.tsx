@@ -163,6 +163,7 @@ import DigAbiWidget from "./widgets/DigAbiWidget";
 import DigOpcodesWidget from "./widgets/DigOpcodesWidget";
 import DigConfirmWidget from "./widgets/DigConfirmWidget";
 import { digRunPinTitle } from "./widgets/DigRunWidget";
+import { digDebugPinTitle } from "./widgets/DigDebugWidget";
 import { runDig, type DigResult } from "./dig/runDig";
 import { digArtifactPinTitle } from "./dig/artifact";
 import { DIG_ERROR } from "./dig/constants";
@@ -775,6 +776,14 @@ export default function TerminalShell({
         base.payload = { panel };
       } else {
         base.title = log.title || "RUN";
+      }
+    } else if (log.type === "dig-debug") {
+      const panel = p.panel;
+      if (panel) {
+        base.title = digDebugPinTitle(panel);
+        base.payload = { panel };
+      } else {
+        base.title = log.title || "DEBUG";
       }
     } else if (log.type === "balance") {
       base.title = `BALANCE${p.symbol ? ` ${p.symbol}` : ""}`;
@@ -1987,6 +1996,33 @@ export default function TerminalShell({
               .slice(0, 120);
             return { ok: false as const, reason };
           }
+        },
+        debugTraceTransaction: async (txHash: `0x${string}`) => {
+          try {
+            if (!chainObj) {
+              return { ok: false as const, code: "debug_no_trace" as const };
+            }
+            const client = getClient(chainObj);
+            const result = await client.request({
+              method: "debug_traceTransaction" as never,
+              params: [
+                txHash,
+                { tracer: "structLogger", disableStorage: false, disableMemory: false }
+              ] as never
+            });
+            const structLogs =
+              result && typeof result === "object" && Array.isArray((result as any).structLogs)
+                ? (result as any).structLogs
+                : Array.isArray(result)
+                  ? result
+                  : null;
+            if (!structLogs) {
+              return { ok: false as const, code: "debug_no_trace" as const };
+            }
+            return { ok: true as const, structLogs };
+          } catch {
+            return { ok: false as const, code: "debug_no_trace" as const };
+          }
         }
       };
 
@@ -2118,6 +2154,23 @@ export default function TerminalShell({
             id: generateId(),
             type: "dig-run",
             title: digRunPinTitle(r.panel),
+            payload: { panel: r.panel }
+          };
+        }
+        if (r.kind === "debug") {
+          if (r.stop) {
+            return {
+              id: generateId(),
+              type: "text",
+              text: "· debug stopped",
+              muted: true,
+              payload: { digDebugStop: true }
+            };
+          }
+          return {
+            id: generateId(),
+            type: "dig-debug",
+            title: digDebugPinTitle(r.panel),
             payload: { panel: r.panel }
           };
         }
@@ -5097,14 +5150,25 @@ export default function TerminalShell({
       if (result !== null) {
         const newEntries = Array.isArray(result) ? result : [result];
         setLogs((prev) => {
-          // dig-run: update-in-place when the latest widget (skip trailing input) is already dig-run (#40)
+          // dig debug stop — drop dig-debug cards (#41)
           if (
             newEntries.length === 1 &&
-            newEntries[0]?.type === "dig-run"
+            newEntries[0]?.type === "text" &&
+            newEntries[0]?.payload?.digDebugStop
           ) {
+            const filtered = prev.filter((l) => l.type !== "dig-debug");
+            return [...filtered, newEntries[0]!].slice(-MAX_LOGS);
+          }
+          // dig-run / dig-debug: update-in-place (#40/#41)
+          if (
+            newEntries.length === 1 &&
+            (newEntries[0]?.type === "dig-run" ||
+              newEntries[0]?.type === "dig-debug")
+          ) {
+            const kind = newEntries[0]!.type;
             let i = prev.length - 1;
             while (i >= 0 && prev[i]?.type === "input") i--;
-            if (i >= 0 && prev[i]?.type === "dig-run") {
+            if (i >= 0 && prev[i]?.type === kind) {
               const updated = [...prev];
               updated[i] = { ...newEntries[0], id: prev[i]!.id };
               return updated.slice(-MAX_LOGS);
@@ -5383,7 +5447,18 @@ export default function TerminalShell({
             "send",
             "logs",
             "gas",
-            "receipt"
+            "receipt",
+            "debug",
+            "step",
+            "over",
+            "out",
+            "back",
+            "br",
+            "op",
+            "stack",
+            "mem",
+            "stor",
+            "vars"
           ];
         } else if (
           command === "dig" &&

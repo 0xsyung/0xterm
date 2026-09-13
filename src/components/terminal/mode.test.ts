@@ -216,6 +216,9 @@ describe("wrong-mode messaging", () => {
     expect(wrongModeMessage("dig compile")).toBe(
       "[!] `dig compile` is a DEV command. Type `mode dev` or `help`."
     );
+    expect(wrongModeMessage("dig debug")).toBe(
+      "[!] `dig debug` is a DEV command. Type `mode dev` or `help`."
+    );
     expect(homeModeForCommand("is")).toBe("dev");
   });
 
