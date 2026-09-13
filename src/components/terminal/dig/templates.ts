@@ -1,6 +1,6 @@
 /**
  * @file templates.ts
- * @description Default Counter.sol template for dig new (#39)
+ * @description Default Counter.sol template for dig new (#39/#40)
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
@@ -15,14 +15,19 @@ export function counterTemplate(
 pragma solidity ^${solcVersion};
 
 contract ${safe} {
-    uint256 public value;
+    uint256 public number;
+
+    event Incremented(uint256 newNumber);
 
     function increment() external {
-        value += 1;
+        unchecked {
+            number += 1;
+        }
+        emit Incremented(number);
     }
 
     function set(uint256 v) external {
-        value = v;
+        number = v;
     }
 }
 `;
