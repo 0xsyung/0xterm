@@ -173,10 +173,12 @@ describe("isCommandAllowed — classification table", () => {
     }
   });
 
-  it("deploy is dig-only", () => {
-    expect(isCommandAllowed("dev", "deploy")).toBe(true);
-    expect(isCommandAllowed("invest", "deploy")).toBe(false);
-    expect(isCommandAllowed("forensic", "deploy")).toBe(false);
+  it("dig / compile / solc are dig-only", () => {
+    for (const cmd of ["dig", "compile", "solc"]) {
+      expect(isCommandAllowed("dev", cmd), cmd).toBe(true);
+      expect(isCommandAllowed("invest", cmd), cmd).toBe(false);
+      expect(isCommandAllowed("forensic", cmd), cmd).toBe(false);
+    }
   });
 
   it("is/info shared dig ∩ forensic", () => {
@@ -194,7 +196,8 @@ describe("isCommandAllowed — classification table", () => {
 
   it("classifies live verbs", () => {
     expect(classifyLiveVerb("swap")).toBe("invest");
-    expect(classifyLiveVerb("deploy")).toBe("dev");
+    expect(classifyLiveVerb("dig")).toBe("dev");
+    expect(classifyLiveVerb("compile")).toBe("dev");
     expect(classifyLiveVerb("kyt")).toBe("forensic");
     expect(classifyLiveVerb("is")).toBe("shared");
     expect(classifyLiveVerb("help")).toBe("global");
@@ -210,8 +213,8 @@ describe("wrong-mode messaging", () => {
     expect(wrongModeMessage("swap")).toBe(
       "[!] `swap` is an INVEST command. Type `mode invest` or `help`."
     );
-    expect(wrongModeMessage("deploy")).toBe(
-      "[!] `deploy` is a DEV command. Type `mode dev` or `help`."
+    expect(wrongModeMessage("dig compile")).toBe(
+      "[!] `dig compile` is a DEV command. Type `mode dev` or `help`."
     );
     expect(homeModeForCommand("is")).toBe("dev");
   });
@@ -234,12 +237,12 @@ describe("wrong-mode messaging", () => {
 
 describe("autocomplete filter + CHOICES", () => {
   it("filters out-of-mode verbs", () => {
-    const all = ["help", "swap", "deploy", "is", "price", "kyt"];
+    const all = ["help", "swap", "dig", "is", "price", "kyt"];
     expect(filterCommandsForMode("invest", all).sort()).toEqual(
       ["help", "price", "swap"].sort()
     );
     expect(filterCommandsForMode("dev", all).sort()).toEqual(
-      ["deploy", "help", "is"].sort()
+      ["dig", "help", "is"].sort()
     );
     expect(filterCommandsForMode("forensic", all).sort()).toEqual(
       ["help", "is", "kyt", "price"].sort()
@@ -256,27 +259,27 @@ describe("autocomplete filter + CHOICES", () => {
 });
 
 describe("helpRowsForMode", () => {
-  it("invest includes swap, excludes deploy/is", () => {
+  it("invest includes swap, excludes dig/is", () => {
     const cmds = helpRowsForMode("invest").map((r) => r.command);
     expect(cmds.some((c) => c.startsWith("swap"))).toBe(true);
-    expect(cmds.some((c) => c.startsWith("deploy"))).toBe(false);
+    expect(cmds.some((c) => c.startsWith("dig"))).toBe(false);
     expect(cmds.some((c) => c.startsWith("is "))).toBe(false);
     expect(cmds.some((c) => c.startsWith("mode"))).toBe(true);
   });
 
-  it("dig includes deploy + is, excludes swap", () => {
+  it("dev includes dig + is, excludes swap", () => {
     const cmds = helpRowsForMode("dev").map((r) => r.command);
-    expect(cmds.some((c) => c.startsWith("deploy"))).toBe(true);
+    expect(cmds.some((c) => c === "dig" || c.startsWith("dig "))).toBe(true);
     expect(cmds.some((c) => c.startsWith("is "))).toBe(true);
     expect(cmds.some((c) => c.startsWith("swap"))).toBe(false);
   });
 
-  it("forensic includes price/is, excludes swap/deploy", () => {
+  it("forensic includes price/is, excludes swap/dig", () => {
     const cmds = helpRowsForMode("forensic").map((r) => r.command);
     expect(cmds.some((c) => c.startsWith("price"))).toBe(true);
     expect(cmds.some((c) => c.startsWith("is "))).toBe(true);
     expect(cmds.some((c) => c.startsWith("swap"))).toBe(false);
-    expect(cmds.some((c) => c.startsWith("deploy"))).toBe(false);
+    expect(cmds.some((c) => c.startsWith("dig"))).toBe(false);
   });
 });
 

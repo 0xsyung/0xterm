@@ -155,6 +155,13 @@ import type {
 import PortfolioWidget, { type SnapshotHolding } from "./widgets/PortfolioWidget";
 import { trackEvent } from "../../lib/analytics";
 import DeployWidget from "./widgets/DeployWidget";
+import DigEditorWidget from "./widgets/DigEditorWidget";
+import DigArtifactWidget from "./widgets/DigArtifactWidget";
+import DigAbiWidget from "./widgets/DigAbiWidget";
+import DigOpcodesWidget from "./widgets/DigOpcodesWidget";
+import { runDig, type DigResult } from "./dig/runDig";
+import { digArtifactPinTitle } from "./dig/artifact";
+import { DIG_ERROR } from "./dig/constants";
 import PinnedPanel from "./PinnedPanel";
 import SocialPanel from "./SocialPanel";
 import {
@@ -739,6 +746,14 @@ export default function TerminalShell({
         registerPinRefresh(log.id, () =>
           fetchBillboard(getClient(chain), contract, count)
         );
+      }
+    } else if (log.type === "dig-artifact") {
+      const art = p.artifact;
+      if (art) {
+        base.title = digArtifactPinTitle(art);
+        base.payload = { artifact: art };
+      } else {
+        base.title = log.title || "ARTIFACT";
       }
     } else if (log.type === "balance") {
       base.title = `BALANCE${p.symbol ? ` ${p.symbol}` : ""}`;
@@ -1884,78 +1899,139 @@ export default function TerminalShell({
       setLogs([]);
       return null;
     },
-    deploy: async (args) => {
-      if (!isConnected || !address)
+    dig: async (args) => {
+      const mapDig = (r: DigResult): LogEntry | LogEntry[] => {
+        if (Array.isArray(r)) {
+          return r.flatMap((x) => {
+            const m = mapDig(x);
+            return Array.isArray(m) ? m : [m];
+          });
+        }
+        if (r.kind === "text") {
+          return {
+            id: generateId(),
+            type: "text",
+            text: r.text,
+            warn: r.warn,
+            muted: r.muted
+          };
+        }
+        if (r.kind === "multi-text") {
+          return r.lines.map((line) => ({
+            id: generateId(),
+            type: "text" as const,
+            text: line.text,
+            warn: line.warn,
+            muted: line.muted
+          }));
+        }
+        if (r.kind === "editor") {
+          const id = generateId();
+          return {
+            id,
+            type: "dig-editor",
+            title: `SOURCE ${r.filename}`,
+            payload: {
+              filename: r.filename,
+              content: r.content,
+              mode: r.mode
+            },
+            component: (
+              <DigEditorWidget
+                theme={theme}
+                filename={r.filename}
+                initialContent={r.content}
+                mode={r.mode}
+                onClose={() => {
+                  setLogs((prev) => prev.filter((l) => l.id !== id));
+                }}
+              />
+            )
+          };
+        }
+        if (r.kind === "artifact") {
+          return {
+            id: generateId(),
+            type: "dig-artifact",
+            title: r.title,
+            payload: { artifact: r.artifact },
+            component: undefined
+          };
+        }
+        if (r.kind === "abi") {
+          return {
+            id: generateId(),
+            type: "dig-abi",
+            title: `ABI ${r.name}`,
+            payload: { name: r.name, abi: r.abi }
+          };
+        }
+        if (r.kind === "opcodes") {
+          return {
+            id: generateId(),
+            type: "dig-opcodes",
+            title: `OPCODES ${r.name}`,
+            payload: {
+              name: r.name,
+              rows: r.rows,
+              truncated: r.truncated
+            }
+          };
+        }
+        if (r.kind === "deploy") {
+          if (!isConnected || !address) {
+            return {
+              id: generateId(),
+              type: "text",
+              text: "Wallet not connected."
+            };
+          }
+          if (!activeChainId) {
+            return {
+              id: generateId(),
+              type: "text",
+              text: "Select network first using 'network <name>'."
+            };
+          }
+          const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
+          if (!targetChain.testnet) {
+            return {
+              id: generateId(),
+              type: "text",
+              text: `[!] Deployment is disabled on mainnet (${targetChain.name}). Please switch to a testnet (e.g., Sepolia or Base Sepolia) to deploy tokens.`
+            };
+          }
+          const implementation = IMPLEMENTATION_ADDRESSES[activeChainId]?.[
+            r.type as "erc20" | "erc721"
+          ];
+          const deployWidget = (
+            <DeployWidget
+              theme={theme}
+              type={r.type}
+              name={r.name}
+              symbol={r.symbol}
+              decimals={r.decimals}
+              implementation={implementation}
+              targetChain={targetChain}
+              userAddress={address as Address}
+            />
+          );
+          return {
+            id: generateId(),
+            type: "component",
+            component: deployWidget,
+            title: `DEPLOY ${r.name.toUpperCase()}`
+          };
+        }
         return {
           id: generateId(),
           type: "text",
-          text: "Wallet not connected."
+          text: DIG_ERROR.no_artifact,
+          warn: true
         };
-      if (!activeChainId)
-        return {
-          id: generateId(),
-          type: "text",
-          text: "Select network first using 'network <name>'."
-        };
-
-      const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId)!;
-
-      // NEW SAFETY CHECK: Prevent deployment on Mainnet
-      if (!targetChain.testnet) {
-        return {
-          id: generateId(),
-          type: "text",
-          text: `[!] Deployment is disabled on mainnet (${targetChain.name}). Please switch to a testnet (e.g., Sepolia or Base Sepolia) to deploy tokens.`
-        };
-      }
-
-      const type = args[1]?.toLowerCase();
-      if (type !== "erc20" && type !== "erc721") {
-        return {
-          id: generateId(),
-          type: "text",
-          text: "Usage: deploy <erc20|erc721> <name> <symbol> [decimals]"
-        };
-      }
-
-      const name = args[2];
-      const symbol = args[3];
-      const decimals =
-        type === "erc20" ? (args[4] ? parseInt(args[4]) : 18) : 0;
-
-      if (!name || !symbol) {
-        return {
-          id: generateId(),
-          type: "text",
-          text: `Usage: deploy ${type} <name> <symbol>${type === "erc20" ? " [decimals]" : ""}`
-        };
-      }
-
-      // Prefer a registry-defined implementation; if missing, the widget will
-      // auto-deploy one from the bundled creation bytecode and cache it per chain.
-      const implementation = IMPLEMENTATION_ADDRESSES[activeChainId]?.[
-        type as "erc20" | "erc721"
-      ];
-
-      const deployWidget = (
-        <DeployWidget
-          theme={theme}
-          type={type as "erc20" | "erc721"}
-          name={name}
-          symbol={symbol}
-          decimals={decimals}
-          implementation={implementation}
-          targetChain={targetChain}
-          userAddress={address as Address}
-        />
-      );
-
-      return {
-        id: generateId(),
-        type: "component",
-        component: deployWidget,
-        title: `DEPLOY ${name.toUpperCase()}`
       };
+      const result = await runDig(args);
+      return mapDig(result);
     },
     help: () => ({ id: generateId(), type: "help" }),
     "?": () => ({ id: generateId(), type: "help" }),
@@ -4720,6 +4796,10 @@ export default function TerminalShell({
   commands.style = commands.theme;
   commands.msg = commands.chat;
   commands.messages = commands.inbox;
+  commands.compile = async (args, raw) =>
+    commands.dig(["dig", "compile", ...args.slice(1)], raw);
+  commands.solc = async (args, raw) =>
+    commands.dig(["dig", "ver", ...args.slice(1)], raw);
 
   const availableCommands = Object.keys(commands);
 
@@ -4766,7 +4846,11 @@ export default function TerminalShell({
             id: generateId(),
             type: "text",
             warn: true,
-            text: wrongModeMessage(command)
+            text: wrongModeMessage(
+              command === "dig" && args[1]
+                ? `dig ${args[1].toLowerCase()}`
+                : command
+            )
           } as LogEntry
         ].slice(-MAX_LOGS)
       );
@@ -5031,8 +5115,31 @@ export default function TerminalShell({
           candidates = ["100", "500", "3000", "10000"];
 
           // 9. Deploy Command
-        } else if (command === "deploy" && currentArgIdx === 1) {
+        } else if (command === "dig" && currentArgIdx === 1) {
+          candidates = [
+            "new",
+            "open",
+            "edit",
+            "compile",
+            "ver",
+            "bytecode",
+            "abi",
+            "opcodes",
+            "artifact",
+            "deploy"
+          ];
+        } else if (
+          command === "dig" &&
+          currentArgIdx === 2 &&
+          rawArgs[1]?.toLowerCase() === "deploy"
+        ) {
           candidates = ["erc20", "erc721"];
+        } else if (
+          command === "dig" &&
+          currentArgIdx === 2 &&
+          rawArgs[1]?.toLowerCase() === "ver"
+        ) {
+          candidates = ["0.8.37", "0.8.28", "0.8.26", "0.8.24", "0.8.20"];
 
           // 10. Standard Token Resolution
         } else if (
