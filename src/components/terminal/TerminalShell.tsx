@@ -5819,7 +5819,7 @@ export default function TerminalShell({
                   onPin={onPin}
                   pinnedIds={new Set(pinned.map((p) => p.id))}
                   mode={terminalMode}
-                  narrow={narrow}
+                  narrow={narrow || band === "stack"}
                   hasActiveChannel={!!activeChatChannel}
                   onFillPrompt={(text) => {
                     setInput(text);

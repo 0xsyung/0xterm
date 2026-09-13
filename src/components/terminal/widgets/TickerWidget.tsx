@@ -39,7 +39,7 @@ export default function TickerWidget({
   data: TickerWidgetData;
   theme: any;
   compact?: boolean;
-  /** Stack / <768 — drop VOL like compact pin (Stephy #49). */
+  /** Drop VOL: width<768 OR layout band stack (short landscape) — Stephy #15/#49. */
   narrow?: boolean;
   onPin?: () => void;
   pinned?: boolean;

@@ -68,4 +68,30 @@ describe("TickerWidget", () => {
     expect(screen.queryByText("VOL 24H")).toBeNull();
     expect(screen.getByText("STALE")).toBeTruthy();
   });
+
+  it("drops VOL when narrow (stack band / <768)", () => {
+    render(
+      <TickerWidget
+        data={{
+          kind: "ticker",
+          widgetId: "ticker:watchlist",
+          rows: [
+            {
+              symbol: "ETH",
+              pairAddress: "0x1",
+              dsChain: "ethereum",
+              priceUsd: 1,
+              change24h: 0,
+              volume24h: 1e6,
+              updatedAt: 1
+            }
+          ]
+        }}
+        theme={theme}
+        narrow
+      />
+    );
+    expect(screen.queryByText("VOL 24H")).toBeNull();
+    expect(screen.getByText("ETH")).toBeTruthy();
+  });
 });
