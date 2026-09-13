@@ -36,14 +36,14 @@ export default defineConfig({
         "src/**/*.test.{ts,tsx}",
       ],
       thresholds: {
-        // Ratchet — measured 2026-09-13 under CI Node after dig debug (#41):
-        // Lines 34.53%, Statements 35.00%, Functions 37.21%, Branches 28.15%.
+        // Ratchet — measured 2026-09-13 under CI Node after ticker (#15):
+        // Lines 36.33%, Statements 36.64%, Functions 39.35%, Branches 30.01%.
         // Prior mistaken dig-local floors (lesson #73). Hard-fail at floor(measured).
         // Climb toward 90% is tracked in #37.
-        lines: 34,
-        statements: 35,
-        functions: 37,
-        branches: 28,
+        lines: 36,
+        statements: 36,
+        functions: 39,
+        branches: 30,
       },
     },
   },

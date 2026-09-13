@@ -12,6 +12,7 @@ import InitializePoolWidget from "./widgets/InitializePoolWidget";
 import AddLiquidityWidget from "./widgets/AddLiquidityWidget";
 import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
+import TickerWidget from "./widgets/TickerWidget";
 import ChatWidget from "./widgets/ChatWidget";
 import BillboardWidget from "./widgets/BillboardWidget";
 import ShareCard from "./widgets/ShareCard";
@@ -38,7 +39,8 @@ export default function TerminalLogList({
   onFillPrompt,
   onRunCommand,
   onLogText,
-  hasActiveChannel = false
+  hasActiveChannel = false,
+  narrow = false
 }: {
   logs: LogEntry[];
   theme: any;
@@ -50,6 +52,7 @@ export default function TerminalLogList({
   onRunCommand?: (cmd: string) => void;
   onLogText?: (text: string, warn?: boolean) => void;
   hasActiveChannel?: boolean;
+  narrow?: boolean;
 }) {
   const explorerUrl =
     SUPPORTED_CHAINS.find((c) => c.id === activeChainId)?.blockExplorers
@@ -72,7 +75,8 @@ export default function TerminalLogList({
                 onRunCommand,
                 onLogText,
                 hasActiveChannel,
-                explorerUrl
+                explorerUrl,
+                narrow
               }
             )}
           </div>
@@ -95,6 +99,7 @@ function renderLog(
     onLogText?: (text: string, warn?: boolean) => void;
     hasActiveChannel?: boolean;
     explorerUrl?: string | null;
+    narrow?: boolean;
   }
 ) {
   if (log.type === "input") {
@@ -142,6 +147,23 @@ function renderLog(
     return <BalanceWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   if (log.type === "portfolio")
     return <PortfolioWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
+  if (log.type === "ticker")
+    return (
+      <TickerWidget
+        data={{
+          kind: "ticker",
+          widgetId: "ticker:watchlist",
+          rows: log.payload?.rows || [],
+          stale: !!log.payload?.stale,
+          symbols: log.payload?.symbols
+        }}
+        theme={theme}
+        narrow={!!actions?.narrow}
+        onPin={() => onPin(log)}
+        pinned={isPinned}
+        liveRefresh
+      />
+    );
   if (log.type === "chat")
     return <ChatWidget {...log.payload} theme={theme} />;
   if (log.type === "billboard")

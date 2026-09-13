@@ -13,7 +13,7 @@ import type { CustomTokenEntry, CustomTokensMap } from "./types";
  * dig-artifact (#39), dig-run (#40), dig-debug (#41) are workshop exceptions. Editor / opcodes / abi are not
  * pinnable. Other component kinds (swap/pool/deploy/export) are stripped.
  */
-export const PINNABLE_KINDS = new Set(["balance", "portfolio", "dig-artifact", "dig-run", "dig-debug"]);
+export const PINNABLE_KINDS = new Set(["balance", "portfolio", "ticker", "dig-artifact", "dig-run", "dig-debug"]);
 
 export const isPinnableLog = (log: {
   type: string;
