@@ -23,6 +23,7 @@ import DigArtifactWidget from "./widgets/DigArtifactWidget";
 import DigAbiWidget from "./widgets/DigAbiWidget";
 import DigOpcodesWidget from "./widgets/DigOpcodesWidget";
 import DigRunWidget from "./widgets/DigRunWidget";
+import DigDebugWidget from "./widgets/DigDebugWidget";
 import DigConfirmWidget from "./widgets/DigConfirmWidget";
 import type { LogEntry, DexProtocol } from "./types";
 import { DEFAULT_MODE, type TerminalMode } from "./mode";
@@ -216,6 +217,19 @@ function renderLog(
         onPin={() => onPin(log)}
         pinned={isPinned}
         onFillPrompt={actions?.onFillPrompt}
+      />
+    );
+  }
+  if (log.type === "dig-debug") {
+    const panel = log.payload?.panel;
+    if (!panel) return null;
+    return (
+      <DigDebugWidget
+        panel={panel}
+        theme={theme}
+        onPin={() => onPin(log)}
+        pinned={isPinned}
+        onCommand={actions?.onRunCommand}
       />
     );
   }

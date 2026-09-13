@@ -1,6 +1,6 @@
 /**
  * @file vm.ts
- * @description In-browser EVM via @ethereumjs/vm — Cancun pin (#40)
+ * @description In-browser EVM via @ethereumjs/vm — Cancun pin (#40/#41)
  * Session-only state. Honest copy: not a live chain. Never touches real keys.
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
@@ -17,6 +17,12 @@ import {
   DIG_VM_HARDFORK,
   DIG_VM_TEST_ACCOUNT
 } from "./constants";
+import {
+  DIG_DEBUG_TRACE_CAP,
+  memoryToHex,
+  normalizeStackWord,
+  type DigTraceStep
+} from "./debug";
 
 export type DigVmCallResult = {
   ok: true;
@@ -28,10 +34,15 @@ export type DigVmCallResult = {
     topics: `0x${string}`[];
     data: `0x${string}`;
   }>;
+  /** Populated when captureTrace is true (#41). */
+  trace?: DigTraceStep[];
+  truncated?: boolean;
 } | {
   ok: false;
   reason: string;
   gasUsed?: bigint;
+  trace?: DigTraceStep[];
+  truncated?: boolean;
 };
 
 type DigVmHandle = {
@@ -92,12 +103,70 @@ function failReason(err: unknown): string {
   return String(msg).split("\n")[0]!.slice(0, 120);
 }
 
+type StepListener = {
+  steps: DigTraceStep[];
+  readonly truncated: boolean;
+  detach: () => void;
+};
+
+function attachStepListener(vm: VM): StepListener {
+  const steps: DigTraceStep[] = [];
+  const state = { truncated: false };
+  const handler = (data: {
+    pc: number;
+    gasLeft: bigint;
+    depth: number;
+    opcode: { name: string };
+    stack: bigint[];
+    memory: Uint8Array;
+    address?: { toString(): string };
+  }, resolve?: (result?: unknown) => void) => {
+    if (steps.length < DIG_DEBUG_TRACE_CAP) {
+      steps.push({
+        pc: data.pc,
+        op: data.opcode.name,
+        gas: data.gasLeft.toString(),
+        depth: data.depth,
+        stack: data.stack.map((w) => normalizeStackWord(w)),
+        memory: memoryToHex(data.memory),
+        address: data.address?.toString()
+      });
+    } else {
+      state.truncated = true;
+    }
+    resolve?.();
+  };
+  const events = vm.evm.events;
+  if (!events) {
+    return {
+      steps,
+      get truncated() {
+        return state.truncated;
+      },
+      detach: () => undefined
+    };
+  }
+  events.on("step", handler as never);
+  return {
+    steps,
+    get truncated() {
+      return state.truncated;
+    },
+    detach: () => {
+      events.off("step", handler as never);
+    }
+  };
+}
+
 export async function vmDeploy(
   creationBytecode: `0x${string}`,
-  value: bigint = 0n
+  value: bigint = 0n,
+  opts?: { captureTrace?: boolean }
 ): Promise<DigVmCallResult> {
+  let listener: StepListener | undefined;
   try {
     const { vm, account } = await ensureVm();
+    if (opts?.captureTrace) listener = attachStepListener(vm);
     const data = hexToBytes(creationBytecode);
     const res = await vm.evm.runCall({
       caller: account,
@@ -106,26 +175,38 @@ export async function vmDeploy(
       gasLimit: 30_000_000n
     });
     const gasUsed = res.execResult.executionGasUsed;
+    const trace = listener
+      ? { trace: listener.steps, truncated: listener.truncated }
+      : {};
     if (res.execResult.exceptionError) {
       return {
         ok: false,
         reason: failReason(res.execResult.exceptionError),
-        gasUsed
+        gasUsed,
+        ...trace
       };
     }
     const created = res.createdAddress;
     if (!created) {
-      return { ok: false, reason: "no contract address", gasUsed };
+      return { ok: false, reason: "no contract address", gasUsed, ...trace };
     }
     return {
       ok: true,
       returnData: bytesToHex(res.execResult.returnValue) as `0x${string}`,
       gasUsed,
       createdAddress: created.toString() as `0x${string}`,
-      logs: mapLogs(res.execResult)
+      logs: mapLogs(res.execResult),
+      ...trace
     };
   } catch (e) {
-    return { ok: false, reason: failReason(e) };
+    return {
+      ok: false,
+      reason: failReason(e),
+      trace: listener?.steps,
+      truncated: listener?.truncated
+    };
+  } finally {
+    listener?.detach();
   }
 }
 
@@ -133,9 +214,12 @@ export async function vmCall(opts: {
   to: `0x${string}`;
   data: `0x${string}`;
   value?: bigint;
+  captureTrace?: boolean;
 }): Promise<DigVmCallResult> {
+  let listener: StepListener | undefined;
   try {
     const { vm, account } = await ensureVm();
+    if (opts.captureTrace) listener = attachStepListener(vm);
     const res = await vm.evm.runCall({
       caller: account,
       to: createAddressFromString(opts.to),
@@ -144,20 +228,32 @@ export async function vmCall(opts: {
       gasLimit: 30_000_000n
     });
     const gasUsed = res.execResult.executionGasUsed;
+    const trace = listener
+      ? { trace: listener.steps, truncated: listener.truncated }
+      : {};
     if (res.execResult.exceptionError) {
       return {
         ok: false,
         reason: failReason(res.execResult.exceptionError),
-        gasUsed
+        gasUsed,
+        ...trace
       };
     }
     return {
       ok: true,
       returnData: bytesToHex(res.execResult.returnValue) as `0x${string}`,
       gasUsed,
-      logs: mapLogs(res.execResult)
+      logs: mapLogs(res.execResult),
+      ...trace
     };
   } catch (e) {
-    return { ok: false, reason: failReason(e) };
+    return {
+      ok: false,
+      reason: failReason(e),
+      trace: listener?.steps,
+      truncated: listener?.truncated
+    };
+  } finally {
+    listener?.detach();
   }
 }

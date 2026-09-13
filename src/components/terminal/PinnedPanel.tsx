@@ -10,6 +10,7 @@ import PortfolioWidget from "./widgets/PortfolioWidget";
 import PriceCard from "./widgets/PriceCard";
 import DigArtifactWidget from "./widgets/DigArtifactWidget";
 import DigRunWidget from "./widgets/DigRunWidget";
+import DigDebugWidget from "./widgets/DigDebugWidget";
 import type { PinnedManifest, ThemeConfig } from "./types";
 
 const REFRESH_INTERVAL = 60;
@@ -134,6 +135,12 @@ function renderPinned(p: PinnedManifest, theme: any) {
         <DigRunWidget panel={payload.panel} theme={theme} compact pinned />
       ) : (
         <div className={`${theme.text}/50`}>run unavailable</div>
+      );
+    case "dig-debug":
+      return payload.panel ? (
+        <DigDebugWidget panel={payload.panel} theme={theme} compact pinned />
+      ) : (
+        <div className={`${theme.text}/50`}>debug unavailable</div>
       );
     default:
       return <div className={`${theme.text}/90 whitespace-pre-wrap`}>{payload.text}</div>;
