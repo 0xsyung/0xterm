@@ -6009,7 +6009,16 @@ export default function TerminalShell({
       {/* TERMINAL CONTENT CONTAINER */}
       <div
         className={`flex-1 flex flex-col pl-[calc(0.75rem_+_env(safe-area-inset-left))] pr-[calc(0.75rem_+_env(safe-area-inset-right))] md:pl-[calc(1.5rem_+_env(safe-area-inset-left))] md:pr-[calc(1.5rem_+_env(safe-area-inset-right))] pb-[calc(1.5rem_+_env(safe-area-inset-bottom))] ${HEADER_PAD[theme.headerStyle]} overflow-hidden relative z-10`}
-        onClick={() => inputRef.current?.focus()}
+        onClick={(e) => {
+          // News/debug widgets retain focus for j/k/Enter (#14 Alex QA).
+          if (
+            e.target instanceof Element &&
+            e.target.closest("[data-retain-focus]")
+          ) {
+            return;
+          }
+          inputRef.current?.focus();
+        }}
       >
         {primaryTab === "social" ? (
           <div className="flex-1 min-h-0 min-w-0 overflow-hidden">

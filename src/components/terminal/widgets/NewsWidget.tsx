@@ -112,6 +112,7 @@ export default function NewsWidget({
     <div
       ref={rootRef}
       tabIndex={0}
+      data-retain-focus=""
       className={shell}
       onFocus={() => setFocused(true)}
       onBlur={(e) => {
@@ -172,8 +173,13 @@ export default function NewsWidget({
                 key={it.id}
                 type="button"
                 onMouseDown={(e) => {
-                  // Select + keep focus: stop bubble to shell prompt-focus onClick.
-                  e.preventDefault();
+                  // Select + keep focus: no preventDefault (fights focus); stop bubble.
+                  e.stopPropagation();
+                  setActiveIdx(idx);
+                  setFocused(true);
+                  rootRef.current?.focus();
+                }}
+                onClick={(e) => {
                   e.stopPropagation();
                   setActiveIdx(idx);
                   setFocused(true);

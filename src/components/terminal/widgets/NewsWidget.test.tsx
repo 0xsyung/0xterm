@@ -98,8 +98,9 @@ describe("NewsWidget", () => {
         theme={theme}
       />
     );
-    const root = container.querySelector("[tabindex=\"0\"]") as HTMLElement;
+    const root = container.querySelector("[data-retain-focus]") as HTMLElement;
     expect(root).toBeTruthy();
+    expect(root.getAttribute("tabindex")).toBe("0");
     const bubble = { click: false, down: false };
     const onBubbleClick = () => {
       bubble.click = true;
@@ -111,6 +112,9 @@ describe("NewsWidget", () => {
     document.body.addEventListener("mousedown", onBubbleDown);
     fireEvent.mouseDown(root);
     fireEvent.click(root);
+    const row = screen.getByRole("button", { name: /Hello/i });
+    fireEvent.mouseDown(row);
+    fireEvent.click(row);
     document.body.removeEventListener("click", onBubbleClick);
     document.body.removeEventListener("mousedown", onBubbleDown);
     expect(bubble.click).toBe(false);
