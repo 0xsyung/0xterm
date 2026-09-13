@@ -12,6 +12,7 @@ import DigArtifactWidget from "./widgets/DigArtifactWidget";
 import DigRunWidget from "./widgets/DigRunWidget";
 import DigDebugWidget from "./widgets/DigDebugWidget";
 import TickerWidget from "./widgets/TickerWidget";
+import NewsWidget from "./widgets/NewsWidget";
 import type { PinnedManifest, ThemeConfig } from "./types";
 
 const REFRESH_INTERVAL = 60;
@@ -135,6 +136,22 @@ function renderPinned(p: PinnedManifest, theme: any) {
             rows: payload.rows || [],
             stale: !!payload.stale,
             symbols: payload.symbols
+          }}
+          theme={theme}
+          compact
+        />
+      );
+    case "news":
+      return (
+        <NewsWidget
+          data={{
+            kind: "news",
+            widgetId: payload.widgetId || `news:${payload.tag || "all"}`,
+            tag: payload.tag || "",
+            items: payload.items || [],
+            fetchedAt: payload.fetchedAt || Date.now(),
+            usedRss2json: !!payload.usedRss2json,
+            missing: payload.missing || []
           }}
           theme={theme}
           compact

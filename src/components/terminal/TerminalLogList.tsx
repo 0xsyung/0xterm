@@ -13,6 +13,7 @@ import AddLiquidityWidget from "./widgets/AddLiquidityWidget";
 import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
 import TickerWidget from "./widgets/TickerWidget";
+import NewsWidget from "./widgets/NewsWidget";
 import ChatWidget from "./widgets/ChatWidget";
 import BillboardWidget from "./widgets/BillboardWidget";
 import ShareCard from "./widgets/ShareCard";
@@ -40,7 +41,8 @@ export default function TerminalLogList({
   onRunCommand,
   onLogText,
   hasActiveChannel = false,
-  narrow = false
+  narrow = false,
+  onFocusPrompt
 }: {
   logs: LogEntry[];
   theme: any;
@@ -53,6 +55,7 @@ export default function TerminalLogList({
   onLogText?: (text: string, warn?: boolean) => void;
   hasActiveChannel?: boolean;
   narrow?: boolean;
+  onFocusPrompt?: () => void;
 }) {
   const explorerUrl =
     SUPPORTED_CHAINS.find((c) => c.id === activeChainId)?.blockExplorers
@@ -76,7 +79,8 @@ export default function TerminalLogList({
                 onLogText,
                 hasActiveChannel,
                 explorerUrl,
-                narrow
+                narrow,
+                onFocusPrompt
               }
             )}
           </div>
@@ -100,6 +104,7 @@ function renderLog(
     hasActiveChannel?: boolean;
     explorerUrl?: string | null;
     narrow?: boolean;
+    onFocusPrompt?: () => void;
   }
 ) {
   if (log.type === "input") {
@@ -162,6 +167,27 @@ function renderLog(
         onPin={() => onPin(log)}
         pinned={isPinned}
         liveRefresh
+      />
+    );
+  if (log.type === "news")
+    return (
+      <NewsWidget
+        data={{
+          kind: "news",
+          widgetId: log.payload?.widgetId || `news:${log.payload?.tag || "all"}`,
+          tag: log.payload?.tag || "",
+          items: log.payload?.items || [],
+          fetchedAt: log.payload?.fetchedAt || Date.now(),
+          usedRss2json: !!log.payload?.usedRss2json,
+          missing: log.payload?.missing || [],
+          loading: !!log.payload?.loading
+        }}
+        theme={theme}
+        narrow={!!actions?.narrow}
+        onPin={() => onPin(log)}
+        pinned={isPinned}
+        autoFocus={!!log.payload?.autoFocus}
+        onFocusPrompt={actions?.onFocusPrompt}
       />
     );
   if (log.type === "chat")

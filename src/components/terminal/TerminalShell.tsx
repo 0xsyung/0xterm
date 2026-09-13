@@ -102,6 +102,17 @@ import {
   writeTickerPrefs,
   type TickerRow
 } from "./ticker";
+import {
+  NEWS_ERROR,
+  NEWS_PAGE_SIZE,
+  NEWS_REFRESH_SEC,
+  fetchNewsHeadlines,
+  filterByTag,
+  newsPinKey,
+  pageNewsItems,
+  parseNewsCommand,
+  type NewsSession
+} from "./news";
 import { getPoolPriceRatio } from "./poolPrice";
 import { fetchBillboard, fetchChatThread } from "./pinLoaders";
 import {
@@ -585,9 +596,18 @@ export default function TerminalShell({
         return next;
       }
       // one pinned widget per kind — can't pin a second inbox/board, etc.
-      // (price is exempt so different price params can each be pinned).
-      if (prev.some((p) => p.kind === log.type) && log.type !== "component")
+      // (price is exempt so different price params can each be pinned;
+      //  news is exempt so different tags can each be pinned — #14).
+      if (
+        prev.some((p) => p.kind === log.type) &&
+        log.type !== "component" &&
+        log.type !== "news"
+      )
         return prev;
+      if (log.type === "news") {
+        const wid = newsPinKey(log.payload?.tag);
+        if (prev.some((p) => p.kind === "news" && p.widgetId === wid)) return prev;
+      }
       if (log.type === "component") {
         const cd = log.componentData;
         const key = pricePinKey(cd, activeChainId, activeDexId);
@@ -700,6 +720,31 @@ export default function TerminalShell({
             rows: out.rows,
             stale: out.stale,
             symbols: m.payload?.symbols || rows.map((r) => r.symbol)
+          };
+        };
+        continue;
+      }
+      if (m.kind === "news") {
+        refs[m.id] = async () => {
+          const tagNow =
+            (m.pairOrSymbols as string) ||
+            (m.payload?.tag as string) ||
+            "";
+          const realTag = tagNow === "all" ? "" : tagNow;
+          const fetched = await fetchNewsHeadlines();
+          if (fetched.error === "NEWS_TRANSPORT") {
+            throw new Error(NEWS_ERROR.NEWS_TRANSPORT);
+          }
+          const filtered = filterByTag(fetched.items, realTag);
+          const page = pageNewsItems(filtered, 0);
+          return {
+            kind: "news",
+            tag: realTag,
+            widgetId: newsPinKey(realTag),
+            items: page,
+            fetchedAt: Date.now(),
+            usedRss2json: fetched.usedRss2json,
+            missing: fetched.missing
           };
         };
         continue;
@@ -917,6 +962,46 @@ export default function TerminalShell({
           symbols: current?.payload?.symbols || base.payload?.symbols || rows.map((r) => r.symbol)
         };
       });
+    } else if (log.type === "news") {
+      const tag = (log.payload?.tag as string) || "";
+      base.title = tag ? `NEWS ${tag.toUpperCase()}` : "NEWS";
+      base.widgetId = newsPinKey(tag);
+      base.pairOrSymbols = tag || "all";
+      base.refreshSec = NEWS_REFRESH_SEC;
+      base.payload = {
+        kind: "news",
+        tag,
+        widgetId: newsPinKey(tag),
+        items: log.payload?.items || [],
+        fetchedAt: log.payload?.fetchedAt || Date.now(),
+        usedRss2json: !!log.payload?.usedRss2json,
+        missing: log.payload?.missing || []
+      };
+      registerPinRefresh(log.id, async () => {
+        const current = pinnedRef.current.find((x) => x.id === log.id);
+        const tagNow =
+          (current?.pairOrSymbols as string) ||
+          (current?.payload?.tag as string) ||
+          tag ||
+          "";
+        const realTag = tagNow === "all" ? "" : tagNow;
+        // Identity is the tag — reuse allowlist + tag; never scrape a headline.
+        const fetched = await fetchNewsHeadlines();
+        if (fetched.error === "NEWS_TRANSPORT") {
+          throw new Error(NEWS_ERROR.NEWS_TRANSPORT);
+        }
+        const filtered = filterByTag(fetched.items, realTag);
+        const page = pageNewsItems(filtered, 0);
+        return {
+          kind: "news",
+          tag: realTag,
+          widgetId: newsPinKey(realTag),
+          items: page,
+          fetchedAt: Date.now(),
+          usedRss2json: fetched.usedRss2json,
+          missing: fetched.missing
+        };
+      });
     }
 
     return base;
@@ -950,6 +1035,21 @@ export default function TerminalShell({
           }
         };
       }
+      // news (#14): persist tag identity + last page (titles only)
+      if (rest.kind === "news" && payload) {
+        return {
+          ...rest,
+          payload: {
+            kind: "news",
+            tag: payload.tag || "",
+            widgetId: payload.widgetId || newsPinKey(payload.tag),
+            items: payload.items || [],
+            fetchedAt: payload.fetchedAt || Date.now(),
+            usedRss2json: !!payload.usedRss2json,
+            missing: payload.missing || []
+          }
+        };
+      }
       return rest;
     });
     savePreference("pinned", serializable);
@@ -958,6 +1058,8 @@ export default function TerminalShell({
   // True once prefs have been loaded on connect. Persisting logs/history before
   // that would clobber saved scrollback with the default banner lines.
   const prefsLoaded = useRef(false);
+  /** Session buffer for news paging / pin (#14). */
+  const newsSessionRef = useRef<NewsSession | null>(null);
 
   // Persist the terminal scrollback (logs) and up/down command history so the
   // screen looks the same after a refresh. `component`/`componentData` React
@@ -3927,6 +4029,182 @@ export default function TerminalShell({
         };
       }
     },
+    news: async (args) => {
+      const parsed = parseNewsCommand(args);
+
+      if (parsed.op === "pin") {
+        const sess = newsSessionRef.current;
+        if (!sess) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: NEWS_ERROR.NEWS_NO_PAGE,
+            warn: true
+          };
+        }
+        const tag = sess.tag || "";
+        const wid = newsPinKey(tag);
+        const page = pageNewsItems(filterByTag(sess.items, tag), sess.page);
+        const fakeLog: LogEntry = {
+          id: generateId(),
+          type: "news",
+          title: tag ? `NEWS ${tag.toUpperCase()}` : "NEWS",
+          payload: {
+            kind: "news",
+            tag,
+            widgetId: wid,
+            items: page,
+            fetchedAt: sess.fetchedAt,
+            usedRss2json: sess.usedRss2json,
+            missing: sess.missing
+          }
+        };
+        onPin(fakeLog);
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[✓] pinned ${wid}`
+        };
+      }
+
+      if (parsed.op === "more") {
+        const sess = newsSessionRef.current;
+        if (!sess) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: NEWS_ERROR.NEWS_NO_PAGE,
+            warn: true
+          };
+        }
+        const filtered = filterByTag(sess.items, sess.tag);
+        const nextPage = sess.page + 1;
+        const start = nextPage * NEWS_PAGE_SIZE;
+        if (start >= filtered.length) {
+          // buffer exhausted — refetch (rate cache may reuse)
+          const fetched = await fetchNewsHeadlines();
+          if (fetched.error === "NEWS_TRANSPORT") {
+            return {
+              id: generateId(),
+              type: "text",
+              text: NEWS_ERROR.NEWS_TRANSPORT,
+              warn: true
+            };
+          }
+          if (fetched.error === "NEWS_EMPTY" || fetched.items.length === 0) {
+            return {
+              id: generateId(),
+              type: "text",
+              text: NEWS_ERROR.NEWS_EMPTY,
+              warn: true
+            };
+          }
+          newsSessionRef.current = {
+            fetchedAt: Date.now(),
+            items: fetched.items,
+            tag: sess.tag,
+            page: 0,
+            usedRss2json: fetched.usedRss2json,
+            missing: fetched.missing
+          };
+          const page = pageNewsItems(
+            filterByTag(fetched.items, sess.tag),
+            0
+          );
+          return {
+            id: generateId(),
+            type: "news",
+            title: sess.tag ? `NEWS ${sess.tag.toUpperCase()}` : "NEWS",
+            payload: {
+              kind: "news",
+              tag: sess.tag,
+              widgetId: newsPinKey(sess.tag),
+              items: page,
+              fetchedAt: newsSessionRef.current.fetchedAt,
+              usedRss2json: fetched.usedRss2json,
+              missing: fetched.missing,
+              autoFocus: true
+            }
+          };
+        }
+        sess.page = nextPage;
+        const page = pageNewsItems(filtered, nextPage);
+        return {
+          id: generateId(),
+          type: "news",
+          title: sess.tag ? `NEWS ${sess.tag.toUpperCase()}` : "NEWS",
+          payload: {
+            kind: "news",
+            tag: sess.tag,
+            widgetId: newsPinKey(sess.tag),
+            items: page,
+            fetchedAt: sess.fetchedAt,
+            usedRss2json: sess.usedRss2json,
+            missing: sess.missing,
+            autoFocus: true
+          }
+        };
+      }
+
+      // show / tag filter
+      const tag = parsed.op === "show" ? parsed.tag : "";
+      try {
+        const fetched = await fetchNewsHeadlines();
+        if (fetched.error === "NEWS_TRANSPORT") {
+          return {
+            id: generateId(),
+            type: "text",
+            text: NEWS_ERROR.NEWS_TRANSPORT,
+            warn: true
+          };
+        }
+        if (fetched.error === "NEWS_EMPTY" || fetched.items.length === 0) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: NEWS_ERROR.NEWS_EMPTY,
+            warn: true
+          };
+        }
+        const filtered = filterByTag(fetched.items, tag);
+        newsSessionRef.current = {
+          fetchedAt: Date.now(),
+          items: fetched.items,
+          tag,
+          page: 0,
+          usedRss2json: fetched.usedRss2json,
+          missing: fetched.missing
+        };
+        // optional lastTag convenience (no-ops when disconnected)
+        if (tag) savePreference("news", { lastTag: tag });
+        else savePreference("news", { lastTag: undefined });
+
+        const page = pageNewsItems(filtered, 0);
+        // Empty filter still shows the widget with unmatched message (Stephy)
+        return {
+          id: generateId(),
+          type: "news",
+          title: tag ? `NEWS ${tag.toUpperCase()}` : "NEWS",
+          payload: {
+            kind: "news",
+            tag,
+            widgetId: newsPinKey(tag),
+            items: page,
+            fetchedAt: newsSessionRef.current.fetchedAt,
+            usedRss2json: fetched.usedRss2json,
+            missing: fetched.missing,
+            autoFocus: true
+          }
+        };
+      } catch (e: any) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: NEWS_ERROR.NEWS_TRANSPORT,
+          warn: true
+        };
+      }
+    },
     pool: async (args) => {
       if (!activeChainId)
         return {
@@ -5731,7 +6009,16 @@ export default function TerminalShell({
       {/* TERMINAL CONTENT CONTAINER */}
       <div
         className={`flex-1 flex flex-col pl-[calc(0.75rem_+_env(safe-area-inset-left))] pr-[calc(0.75rem_+_env(safe-area-inset-right))] md:pl-[calc(1.5rem_+_env(safe-area-inset-left))] md:pr-[calc(1.5rem_+_env(safe-area-inset-right))] pb-[calc(1.5rem_+_env(safe-area-inset-bottom))] ${HEADER_PAD[theme.headerStyle]} overflow-hidden relative z-10`}
-        onClick={() => inputRef.current?.focus()}
+        onClick={(e) => {
+          // News/debug widgets retain focus for j/k/Enter (#14 Alex QA).
+          if (
+            e.target instanceof Element &&
+            e.target.closest("[data-retain-focus]")
+          ) {
+            return;
+          }
+          inputRef.current?.focus();
+        }}
       >
         {primaryTab === "social" ? (
           <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
@@ -5821,6 +6108,9 @@ export default function TerminalShell({
                   mode={terminalMode}
                   narrow={narrow || band === "stack"}
                   hasActiveChannel={!!activeChatChannel}
+                  onFocusPrompt={() => {
+                    inputRef.current?.focus();
+                  }}
                   onFillPrompt={(text) => {
                     setInput(text);
                     inputRef.current?.focus();
