@@ -22,6 +22,8 @@ import PriceCard from "./widgets/PriceCard";
 import DigArtifactWidget from "./widgets/DigArtifactWidget";
 import DigAbiWidget from "./widgets/DigAbiWidget";
 import DigOpcodesWidget from "./widgets/DigOpcodesWidget";
+import DigRunWidget from "./widgets/DigRunWidget";
+import DigConfirmWidget from "./widgets/DigConfirmWidget";
 import type { LogEntry, DexProtocol } from "./types";
 import { DEFAULT_MODE, type TerminalMode } from "./mode";
 
@@ -201,6 +203,92 @@ function renderLog(
         truncated={!!log.payload?.truncated}
         theme={theme}
       />
+    );
+  }
+
+  if (log.type === "dig-run") {
+    const panel = log.payload?.panel;
+    if (!panel) return null;
+    return (
+      <DigRunWidget
+        panel={panel}
+        theme={theme}
+        onPin={() => onPin(log)}
+        pinned={isPinned}
+        onFillPrompt={actions?.onFillPrompt}
+      />
+    );
+  }
+  if (log.type === "dig-confirm") {
+    return log.component || null;
+  }
+  if (log.type === "dig-ls") {
+    const rows = log.payload?.rows || [];
+    if (rows.length === 0) {
+      return (
+        <div className={`text-[10px] my-2 ${theme.muted}`}>
+          {log.payload?.emptyMuted || "No deploys this session."}
+        </div>
+      );
+    }
+    return (
+      <div className={`text-[10px] my-2 space-y-1 ${theme.text}`}>
+        {rows.map((row: any) => (
+          <button
+            key={row.address}
+            type="button"
+            className={`block w-full text-left tabular-nums pointer-coarse:min-h-[44px] max-md:min-h-[44px] [@media(hover:none)]:min-h-[44px]`}
+            onClick={() => actions?.onFillPrompt?.(`dig at ${row.address} `)}
+          >
+            <span className="font-bold">{row.name}</span>{" "}
+            <span className="font-mono">{row.address?.slice?.(0, 6)}…{row.address?.slice?.(-4)}</span>{" "}
+            <span className={theme.muted}>{row.envLabel}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+  if (log.type === "dig-fn") {
+    const view = log.payload?.view || [];
+    const write = log.payload?.write || [];
+    return (
+      <div className={`text-[10px] my-2 space-y-2 ${theme.text}`}>
+        <div className={`font-bold ${theme.primary}`}>{log.payload?.name}</div>
+        {view.length > 0 && (
+          <div>
+            <div className={theme.muted}>VIEW</div>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {view.map((fn: string) => (
+                <button
+                  key={`v-${fn}`}
+                  type="button"
+                  className={`px-2 border ${theme.border} pointer-coarse:min-h-[44px] max-md:min-h-[44px] [@media(hover:none)]:min-h-[44px]`}
+                  onClick={() => actions?.onFillPrompt?.(`dig call ${fn} `)}
+                >
+                  {fn}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {write.length > 0 && (
+          <div>
+            <div className={theme.muted}>WRITE</div>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {write.map((fn: string) => (
+                <button
+                  key={`w-${fn}`}
+                  type="button"
+                  className={`px-2 border ${theme.border} pointer-coarse:min-h-[44px] max-md:min-h-[44px] [@media(hover:none)]:min-h-[44px]`}
+                  onClick={() => actions?.onFillPrompt?.(`dig send ${fn} `)}
+                >
+                  {fn}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 

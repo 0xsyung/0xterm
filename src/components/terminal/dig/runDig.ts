@@ -1,10 +1,17 @@
 /**
  * @file runDig.ts
- * @description Dig command router — pure-ish results for TerminalShell (#39)
+ * @description Dig command router — compile (#39) + run/deploy/call (#40)
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
-import { DIG_ERROR, DIG_SUBCOMMANDS } from "./constants";
+import type { Address } from "viem";
+import { isAddress } from "viem";
+import {
+  DIG_ERROR,
+  DIG_RESERVED_DEPLOY,
+  DIG_SUBCOMMANDS,
+  type DigEnvKind
+} from "./constants";
 import {
   digArtifactPinTitle,
   formatCompileSummary,
@@ -30,6 +37,36 @@ import {
   formatVersionList,
   pickSolcVersion
 } from "./version";
+import { extractCallArgs, extractDeployArgs } from "./args";
+import {
+  checksumAddr,
+  decodeDigLogs,
+  decodeDigReturn,
+  encodeDigCall,
+  encodeDigDeploy,
+  findAbiFunction,
+  formatReturnValues,
+  isViewLike,
+  truncateAddress,
+  truncateHex
+} from "./encode";
+import { formatGas, formatGasEstimateLine } from "./gas";
+import {
+  addDigDeployment,
+  getActiveDigDeployment,
+  getDigEnv,
+  getLastDigPanel,
+  getLastDigReceipt,
+  listDigDeployments,
+  setActiveDigDeployment,
+  setDigEnv,
+  setLastDigPanel,
+  setLastDigReceipt,
+  envLabel,
+  type DigDeployment,
+  type DigRunPanelState
+} from "./session";
+import { digVmHardforkLabel, digVmTestAccount, vmCall, vmDeploy } from "./vm";
 
 export type DigTextResult = {
   kind: "text";
@@ -77,6 +114,43 @@ export type DigMultiText = {
   lines: Array<{ text: string; warn?: boolean; muted?: boolean }>;
 };
 
+export type DigRunResult = {
+  kind: "run";
+  panel: DigRunPanelState;
+};
+
+export type DigConfirmResult = {
+  kind: "confirm";
+  to: Address;
+  data: `0x${string}`;
+  dataSummary: string;
+  value: bigint;
+  gasEstimate: bigint;
+  /** After user confirms — apply on chain. */
+  intent: "deploy" | "send";
+  contractName: string;
+  fn?: string;
+  abi: DigContractArtifact["abi"];
+  artifact?: DigContractArtifact;
+};
+
+export type DigLsResult = {
+  kind: "ls";
+  rows: Array<{
+    name: string;
+    address: Address;
+    envLabel: string;
+  }>;
+  emptyMuted?: string;
+};
+
+export type DigFnResult = {
+  kind: "fn";
+  name: string;
+  view: string[];
+  write: string[];
+};
+
 export type DigResult =
   | DigTextResult
   | DigEditorResult
@@ -85,17 +159,77 @@ export type DigResult =
   | DigOpcodesResult
   | DigDeployResult
   | DigMultiText
+  | DigRunResult
+  | DigConfirmResult
+  | DigLsResult
+  | DigFnResult
   | DigResult[];
+
+export type DigRunContext = {
+  isConnected: boolean;
+  address?: Address;
+  chainId?: number;
+  chainName?: string;
+  /** eth_call / estimateGas / simulate on live chain */
+  chainCall?: (args: {
+    to?: Address;
+    data: `0x${string}`;
+    value?: bigint;
+    account?: Address;
+  }) => Promise<{ returnData: `0x${string}`; gasUsed?: bigint }>;
+  chainEstimateGas?: (args: {
+    to?: Address;
+    data: `0x${string}`;
+    value?: bigint;
+    account?: Address;
+  }) => Promise<bigint>;
+  /** Pre-flight sim; throw/return revert reason */
+  chainSimulate?: (args: {
+    to?: Address;
+    data: `0x${string}`;
+    value?: bigint;
+    account?: Address;
+  }) => Promise<{ ok: true } | { ok: false; reason: string }>;
+};
 
 function usage(): DigTextResult {
   return {
     kind: "text",
-    text: "Usage: dig [new|open|edit|compile|ver|bytecode|abi|opcodes|artifact|deploy] …"
+    text: "Usage: dig [new|open|edit|compile|ver|bytecode|abi|opcodes|artifact|deploy|env|at|ls|fn|call|send|logs|gas|receipt] …"
   };
 }
 
-export async function runDig(args: string[]): Promise<DigResult> {
-  // args[0] is "dig" | "compile" | "solc" (aliases normalized by caller)
+function warn(text: string): DigTextResult {
+  return { kind: "text", text, warn: true };
+}
+
+function text(t: string, opts?: { muted?: boolean }): DigTextResult {
+  return { kind: "text", text: t, muted: opts?.muted };
+}
+
+function panelFrom(
+  d: DigDeployment,
+  patch: Partial<DigRunPanelState>
+): DigRunPanelState {
+  const prev = getLastDigPanel();
+  const base: DigRunPanelState = {
+    name: d.name,
+    address: d.address,
+    env: d.env,
+    chainName: d.chainName,
+    events: [],
+    gasLabel: "GAS USED",
+    gas: prev?.gas || "0",
+    ...patch
+  };
+  setLastDigPanel(base);
+  return base;
+}
+
+export async function runDig(
+  args: string[],
+  ctx: DigRunContext = { isConnected: false }
+): Promise<DigResult> {
   const argv = [...args];
   let head = (argv[0] || "dig").toLowerCase();
   if (head === "compile") {
@@ -146,7 +280,7 @@ export async function runDig(args: string[]): Promise<DigResult> {
   if (sub === "edit") {
     const existing = await loadDigSource();
     if (!existing || !existing.content.trim()) {
-      return { kind: "text", text: DIG_ERROR.no_source, warn: true };
+      return warn(DIG_ERROR.no_source);
     }
     return {
       kind: "editor",
@@ -164,19 +298,16 @@ export async function runDig(args: string[]): Promise<DigResult> {
     }
     const picked = pickSolcVersion(raw);
     if (!picked.ok) {
-      return { kind: "text", text: picked.reason, warn: true };
+      return warn(picked.reason);
     }
     await saveDigSolcVersion(picked.version);
-    return {
-      kind: "text",
-      text: `[✓] solc → ${picked.version}`
-    };
+    return { kind: "text", text: `[✓] solc → ${picked.version}` };
   }
 
   if (sub === "compile") {
     const source = await loadDigSource();
     if (!source || !source.content.trim()) {
-      return { kind: "text", text: DIG_ERROR.no_source, warn: true };
+      return warn(DIG_ERROR.no_source);
     }
     const ver = await loadDigSolcVersion();
     const result = await compileDigSource({
@@ -202,7 +333,7 @@ export async function runDig(args: string[]): Promise<DigResult> {
         await saveDigArtifacts([]);
         return { kind: "multi-text", lines };
       }
-      return { kind: "text", text: result.message, warn: true };
+      return warn(result.message);
     }
     await saveDigArtifacts(result.artifacts);
     const summary = formatCompileSummary(
@@ -238,7 +369,7 @@ export async function runDig(args: string[]): Promise<DigResult> {
     );
     const art = pickArtifact(artifacts, nameArg);
     if (!art) {
-      return { kind: "text", text: DIG_ERROR.no_artifact, warn: true };
+      return warn(DIG_ERROR.no_artifact);
     }
     if (sub === "bytecode") {
       return {
@@ -266,27 +397,476 @@ export async function runDig(args: string[]): Promise<DigResult> {
     };
   }
 
+  // —— #40 run surface ——
+  if (sub === "env") {
+    const which = (argv[2] || "").toLowerCase() as DigEnvKind | "";
+    if (!which) {
+      const env = getDigEnv();
+      if (env === "vm") {
+        return {
+          kind: "multi-text",
+          lines: [
+            { text: `[✓] dig env → vm (hardfork ${digVmHardforkLabel()})` },
+            { text: "VM · not a live chain", muted: true },
+            { text: `test account ${digVmTestAccount()}`, muted: true }
+          ]
+        };
+      }
+      const label = env === "injected" ? "INJECTED" : "LOCAL";
+      const chain = ctx.chainName ? ` · ${ctx.chainName}` : "";
+      return text(`[✓] dig env → ${env}${chain || ` (${label})`}`);
+    }
+    if (which !== "vm" && which !== "injected" && which !== "local") {
+      return warn("Usage: dig env [vm|injected|local]");
+    }
+    if (which === "injected" || which === "local") {
+      if (!ctx.isConnected || !ctx.address) {
+        return warn(DIG_ERROR.need_wallet);
+      }
+    }
+    setDigEnv(which);
+    if (which === "vm") {
+      return {
+        kind: "multi-text",
+        lines: [
+          { text: `[✓] dig env → vm (hardfork ${digVmHardforkLabel()})` },
+          { text: "VM · not a live chain", muted: true }
+        ]
+      };
+    }
+    return text(
+      `[✓] dig env → ${which}${ctx.chainName ? ` · ${ctx.chainName}` : ""}`
+    );
+  }
+
   if (sub === "deploy") {
     const type = (argv[2] || "").toLowerCase();
-    if (type !== "erc20" && type !== "erc721") {
+    if (type === "erc20" || type === "erc721") {
+      const name = argv[3];
+      const symbol = argv[4];
+      const decimals =
+        type === "erc20" ? (argv[5] ? parseInt(argv[5], 10) : 18) : 0;
+      if (!name || !symbol) {
+        return warn(
+          `Usage: dig deploy ${type} <name> <symbol>${type === "erc20" ? " [decimals]" : ""}`
+        );
+      }
+      return { kind: "deploy", type, name, symbol, decimals };
+    }
+
+    // Artifact deploy path
+    const artifacts = await loadDigArtifacts();
+    if (!artifacts.length) return warn(DIG_ERROR.no_artifact);
+
+    const parsed = extractDeployArgs(argv);
+    if (parsed.error === "arg") return warn(DIG_ERROR.arg);
+
+    let contractArg = parsed.contractArg;
+    // If first token looks like reserved name used as contract
+    if (
+      contractArg &&
+      (DIG_RESERVED_DEPLOY as readonly string[]).includes(
+        contractArg.toLowerCase()
+      )
+    ) {
+      // Could be bare `dig deploy erc20` without name — already handled above when type matches
+      // Collision: compiled contract named erc20
+      const named = pickArtifact(artifacts, contractArg);
+      if (named) {
+        return warn(DIG_ERROR.reserved(contractArg.toLowerCase()));
+      }
+    }
+
+    const art = pickArtifact(artifacts, contractArg);
+    if (!art) {
+      if (!contractArg) return warn(DIG_ERROR.no_artifact);
+      return warn(
+        `Usage: dig deploy [Contract] [--args …]  or  dig deploy <erc20|erc721> …`
+      );
+    }
+    // Reserved name collision when deploying by FQN still OK; by bare reserved refused
+    if (
+      (DIG_RESERVED_DEPLOY as readonly string[]).includes(
+        art.name.toLowerCase()
+      ) &&
+      (!contractArg || !contractArg.includes(":"))
+    ) {
+      return warn(DIG_ERROR.reserved(art.name.toLowerCase()));
+    }
+
+    const bytecode = (
+      art.creationBytecode.startsWith("0x")
+        ? art.creationBytecode
+        : `0x${art.creationBytecode}`
+    ) as `0x${string}`;
+    const encoded = encodeDigDeploy({
+      abi: art.abi,
+      bytecode,
+      argTokens: parsed.ctorArgs
+    });
+    if (!encoded.ok) return warn(DIG_ERROR.arg);
+
+    const env = getDigEnv();
+    const value = parsed.valueWei ?? 0n;
+
+    if (env === "vm") {
+      const res = await vmDeploy(encoded.data, value);
+      if (!res.ok) {
+        return warn(DIG_ERROR.vm_fail(res.reason));
+      }
+      const addr = checksumAddr(res.createdAddress!);
+      const events = decodeDigLogs(art.abi, res.logs);
+      const dep: DigDeployment = {
+        name: art.name,
+        address: addr,
+        env: "vm",
+        abi: art.abi,
+        artifact: art
+      };
+      addDigDeployment(dep);
+      setLastDigReceipt({
+        status: "success",
+        gasUsed: res.gasUsed,
+        contractAddress: addr,
+        logs: events,
+        fn: "constructor",
+        argsSummary: parsed.ctorArgs.join(" ")
+      });
+      const panel = panelFrom(dep, {
+        lastFn: "constructor",
+        argsSummary: parsed.ctorArgs.join(" ") || undefined,
+        events,
+        gasLabel: "GAS USED",
+        gas: formatGas(res.gasUsed)
+      });
+      return { kind: "run", panel };
+    }
+
+    // Chain path — need wallet
+    if (!ctx.isConnected || !ctx.address) {
+      return warn(DIG_ERROR.need_wallet);
+    }
+    let gasEstimate = 500_000n;
+    try {
+      if (ctx.chainEstimateGas) {
+        gasEstimate = await ctx.chainEstimateGas({
+          data: encoded.data,
+          value,
+          account: ctx.address
+        });
+      }
+    } catch (e) {
+      const reason = e instanceof Error ? e.message.split("\n")[0]! : "estimate failed";
+      return warn(DIG_ERROR.reverted(reason.slice(0, 120)));
+    }
+    if (ctx.chainSimulate) {
+      const sim = await ctx.chainSimulate({
+        data: encoded.data,
+        value,
+        account: ctx.address
+      });
+      if (!sim.ok) return warn(DIG_ERROR.reverted(sim.reason));
+    }
+    return {
+      kind: "confirm",
+      to: "0x0000000000000000000000000000000000000000" as Address,
+      data: encoded.data,
+      dataSummary: `${art.name} constructor${parsed.ctorArgs.length ? `(${parsed.ctorArgs.join(", ")})` : ""}`,
+      value,
+      gasEstimate,
+      intent: "deploy",
+      contractName: art.name,
+      abi: art.abi,
+      artifact: art
+    };
+  }
+
+  if (sub === "at") {
+    const addrRaw = argv[2];
+    if (!addrRaw || !isAddress(addrRaw)) {
+      return warn("Usage: dig at <address> [Contract]");
+    }
+    const artifacts = await loadDigArtifacts();
+    const art = pickArtifact(artifacts, argv[3]);
+    if (!art) return warn(DIG_ERROR.no_artifact);
+    const env = getDigEnv();
+    if ((env === "injected" || env === "local") && (!ctx.isConnected || !ctx.address)) {
+      return warn(DIG_ERROR.need_wallet);
+    }
+    const dep: DigDeployment = {
+      name: art.name,
+      address: checksumAddr(addrRaw),
+      env,
+      chainId: ctx.chainId,
+      chainName: ctx.chainName,
+      abi: art.abi,
+      artifact: art
+    };
+    addDigDeployment(dep);
+    const panel = panelFrom(dep, {
+      lastFn: undefined,
+      argsSummary: undefined,
+      returnValues: undefined,
+      events: [],
+      gasLabel: "ESTIMATE",
+      gas: "—"
+    });
+    return { kind: "run", panel };
+  }
+
+  if (sub === "ls") {
+    const list = listDigDeployments();
+    if (list.length === 0) {
       return {
-        kind: "text",
-        text: "Usage: dig deploy <erc20|erc721> <name> <symbol> [decimals]",
-        warn: true
+        kind: "ls",
+        rows: [],
+        emptyMuted: "No deploys this session."
       };
     }
-    const name = argv[3];
-    const symbol = argv[4];
-    const decimals =
-      type === "erc20" ? (argv[5] ? parseInt(argv[5], 10) : 18) : 0;
-    if (!name || !symbol) {
-      return {
-        kind: "text",
-        text: `Usage: dig deploy ${type} <name> <symbol>${type === "erc20" ? " [decimals]" : ""}`,
-        warn: true
-      };
+    return {
+      kind: "ls",
+      rows: list.map((d) => ({
+        name: d.name,
+        address: d.address,
+        envLabel: d.env === "vm" ? "VM" : d.chainName || d.env.toUpperCase()
+      }))
+    };
+  }
+
+  if (sub === "fn") {
+    const artifacts = await loadDigArtifacts();
+    const active = getActiveDigDeployment();
+    const art =
+      pickArtifact(artifacts, argv[2]) ||
+      active?.artifact ||
+      (active ? { name: active.name, abi: active.abi } as DigContractArtifact : null);
+    if (!art) {
+      const a = active;
+      if (!a) return warn(DIG_ERROR.no_address);
+      const view: string[] = [];
+      const write: string[] = [];
+      for (const item of a.abi) {
+        if (item?.type !== "function" || !item.name) continue;
+        const fn = item as { name: string; stateMutability?: string };
+        if (fn.stateMutability === "view" || fn.stateMutability === "pure") {
+          view.push(fn.name);
+        } else write.push(fn.name);
+      }
+      return { kind: "fn", name: a.name, view, write };
     }
-    return { kind: "deploy", type, name, symbol, decimals };
+    const view: string[] = [];
+    const write: string[] = [];
+    for (const item of art.abi) {
+      if (item?.type !== "function" || !item.name) continue;
+      const sm = item.stateMutability;
+      if (sm === "view" || sm === "pure") view.push(item.name);
+      else write.push(item.name);
+    }
+    return { kind: "fn", name: art.name, view, write };
+  }
+
+  if (sub === "call" || sub === "send" || sub === "gas") {
+    const active = getActiveDigDeployment();
+    if (!active) return warn(DIG_ERROR.no_address);
+    const parsed = extractCallArgs(argv, 2);
+    if (parsed.error === "arg") return warn(DIG_ERROR.arg);
+    if (!parsed.fn) {
+      return warn(`Usage: dig ${sub} <fn> [args…]`);
+    }
+    const encoded = encodeDigCall({
+      abi: active.abi,
+      functionName: parsed.fn,
+      argTokens: parsed.args
+    });
+    if (!encoded.ok) {
+      return warn(
+        encoded.code === "bad_fn"
+          ? DIG_ERROR.bad_fn(parsed.fn)
+          : DIG_ERROR.arg
+      );
+    }
+    const value = parsed.valueWei ?? 0n;
+    const env = getDigEnv();
+    const argsSummary = parsed.args.join(" ");
+
+    if (sub === "gas") {
+      if (env === "vm") {
+        const res = await vmCall({
+          to: active.address,
+          data: encoded.data,
+          value
+        });
+        if (!res.ok) return warn(DIG_ERROR.vm_fail(res.reason));
+        return text(formatGasEstimateLine(parsed.fn, res.gasUsed));
+      }
+      if (!ctx.isConnected || !ctx.address) return warn(DIG_ERROR.need_wallet);
+      try {
+        const gas = ctx.chainEstimateGas
+          ? await ctx.chainEstimateGas({
+              to: active.address,
+              data: encoded.data,
+              value,
+              account: ctx.address
+            })
+          : 0n;
+        return text(formatGasEstimateLine(parsed.fn, gas));
+      } catch (e) {
+        const reason = e instanceof Error ? e.message.split("\n")[0]! : "estimate failed";
+        return warn(DIG_ERROR.reverted(reason.slice(0, 120)));
+      }
+    }
+
+    if (env === "vm") {
+      const res = await vmCall({
+        to: active.address,
+        data: encoded.data,
+        value
+      });
+      if (!res.ok) {
+        // distinguish revert-ish
+        const r = res.reason.toLowerCase();
+        if (r.includes("revert")) return warn(DIG_ERROR.reverted(res.reason));
+        return warn(DIG_ERROR.vm_fail(res.reason));
+      }
+      const events = decodeDigLogs(active.abi, res.logs);
+      let returnValues: string | undefined;
+      let rawReturn: string | undefined;
+      if (sub === "call" || isViewLike(encoded.fn)) {
+        const dec = decodeDigReturn({
+          abi: active.abi,
+          functionName: parsed.fn,
+          data: res.returnData
+        });
+        if (dec.ok) returnValues = formatReturnValues(dec.values);
+        else rawReturn = truncateHex(dec.raw);
+      }
+      setLastDigReceipt({
+        status: "success",
+        gasUsed: res.gasUsed,
+        logs: events,
+        fn: parsed.fn,
+        argsSummary,
+        returnSummary: returnValues
+      });
+      const panel = panelFrom(active, {
+        lastFn: parsed.fn,
+        argsSummary: argsSummary || undefined,
+        returnValues,
+        rawReturn,
+        events,
+        gasLabel: "GAS USED",
+        gas: formatGas(res.gasUsed)
+      });
+      if (sub === "send" && isViewLike(encoded.fn)) {
+        // still OK to apply on VM
+      }
+      return { kind: "run", panel };
+    }
+
+    // Chain
+    if (!ctx.isConnected || !ctx.address) return warn(DIG_ERROR.need_wallet);
+
+    if (sub === "call") {
+      try {
+        if (!ctx.chainCall) return warn(DIG_ERROR.need_wallet);
+        const res = await ctx.chainCall({
+          to: active.address,
+          data: encoded.data,
+          value,
+          account: ctx.address
+        });
+        const dec = decodeDigReturn({
+          abi: active.abi,
+          functionName: parsed.fn,
+          data: res.returnData
+        });
+        const panel = panelFrom(active, {
+          lastFn: parsed.fn,
+          argsSummary: argsSummary || undefined,
+          returnValues: dec.ok ? formatReturnValues(dec.values) : undefined,
+          rawReturn: dec.ok ? undefined : truncateHex(dec.raw),
+          events: [],
+          gasLabel: "ESTIMATE",
+          gas: res.gasUsed != null ? formatGas(res.gasUsed) : "—"
+        });
+        return { kind: "run", panel };
+      } catch (e) {
+        const reason = e instanceof Error ? e.message.split("\n")[0]! : "call failed";
+        return warn(DIG_ERROR.reverted(reason.slice(0, 120)));
+      }
+    }
+
+    // send — simulate then confirm
+    if (ctx.chainSimulate) {
+      const sim = await ctx.chainSimulate({
+        to: active.address,
+        data: encoded.data,
+        value,
+        account: ctx.address
+      });
+      if (!sim.ok) return warn(DIG_ERROR.reverted(sim.reason));
+    }
+    let gasEstimate = 100_000n;
+    try {
+      if (ctx.chainEstimateGas) {
+        gasEstimate = await ctx.chainEstimateGas({
+          to: active.address,
+          data: encoded.data,
+          value,
+          account: ctx.address
+        });
+      }
+    } catch (e) {
+      const reason = e instanceof Error ? e.message.split("\n")[0]! : "estimate failed";
+      return warn(DIG_ERROR.reverted(reason.slice(0, 120)));
+    }
+    return {
+      kind: "confirm",
+      to: active.address,
+      data: encoded.data,
+      dataSummary: `${parsed.fn}${argsSummary ? `(${argsSummary})` : "()"}`,
+      value,
+      gasEstimate,
+      intent: "send",
+      contractName: active.name,
+      fn: parsed.fn,
+      abi: active.abi,
+      artifact: active.artifact
+    };
+  }
+
+  if (sub === "logs") {
+    const receipt = getLastDigReceipt();
+    if (!receipt || receipt.logs.length === 0) {
+      return text("No events on last receipt.", { muted: true });
+    }
+    const lines = receipt.logs.map(
+      (e) => `${e.eventName}  ${e.argsSummary}`
+    );
+    return {
+      kind: "multi-text",
+      lines: [
+        { text: "EVENT | ARGS", muted: true },
+        ...lines.map((t) => ({ text: t }))
+      ]
+    };
+  }
+
+  if (sub === "receipt") {
+    const receipt = getLastDigReceipt();
+    const active = getActiveDigDeployment();
+    if (!receipt || !active) return warn(DIG_ERROR.no_address);
+    const panel = panelFrom(active, {
+      lastFn: receipt.fn,
+      argsSummary: receipt.argsSummary,
+      returnValues: receipt.returnSummary,
+      events: receipt.logs,
+      gasLabel: "GAS USED",
+      gas: formatGas(receipt.gasUsed),
+      warnLine:
+        receipt.status === "reverted" ? DIG_ERROR.reverted("tx") : undefined
+    });
+    return { kind: "run", panel };
   }
 
   if (!(DIG_SUBCOMMANDS as readonly string[]).includes(sub)) {
@@ -295,4 +875,4 @@ export async function runDig(args: string[]): Promise<DigResult> {
   return usage();
 }
 
-export { defaultSolcVersion };
+export { defaultSolcVersion, truncateAddress, envLabel };
