@@ -22,10 +22,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Node 24 (not 20): jsdom@30 + @testing-library/jest-dom + @ethereumjs
+      # require Node >=22, and npm@10 can't resolve the @noble/hashes tree.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install dependencies
