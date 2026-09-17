@@ -7,15 +7,6 @@
 import type React from 'react'
 import type { Address, Chain } from 'viem'
 
-export type HeaderStyle =
-  | 'crt'
-  | 'bloomberg'
-  | 'macintosh'
-  | 'ibm'
-  | 'dos'
-  | 'teletype'
-  | 'void'
-
 export type ThemeMode =
   | 'matrix'
   | 'amber'
@@ -104,7 +95,6 @@ export type ThemeConfig = {
   font: string
   rounded: string
   promptSymbol: string
-  headerStyle: HeaderStyle
   hasScanlines: boolean
   hasGrid: boolean
   warn: string

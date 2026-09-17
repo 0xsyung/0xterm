@@ -8,7 +8,15 @@
 
 import { useEffect, useRef } from "react";
 
-export default function MatrixRain({ active = true }: { active?: boolean }) {
+export default function MatrixRain({
+  active = false,
+  opacity = active ? 0.2 : 0
+}: {
+  /** Run the RAF loop. */
+  active?: boolean;
+  /** Rendered canvas opacity (fade in/out via CSS transition). */
+  opacity?: number;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -59,11 +67,11 @@ export default function MatrixRain({ active = true }: { active?: boolean }) {
     };
   }, [active]);
 
-  if (!active) return null;
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 pointer-events-none opacity-20 z-0"
+      className="fixed inset-0 pointer-events-none transition-opacity duration-1000 ease-out z-0"
+      style={{ opacity }}
     />
   );
 }

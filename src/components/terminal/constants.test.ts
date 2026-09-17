@@ -73,13 +73,12 @@ describe("THEME_ORDER", () => {
     expect(Object.keys(THEMES).sort()).toEqual([...THEME_ORDER].sort());
   });
 
-  it("defines warn/muted/phosphor/headerStyle on every theme", () => {
+  it("defines warn/muted/phosphor on every theme", () => {
     for (const mode of THEME_ORDER) {
       const t = THEMES[mode];
       expect(t.warn).toBeTypeOf("string");
       expect(t.muted).toBeTypeOf("string");
       expect(t.phosphor).toBeTypeOf("string");
-      expect(t.headerStyle).toBeTypeOf("string");
     }
   });
 });
