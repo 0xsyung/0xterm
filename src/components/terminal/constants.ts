@@ -31,7 +31,6 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
     font: 'font-plex tracking-wide',
     rounded: 'rounded-none',
     promptSymbol: '>',
-    headerStyle: 'crt',
     hasScanlines: true,
     hasGrid: false,
     warn: 'text-[#c8ff00] border-[#c8ff00]/50 bg-[#c8ff00]/10',
@@ -51,7 +50,6 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
     font: 'font-plex tracking-wide',
     rounded: 'rounded-none',
     promptSymbol: '>',
-    headerStyle: 'crt',
     hasScanlines: true,
     hasGrid: false,
     warn: 'text-[#ff6a00] border-[#ff6a00]/50 bg-[#ff6a00]/10',
@@ -71,7 +69,6 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
     font: 'font-plex tracking-wider',
     rounded: 'rounded-none',
     promptSymbol: '►',
-    headerStyle: 'ibm',
     hasScanlines: true,
     hasGrid: false,
     warn: 'text-[#f2e55c] border-[#f2e55c]/50 bg-[#f2e55c]/10',
@@ -91,7 +88,6 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
     font: 'font-plex tracking-widest uppercase text-[12px] leading-relaxed',
     rounded: 'rounded-none',
     promptSymbol: '■',
-    headerStyle: 'bloomberg',
     hasScanlines: false,
     hasGrid: true,
     warn: 'text-[#ff5a36] border-[#ff5a36]/60 bg-[#ff5a36]/10',
@@ -111,7 +107,6 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
     font: 'font-mac',
     rounded: 'rounded-[10px]',
     promptSymbol: '$',
-    headerStyle: 'macintosh',
     hasScanlines: false,
     hasGrid: false,
     warn: 'text-[#febc2e] border-[#febc2e]/50 bg-[#febc2e]/10',
@@ -131,7 +126,6 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
     font: 'font-plex text-[18px] leading-tight',
     rounded: 'rounded-none',
     promptSymbol: 'C>',
-    headerStyle: 'dos',
     hasScanlines: false,
     hasGrid: false,
     warn: 'text-[#ff5555] border-[#ff5555]/70 bg-[#aa0000]',
@@ -151,7 +145,6 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
     font: 'font-plex',
     rounded: 'rounded-none',
     promptSymbol: '>',
-    headerStyle: 'teletype',
     hasScanlines: false,
     hasGrid: true,
     warn: 'text-[#8a1f12] border-[#8a1f12]/40 bg-[#8a1f12]/10',
@@ -171,7 +164,6 @@ export const THEMES: Record<ThemeMode, ThemeConfig> = {
     font: 'font-plex tracking-tight',
     rounded: 'rounded-none',
     promptSymbol: '›',
-    headerStyle: 'void',
     hasScanlines: false,
     hasGrid: false,
     warn: 'text-[#e8c27a] border-[#e8c27a]/40 bg-[#e8c27a]/10',
@@ -210,35 +202,11 @@ export const THEME_ALIASES: Record<string, ThemeMode> = {
   kanagawa: 'void'
 }
 
-export const HEADER_PAD: Record<ThemeConfig['headerStyle'], string> = {
-  crt: 'pt-[calc(40px_+_env(safe-area-inset-top))]',
-  bloomberg: 'max-md:pt-[calc(80px_+_env(safe-area-inset-top))] md:pt-[calc(32px_+_env(safe-area-inset-top))]',
-  macintosh: 'pt-[calc(52px_+_env(safe-area-inset-top))]',
-  ibm: 'pt-[calc(24px_+_env(safe-area-inset-top))]',
-  dos: 'pt-[calc(22px_+_env(safe-area-inset-top))]',
-  teletype: 'pt-[calc(28px_+_env(safe-area-inset-top))]',
-  void: 'pt-[calc(32px_+_env(safe-area-inset-top))]'
-}
+// Single canonical header metrics — the Bloomberg terminal bar. Themes never
+// change layout, so there is exactly one header height/pad for every skin.
+export const HEADER_PAD = 'max-md:pt-[calc(80px_+_env(safe-area-inset-top))] md:pt-[calc(32px_+_env(safe-area-inset-top))]'
 
-export const HEADER_TOP: Record<ThemeConfig['headerStyle'], string> = {
-  crt: 'top-[calc(40px_+_env(safe-area-inset-top))]',
-  bloomberg: 'max-md:top-[calc(80px_+_env(safe-area-inset-top))] md:top-[calc(32px_+_env(safe-area-inset-top))]',
-  macintosh: 'top-[calc(52px_+_env(safe-area-inset-top))]',
-  ibm: 'top-[calc(24px_+_env(safe-area-inset-top))]',
-  dos: 'top-[calc(22px_+_env(safe-area-inset-top))]',
-  teletype: 'top-[calc(28px_+_env(safe-area-inset-top))]',
-  void: 'top-[calc(32px_+_env(safe-area-inset-top))]'
-}
-
-export const HEADER_H: Record<ThemeConfig['headerStyle'], string> = {
-  crt: 'h-[calc(40px_+_env(safe-area-inset-top))]',
-  bloomberg: 'max-md:h-auto max-md:min-h-[calc(80px_+_env(safe-area-inset-top))] md:h-[calc(32px_+_env(safe-area-inset-top))]',
-  macintosh: 'h-[calc(52px_+_env(safe-area-inset-top))]',
-  ibm: 'h-[calc(24px_+_env(safe-area-inset-top))]',
-  dos: 'h-[calc(22px_+_env(safe-area-inset-top))]',
-  teletype: 'h-[calc(28px_+_env(safe-area-inset-top))]',
-  void: 'h-[calc(32px_+_env(safe-area-inset-top))]'
-}
+export const HEADER_H = 'max-md:h-auto max-md:min-h-[calc(80px_+_env(safe-area-inset-top))] md:h-[calc(32px_+_env(safe-area-inset-top))]'
 
 export function resolveThemeKey(raw?: string | null): ThemeMode {
   if (!raw) return 'matrix'

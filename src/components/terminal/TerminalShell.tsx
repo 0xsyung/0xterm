@@ -115,6 +115,7 @@ import {
 } from "./news";
 import { getPoolPriceRatio } from "./poolPrice";
 import { fetchBillboard, fetchChatThread } from "./pinLoaders";
+import MatrixRain from "./MatrixRain";
 import {
   buildBalanceLog,
   buildPnlLog,
@@ -256,6 +257,19 @@ import {
 
 const MAX_LOGS = 100;
 
+// #79 easter egg: famous crypto-community phrases. Deliberately NOT commands —
+// typing one fires a brief Matrix-rain burst instead of "not recognized".
+const EASTER_EGG_PHRASES = new Set<string>([
+  "hodl",
+  "gm",
+  "wen moon",
+  "wagmi",
+  "ngmi",
+  "btfd",
+  "to the moon",
+  "not your keys not your coins"
+]);
+
 // Peer-key continuity (finding C-1): load the persisted map of peer address →
 // last-seen registered chat key. SSR-safe (TerminalShell is a client component,
 // but guard anyway for build-time module evaluation).
@@ -394,6 +408,22 @@ export default function TerminalShell({
   // Custom user-registered tokens, flat list per chain so multiple tokens can
   // share a symbol. `id` is the stable uniqueness key.
   const [customTokens, setCustomTokens] = useState<CustomTokensMap>({});
+
+  // Easter egg (#79): secret crypto phrase fires a short Matrix-rain burst.
+  // Ephemeral — fade in ~1s, play ~20s, fade out; clean the rest of the time.
+  const [easterEggRain, setEasterEggRain] = useState(false);
+  const easterEggTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerEasterEgg = () => {
+    if (easterEggTimer.current) clearTimeout(easterEggTimer.current);
+    setEasterEggRain(true);
+    easterEggTimer.current = setTimeout(() => setEasterEggRain(false), 20_000);
+  };
+  useEffect(
+    () => () => {
+      if (easterEggTimer.current) clearTimeout(easterEggTimer.current);
+    },
+    []
+  );
 
   // Chat channels (#58): saved list + active id (presets live in constants).
   const [channelStore, setChannelStore] = useState<ChannelStore>(() =>
@@ -5518,6 +5548,12 @@ export default function TerminalShell({
     const handler = commands[command];
 
     if (!handler) {
+      // Hidden easter egg (#79): famous crypto phrases aren't commands — they
+      // fire a brief Matrix-rain burst instead of the "not recognized" error.
+      if (EASTER_EGG_PHRASES.has(trimmed)) {
+        triggerEasterEgg();
+        return;
+      }
       setLogs((prev) =>
         [
           ...prev,
@@ -5994,13 +6030,17 @@ export default function TerminalShell({
         />
       )}
 
+      {/* #79 easter egg: secret crypto phrase → brief Matrix-rain burst.
+          Fade in ~1s via CSS transition; pointer-events-none so it never
+          blocks the mouse-first UI. */}
+      <MatrixRain active={easterEggRain} opacity={easterEggRain ? 0.2 : 0} />
+
       {/* TOP HEADER BAR */}
       <TerminalHeader
         theme={theme}
         currentThemeKey={currentThemeKey}
         onThemeChange={handleThemeSwitch}
         onCommand={handleCommand}
-        chainName={SUPPORTED_CHAINS.find((c) => c.id === activeChainId)?.name}
         primaryTab={primaryTab}
         onPrimaryTabChange={handlePrimaryTabChange}
         socialBadge={inboxUnread + boardUnread}
@@ -6008,7 +6048,7 @@ export default function TerminalShell({
 
       {/* TERMINAL CONTENT CONTAINER */}
       <div
-        className={`flex-1 flex flex-col pl-[calc(0.75rem_+_env(safe-area-inset-left))] pr-[calc(0.75rem_+_env(safe-area-inset-right))] md:pl-[calc(1.5rem_+_env(safe-area-inset-left))] md:pr-[calc(1.5rem_+_env(safe-area-inset-right))] pb-[calc(1.5rem_+_env(safe-area-inset-bottom))] ${HEADER_PAD[theme.headerStyle]} overflow-hidden relative z-10`}
+        className={`flex-1 flex flex-col pl-[calc(0.75rem_+_env(safe-area-inset-left))] pr-[calc(0.75rem_+_env(safe-area-inset-right))] md:pl-[calc(1.5rem_+_env(safe-area-inset-left))] md:pr-[calc(1.5rem_+_env(safe-area-inset-right))] pb-[calc(1.5rem_+_env(safe-area-inset-bottom))] ${HEADER_PAD} overflow-hidden relative z-10`}
         onClick={(e) => {
           // News/debug widgets retain focus for j/k/Enter (#14 Alex QA).
           if (

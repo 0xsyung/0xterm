@@ -44,10 +44,6 @@ export type BoardView = {
   onLoadPage?: (offset: number) => Promise<BillboardPost[]>;
 };
 
-function segmentRadius(theme: ThemeConfig): string {
-  return theme.headerStyle === "macintosh" ? theme.rounded : "rounded-none";
-}
-
 function SegmentButton({
   label,
   active,
@@ -64,15 +60,8 @@ function SegmentButton({
   onClick: () => void;
 }) {
   const badgeLabel = formatBadgeCount(badge ?? 0);
-  const radius = segmentRadius(theme);
-  const fillFg =
-    theme.headerStyle === "teletype"
-      ? "#F3F0E6"
-      : theme.headerStyle === "dos"
-        ? "#0000aa"
-        : theme.headerStyle === "macintosh"
-          ? "#ffffff"
-          : "#000000";
+  const radius = "rounded-none";
+  const fillFg = "#000000";
 
   return (
     <button
@@ -215,7 +204,7 @@ export default function SocialPanel({
     }
   };
 
-  const radius = segmentRadius(theme);
+  const radius = "rounded-none";
   const pageSize = board?.pageSize ?? 5;
   const total = board?.total ?? 0;
   const hasPrev = boardOffset > 0;
