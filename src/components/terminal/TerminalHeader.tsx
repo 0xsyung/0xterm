@@ -9,6 +9,8 @@
 import { useEffect, useState } from "react";
 import type { ThemeConfig, ThemeMode } from "./types";
 import { HEADER_H, THEME_ORDER } from "./constants";
+import { MODE_LABEL, MODE_ORDER } from "./mode";
+import type { TerminalMode } from "./mode";
 import type { PrimaryTab } from "./socialUnread";
 import { formatBadgeCount } from "./socialUnread";
 
@@ -87,11 +89,59 @@ function PrimaryTabSwitch({
   );
 }
 
+/** Mode switcher (#80) — workspaces + console, mirrors PrimaryTabSwitch. */
+function ModeTabs({
+  theme,
+  mode,
+  onModeChange
+}: {
+  theme: ThemeConfig;
+  mode: TerminalMode;
+  onModeChange: (m: TerminalMode) => void;
+}) {
+  const radius = "rounded-none";
+  const fillFg = "#000000";
+  return (
+    <div
+      className="flex items-center gap-1 shrink-0"
+      role="tablist"
+      aria-label="Purpose mode"
+    >
+      {MODE_ORDER.map((m) => {
+        const active = mode === m;
+        return (
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onModeChange(m)}
+            className={`relative inline-flex items-center justify-center gap-1 px-2.5 uppercase tracking-widest cursor-pointer pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] [@media(hover:none)]:min-h-[44px] text-[10px] ${radius} ${
+              active
+                ? "border border-transparent font-bold"
+                : `border ${theme.border} ${theme.muted} bg-transparent`
+            }`}
+            style={
+              active
+                ? { background: theme.phosphor, color: fillFg }
+                : undefined
+            }
+          >
+            {MODE_LABEL[m]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function TerminalHeader({
   theme,
   currentThemeKey,
   onThemeChange,
   onCommand,
+  mode = "invest",
+  onModeChange,
   primaryTab = "terminal",
   onPrimaryTabChange,
   socialBadge = 0
@@ -100,11 +150,16 @@ export default function TerminalHeader({
   currentThemeKey: ThemeMode;
   onThemeChange: (mode: ThemeMode) => void;
   onCommand?: (cmd: string) => void;
+  mode?: TerminalMode;
+  onModeChange?: (m: TerminalMode) => void;
   primaryTab?: PrimaryTab;
   onPrimaryTabChange?: (tab: PrimaryTab) => void;
   socialBadge?: number;
 }) {
   const [clock, setClock] = useState(() => formatClock(new Date()));
+  const modeTabsEl = onModeChange ? (
+    <ModeTabs theme={theme} mode={mode} onModeChange={onModeChange} />
+  ) : null;
   const switchEl = onPrimaryTabChange ? (
     <PrimaryTabSwitch
       theme={theme}
@@ -163,6 +218,7 @@ export default function TerminalHeader({
       <div className="flex items-center gap-3 shrink-0 uppercase text-[10px] tracking-widest">
         <span className="font-bold">0xTERM</span>
         <span className="tabular-nums">{clock}</span>
+        {modeTabsEl}
         {switchEl}
       </div>
       <div className="flex items-center gap-3 flex-wrap uppercase text-[10px] tracking-widest max-md:w-full max-md:justify-between">
