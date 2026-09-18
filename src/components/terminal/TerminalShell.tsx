@@ -243,6 +243,7 @@ import {
   type TerminalMode
 } from "./mode";
 import type { BillboardPost } from "./widgets/BillboardWidget";
+import { WorkspaceStrip } from "./workspaces";
 import {
   applyPostCountPoll,
   applyThreadPoll,
@@ -558,6 +559,10 @@ export default function TerminalShell({
     typeof window !== "undefined" ? loadMode(window.localStorage) : DEFAULT_MODE
   );
   const [suggestionIdx, setSuggestionIdx] = useState(-1);
+
+  // Workspace launcher (#80): tile strip collapses on first command; a slim
+  // re-open bar returns it. Console never shows the strip.
+  const [showWorkspace, setShowWorkspace] = useState(true);
 
   // Pending interactive confirmation (e.g. register an unverified contract).
   // When set, the next Enter routes the typed input through this resolver.
@@ -2037,6 +2042,8 @@ export default function TerminalShell({
     setTerminalMode(next);
     saveMode(typeof window !== "undefined" ? window.localStorage : null, next);
     savePreference("mode", next);
+    // #80 — entering a workspace mode re-opens its launcher.
+    if (next !== "console") setShowWorkspace(true);
     // Clear CHOICES / pending token picks belonging to the old mode
     if (pendingTokenPick) {
       pendingTokenPick.resolve(null);
@@ -2482,7 +2489,7 @@ export default function TerminalShell({
         return {
           id: generateId(),
           type: "text",
-          text: `[!] Unknown mode "${args[1]}". Use invest | dev | forensic (aliases: trade/i, workshop/d, dig/trace/f).`
+          text: `[!] Unknown mode "${args[1]}". Use invest | dev | forensic | console (aliases: trade/i, workshop/d, dig/trace/f, shell/c).`
         };
       }
       if (next === terminalMode) {
@@ -5532,6 +5539,9 @@ export default function TerminalShell({
     const trimmed = cmd.trim();
     if (!trimmed) return;
 
+    // #80 — first command dismisses the workspace launcher (re-open via bar).
+    if (showWorkspace) setShowWorkspace(false);
+
     const userLog: LogEntry = {
       id: generateId(),
       type: "input",
@@ -5781,7 +5791,7 @@ export default function TerminalShell({
           (command === "mode" || command === "modes") &&
           currentArgIdx === 1
         ) {
-          candidates = ["invest", "dev", "forensic", "list", "trade", "workshop", "dig", "trace"];
+          candidates = ["invest", "dev", "forensic", "console", "list", "trade", "workshop", "dig", "trace", "shell", "c"];
 
           // 1. Networks & Dexes
         } else if (
@@ -6041,6 +6051,8 @@ export default function TerminalShell({
         currentThemeKey={currentThemeKey}
         onThemeChange={handleThemeSwitch}
         onCommand={handleCommand}
+        mode={terminalMode}
+        onModeChange={applyTerminalMode}
         primaryTab={primaryTab}
         onPrimaryTabChange={handlePrimaryTabChange}
         socialBadge={inboxUnread + boardUnread}
@@ -6133,7 +6145,37 @@ export default function TerminalShell({
           </div>
         ) : (
           /* Log + pin: band-driven — stack (phone/short-landscape) vs two-column (tablet/desktop). Never overlay. */
-          <div className={pinGridClass(band, pinned.length > 0)}>
+          <>
+            {terminalMode !== "console" &&
+              (showWorkspace ? (
+                <div className="shrink-0 flex items-start gap-2 pb-2">
+                  <span
+                    className={`uppercase text-[10px] tracking-widest pt-1 ${theme.muted}`}
+                  >
+                    LAUNCH
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <WorkspaceStrip
+                      theme={theme}
+                      mode={terminalMode}
+                      onCommand={(cmd) => {
+                        void handleCommand(cmd);
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="shrink-0 pb-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowWorkspace(true)}
+                    className={`uppercase text-[10px] tracking-widest cursor-pointer border ${theme.border} ${theme.cardBg} px-2 py-0.5 pointer-coarse:min-h-[44px] [@media(hover:none)]:min-h-[44px]`}
+                  >
+                    ▦ Workspace
+                  </button>
+                </div>
+              ))}
+            <div className={pinGridClass(band, pinned.length > 0)}>
             <div
               ref={logContainerRef}
               className="h-full min-h-0 min-w-0 overflow-y-auto pt-2 pr-2 whitespace-pre-wrap"
@@ -6186,6 +6228,7 @@ export default function TerminalShell({
               stacked={band === "stack"}
             />
           </div>
+          </>
         )}
 
         {/* TWO-LINE PROMPT LAYOUT */}

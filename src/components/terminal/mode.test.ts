@@ -48,6 +48,13 @@ describe("resolveModeId / aliases", () => {
     expect(resolveModeId("f")).toBe("forensic");
   });
 
+  it("resolves console aliases shell / c", () => {
+    expect(resolveModeId("console")).toBe("console");
+    expect(resolveModeId("shell")).toBe("console");
+    expect(resolveModeId("c")).toBe("console");
+    expect(resolveModeId("CONSOLE")).toBe("console");
+  });
+
   it("returns null for unknown", () => {
     expect(resolveModeId("social")).toBeNull();
     expect(resolveModeId("")).toBeNull();
@@ -79,6 +86,7 @@ describe("default + persistence", () => {
   it("isTerminalMode guards", () => {
     expect(isTerminalMode("invest")).toBe(true);
     expect(isTerminalMode("dev")).toBe(true);
+    expect(isTerminalMode("console")).toBe(true);
     expect(isTerminalMode("nope")).toBe(false);
   });
 });
@@ -194,6 +202,12 @@ describe("isCommandAllowed — classification table", () => {
     expect(classifyLiveVerb("foobar")).toBeNull();
   });
 
+  it("console allows every verb (no gating)", () => {
+    for (const cmd of [...globals, ...invest, "dig", "compile", "kyt", "is", "foobar"]) {
+      expect(isCommandAllowed("console", cmd), `console/${cmd}`).toBe(true);
+    }
+  });
+
   it("classifies live verbs", () => {
     expect(classifyLiveVerb("swap")).toBe("invest");
     expect(classifyLiveVerb("dig")).toBe("dev");
@@ -229,11 +243,12 @@ describe("wrong-mode messaging", () => {
     expect(modeSwitchAck("forensic")).toContain("Mode → FORENSIC");
   });
 
-  it("status lists all three", () => {
+  it("status lists all modes", () => {
     const text = modeStatusText("invest");
     expect(text).toContain("INVEST");
     expect(text).toContain("DEV");
     expect(text).toContain("FORENSIC");
+    expect(text).toContain("CONSOLE");
     expect(text).toMatch(/^\* INVEST/m);
   });
 });
@@ -256,7 +271,8 @@ describe("autocomplete filter + CHOICES", () => {
     expect(modeChoiceCommands()).toEqual([
       "mode invest",
       "mode dev",
-      "mode forensic"
+      "mode forensic",
+      "mode console"
     ]);
   });
 });

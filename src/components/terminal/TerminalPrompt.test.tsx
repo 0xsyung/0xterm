@@ -89,6 +89,12 @@ describe("TerminalPrompt", () => {
     expect(screen.getByText(/type help · mode · kyt · kya/)).toBeTruthy();
   });
 
+  it("shows console MODE chip and raw-terminal boot copy", () => {
+    render(<TerminalPrompt {...makeProps({ mode: "console" })} />);
+    expect(screen.getByRole("button", { name: /Mode CONSOLE/i })).toBeTruthy();
+    expect(screen.getByText(/type help · any command/)).toBeTruthy();
+  });
+
   it("invokes onModeChipTap when MODE chip is pressed", () => {
     const onModeChipTap = vi.fn();
     render(<TerminalPrompt {...makeProps({ onModeChipTap })} />);

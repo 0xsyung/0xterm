@@ -5,13 +5,14 @@
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 
-/** Purpose lens — not theme. Exactly three in v1 (issue Decision table). */
-export type TerminalMode = "invest" | "dev" | "forensic";
+/** Purpose lens — not theme. invest/dev/forensic = workspaces; console = raw terminal (no gating). */
+export type TerminalMode = "invest" | "dev" | "forensic" | "console";
 
 export const MODE_ORDER: readonly TerminalMode[] = [
   "invest",
   "dev",
-  "forensic"
+  "forensic",
+  "console"
 ] as const;
 
 export const DEFAULT_MODE: TerminalMode = "invest";
@@ -22,21 +23,24 @@ export const MODE_STORAGE_KEY = "0xterm.mode";
 export const MODE_LABEL: Record<TerminalMode, string> = {
   invest: "INVEST",
   dev: "DEV",
-  forensic: "FORENSIC"
+  forensic: "FORENSIC",
+  console: "CONSOLE"
 };
 
 /** One-line blurb after switch ack. */
 export const MODE_BLURB: Record<TerminalMode, string> = {
   invest: "prices, portfolio, DEX, plans",
   dev: "compile, run, debug, deploy",
-  forensic: "KYT, KYA, sim, address & tx analysis"
+  forensic: "KYT, KYA, sim, address & tx analysis",
+  console: "raw terminal — every command, no gating"
 };
 
 /** Boot hint under the version line — mode once, no clutter. */
 export const MODE_BOOT_HINT: Record<TerminalMode, string> = {
   invest: "type help · mode · connect · price",
   dev: "type help · mode · dig · is",
-  forensic: "type help · mode · kyt · kya"
+  forensic: "type help · mode · kyt · kya",
+  console: "type help · any command"
 };
 
 /**
@@ -54,7 +58,10 @@ const MODE_ALIAS_TO_ID: Record<string, TerminalMode> = {
   forensic: "forensic",
   dig: "forensic",
   trace: "forensic",
-  f: "forensic"
+  f: "forensic",
+  console: "console",
+  shell: "console",
+  c: "console"
 };
 
 export type CommandAffinity =
@@ -194,7 +201,12 @@ const FORENSIC_BLOCKED_INVEST = new Set([
 ]);
 
 export function isTerminalMode(value: unknown): value is TerminalMode {
-  return value === "invest" || value === "dev" || value === "forensic";
+  return (
+    value === "invest" ||
+    value === "dev" ||
+    value === "forensic" ||
+    value === "console"
+  );
 }
 
 /** Resolve `mode <name>` / alias → canonical id, or null if unknown. */
@@ -239,6 +251,8 @@ export function commandAffinity(cmd: string): CommandAffinity | null {
  * are blocked here.
  */
 export function isCommandAllowed(mode: TerminalMode, cmd: string): boolean {
+  // Console (#80) = raw terminal: every command runs, no gating.
+  if (mode === "console") return true;
   const key = cmd.trim().toLowerCase();
   const affinity = commandAffinity(key);
   if (affinity === null) return true;
@@ -289,7 +303,7 @@ export function modeStatusText(mode: TerminalMode): string {
         `${m === mode ? "*" : " "} ${MODE_LABEL[m].padEnd(9)} (${m}) — ${MODE_BLURB[m]}`
     ),
     "",
-    "Switch: mode <invest|dev|forensic>  (aliases: trade/i, workshop/d, dig/trace/f)"
+    "Switch: mode <invest|dev|forensic|console>  (aliases: trade/i, workshop/d, dig/trace/f, shell/c)"
   ];
   return lines.join("\n");
 }
@@ -322,9 +336,15 @@ export type HelpRow = {
  */
 export const HELP_ROWS: HelpRow[] = [
   {
-    command: "mode [invest|dev|forensic]",
+    command: "mode [invest|dev|forensic|console]",
     description:
-      "Show or switch purpose mode (aliases: trade/i, workshop/d, dig/trace/f)",
+      "Show or switch purpose mode (aliases: trade/i, workshop/d, dig/trace/f, shell/c)",
+    modes: ["global"]
+  },
+  {
+    command: "console",
+    description:
+      "Switch to console mode — raw terminal, every command, no gating (aliases: shell, c)",
     modes: ["global"]
   },
   {
