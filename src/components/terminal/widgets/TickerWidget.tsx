@@ -76,7 +76,8 @@ export default function TickerWidget({
           string,
           { priceUsd: number | null; change24h: number | null; volume24h: number | null }
         >();
-        let anyFail = false;
+        let refreshedAny = false;
+        let failedAny = false;
         for (const [chain, addrs] of byChain) {
           try {
             const map = await quoteDexScreenerPairs(chain, addrs);
@@ -86,9 +87,13 @@ export default function TickerWidget({
                 change24h: q.change24h,
                 volume24h: q.volume24h
               });
+              refreshedAny = true;
+            }
+            for (const a of addrs) {
+              if (!map.has(a.toLowerCase())) failedAny = true;
             }
           } catch {
-            anyFail = true;
+            failedAny = true;
           }
         }
         if (cancelled) return;
@@ -104,9 +109,11 @@ export default function TickerWidget({
             updatedAt: Date.now()
           };
         });
+        // Board STALE only when every attempted refresh failed (#84).
+        const boardStale = failedAny && !refreshedAny;
         setRows(next);
-        setStale(anyFail);
-        onRowsUpdate?.(next, anyFail);
+        setStale(boardStale);
+        onRowsUpdate?.(next, boardStale);
       } catch {
         if (!cancelled) setStale(true);
       }

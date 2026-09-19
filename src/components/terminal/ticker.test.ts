@@ -16,8 +16,10 @@ import {
   writeTickerPrefs,
   readTickerPrefs,
   refreshTickerRows,
+  resolveTickerSymbol,
   type TickerRow
 } from "./ticker";
+import { DEX_FETCH_FAILED_MSG } from "./dexscreener";
 
 describe("tickerPinKey", () => {
   it("is stable ticker:watchlist regardless of symbol order", () => {
@@ -152,5 +154,97 @@ describe("refreshTickerRows", () => {
     const out = await refreshTickerRows(rows, fetchMock as unknown as typeof fetch);
     expect(out.rows[0].priceUsd).toBe(2384.1);
     expect(out.stale).toBe(false);
+  });
+});
+
+describe("refreshTickerRows partial failure (#84)", () => {
+  it("does not mark entire board stale when a single symbol fails", async () => {
+    const rows: TickerRow[] = [
+      {
+        symbol: "ETH",
+        pairAddress: "0xethusdc",
+        dsChain: "ethereum",
+        priceUsd: 2000,
+        change24h: 1,
+        volume24h: 1e6,
+        updatedAt: 1
+      },
+      {
+        symbol: "LINK",
+        pairAddress: "0xlinkusdc",
+        dsChain: "ethereum",
+        priceUsd: 10,
+        change24h: 2,
+        volume24h: 1e5,
+        updatedAt: 1
+      }
+    ];
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        pairs: [
+          {
+            chainId: "ethereum",
+            pairAddress: "0xethusdc",
+            priceUsd: "2384.1",
+            priceChange: { h24: -2.76 },
+            volume: { h24: 1.79e6 }
+          }
+          // LINK missing from response → keep last marks
+        ]
+      })
+    }));
+    const out = await refreshTickerRows(rows, fetchMock as unknown as typeof fetch);
+    expect(out.rows[0].priceUsd).toBe(2384.1);
+    expect(out.rows[1].priceUsd).toBe(10); // last mark kept
+    expect(out.stale).toBe(false);
+  });
+
+  it("marks board stale only when every refresh fails", async () => {
+    const rows: TickerRow[] = [
+      {
+        symbol: "ETH",
+        pairAddress: "0xethusdc",
+        dsChain: "ethereum",
+        priceUsd: 2000,
+        change24h: 1,
+        volume24h: 1e6,
+        updatedAt: 1
+      },
+      {
+        symbol: "BTC",
+        pairAddress: "0xbtcusdc",
+        dsChain: "ethereum",
+        priceUsd: 60000,
+        change24h: 0,
+        volume24h: 1e7,
+        updatedAt: 1
+      }
+    ];
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    const out = await refreshTickerRows(rows, fetchMock as unknown as typeof fetch);
+    expect(out.rows[0].priceUsd).toBe(2000);
+    expect(out.rows[1].priceUsd).toBe(60000);
+    expect(out.stale).toBe(true);
+    expect(out.messages.some((m) => /ad-?blocker/i.test(m))).toBe(false);
+    expect(out.messages).toContain(DEX_FETCH_FAILED_MSG);
+  });
+});
+
+describe("resolveTickerSymbol error copy (#84)", () => {
+  it("does not say ad-blocker for generic Failed to fetch", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    const out = await resolveTickerSymbol(
+      "LINK",
+      1,
+      fetchMock as unknown as typeof fetch
+    );
+    expect(out.unresolved).toBe(true);
+    expect(out.error || "").not.toMatch(/ad-?blocker/i);
+    expect(out.error).toBe(DEX_FETCH_FAILED_MSG);
   });
 });
