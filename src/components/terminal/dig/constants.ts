@@ -99,4 +99,12 @@ export const DIG_SUBCOMMANDS = [
 
 export type DigSubcommand = (typeof DIG_SUBCOMMANDS)[number];
 
+/**
+ * Full dig usage for `dig` / `dig help` (#88).
+ * Spaces around `|` so the log wraps on word boundaries — never a trailing `…`.
+ */
+export function digUsageText(): string {
+  return `Usage: dig [${DIG_SUBCOMMANDS.join(" | ")}]`;
+}
+
 export type DigEnvKind = "vm" | "injected" | "local";

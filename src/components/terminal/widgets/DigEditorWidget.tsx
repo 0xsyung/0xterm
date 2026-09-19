@@ -33,6 +33,7 @@ export default function DigEditorWidget({
   );
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const gutterRef = useRef<HTMLDivElement>(null);
 
   const lines = useMemo(() => {
     const n = content.split("\n").length;
@@ -78,10 +79,20 @@ export default function DigEditorWidget({
     setPhase("edit");
   };
 
+  /** Keep gutter line numbers aligned while the textarea scrolls (#92). */
+  const onTaScroll = () => {
+    if (gutterRef.current && taRef.current) {
+      gutterRef.current.scrollTop = taRef.current.scrollTop;
+    }
+  };
+
   if (phase === "pick") {
     return (
       <div
-        className={`relative my-3 p-3 border ${theme.border} ${theme.cardBg} ${theme.rounded} max-w-2xl ${theme.text}`}
+        data-retain-focus=""
+        className={`relative my-3 mb-3 p-3 border ${theme.border} ${theme.cardBg} ${theme.rounded} max-w-2xl ${theme.text}`}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <div
           className={`border-b ${theme.border} pb-1 mb-2 text-[10px] tracking-wider flex gap-2`}
@@ -110,12 +121,18 @@ export default function DigEditorWidget({
     );
   }
 
+  // #92: flex column with min-h-0 + internal scroll; mb-3 (≥12px) clears
+  // status/prompt chrome so the bottom gutter/source lines are not clipped.
   return (
     <div
-      className={`relative my-3 border ${theme.border} ${theme.cardBg} ${theme.rounded} max-w-2xl w-full overflow-hidden`}
+      data-dig-editor
+      data-retain-focus=""
+      className={`relative my-3 mb-3 border ${theme.border} ${theme.cardBg} ${theme.rounded} max-w-2xl w-full min-h-0 flex flex-col overflow-hidden max-h-[min(50vh,calc(100dvh-14rem))]`}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
     >
       <div
-        className={`border-b ${theme.border} px-2 py-1 text-[10px] tracking-wider flex gap-2 items-center`}
+        className={`shrink-0 border-b ${theme.border} px-2 py-1 text-[10px] tracking-wider flex gap-2 items-center`}
       >
         <span className={theme.muted}>SOURCE</span>
         <span className={theme.text}>{name}</span>
@@ -128,9 +145,13 @@ export default function DigEditorWidget({
           Esc
         </button>
       </div>
-      <div className="flex min-h-[12rem] max-h-[50vh]">
+      <div
+        className="flex flex-1 min-h-0 overflow-hidden"
+        style={{ minHeight: "12rem" }}
+      >
         <div
-          className={`select-none text-right pr-2 pl-1 py-2 ${theme.muted} tabular-nums text-[9px] leading-[1.4] overflow-hidden shrink-0 border-r ${theme.border}`}
+          ref={gutterRef}
+          className={`select-none text-right pr-2 pl-1 py-2 ${theme.muted} tabular-nums text-[9px] leading-[1.4] overflow-hidden min-h-0 shrink-0 border-r ${theme.border}`}
           aria-hidden
         >
           {lines.map((n) => (
@@ -142,7 +163,8 @@ export default function DigEditorWidget({
           value={content}
           spellCheck={false}
           onChange={(e) => onInput(e.target.value)}
-          className={`flex-1 min-w-0 resize-y bg-transparent outline-none p-2 leading-[1.4] ${theme.text} text-[16px] md:text-[12px] font-mono`}
+          onScroll={onTaScroll}
+          className={`flex-1 min-w-0 min-h-0 resize-none overflow-y-auto bg-transparent outline-none p-2 leading-[1.4] ${theme.text} text-[16px] md:text-[12px] font-mono`}
           style={{ overflowWrap: "anywhere" }}
           aria-label={`Source ${name}`}
         />

@@ -2228,6 +2228,8 @@ export default function TerminalShell({
                 mode={r.mode}
                 onClose={() => {
                   setLogs((prev) => prev.filter((l) => l.id !== id));
+                  // #92: Esc-to-close returns focus to the prompt.
+                  inputRef.current?.focus();
                 }}
               />
             )
@@ -6079,7 +6081,7 @@ export default function TerminalShell({
       <div
         className={`flex-1 flex flex-col pl-[calc(0.75rem_+_env(safe-area-inset-left))] pr-[calc(0.75rem_+_env(safe-area-inset-right))] md:pl-[calc(1.5rem_+_env(safe-area-inset-left))] md:pr-[calc(1.5rem_+_env(safe-area-inset-right))] pb-[calc(1.5rem_+_env(safe-area-inset-bottom))] ${HEADER_PAD} overflow-hidden relative z-10`}
         onClick={(e) => {
-          // News/debug widgets retain focus for j/k/Enter (#14 Alex QA).
+          // News/debug/dig-editor retain focus (#14/#97 Alex QA).
           if (
             e.target instanceof Element &&
             e.target.closest("[data-retain-focus]")
