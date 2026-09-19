@@ -12,6 +12,7 @@ import {
   WRAPPED_NATIVE
 } from "./constants";
 import {
+  DEX_FETCH_FAILED_MSG,
   fetchSearchPairs,
   fetchTokensV1,
   pickDexPair,
@@ -415,9 +416,7 @@ export const resolveTickerSymbol = async (
   } catch (e: any) {
     const msg = String(e?.message || e);
     if (/fetch|network|Failed to fetch/i.test(msg)) {
-      return unresolved(
-        "API fetch failed. Check ad-blocker vs api.dexscreener.com."
-      );
+      return unresolved(DEX_FETCH_FAILED_MSG);
     }
     return unresolved(msg);
   }
@@ -499,7 +498,8 @@ export const refreshTickerRows = async (
   }
 
   const quoted = new Map<string, { priceUsd: number | null; change24h: number | null; volume24h: number | null }>();
-  let stale = false;
+  let refreshedAny = false;
+  let failedAny = false;
 
   for (const [chain, addrs] of byChain) {
     try {
@@ -510,21 +510,22 @@ export const refreshTickerRows = async (
           change24h: q.change24h,
           volume24h: q.volume24h
         });
+        refreshedAny = true;
       }
-      // addresses missing from response → keep last (stale if we had no prior)
+      // Missing addresses keep last marks — do not STALE the whole board (#84).
       for (const a of addrs) {
-        if (!map.has(a.toLowerCase())) stale = true;
+        if (!map.has(a.toLowerCase())) failedAny = true;
       }
     } catch (e: any) {
-      stale = true;
+      failedAny = true;
       const msg = String(e?.message || e);
       if (/DexScreener returned/.test(msg)) messages.push(msg);
-      else
-        messages.push(
-          "API fetch failed. Check ad-blocker vs api.dexscreener.com."
-        );
+      else messages.push(DEX_FETCH_FAILED_MSG);
     }
   }
+
+  // Board STALE only when every attempted refresh failed (partial OK).
+  const stale = failedAny && !refreshedAny;
 
   const next = rows.map((r) => {
     if (!r.pairAddress || !r.dsChain) return r;

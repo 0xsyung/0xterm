@@ -4,6 +4,8 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import {
+  DEX_FETCH_FAILED_MSG,
+  fetchWithRetry,
   parseTokensV1Response,
   pickDexPair,
   quoteDexScreenerPairs,
@@ -139,5 +141,44 @@ describe("quoteDexScreenerPairs", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const calledUrl = String(fetchMock.mock.calls[0][0]);
     expect(calledUrl).toMatch(/\/latest\/dex\/pairs\/ethereum\/0xethusdc/);
+  });
+});
+
+describe("fetchWithRetry (#84)", () => {
+  it("retries on TypeError Failed to fetch then succeeds", async () => {
+    let calls = 0;
+    const fetchMock = vi.fn(async () => {
+      calls += 1;
+      if (calls < 3) throw new TypeError("Failed to fetch");
+      return { ok: true, status: 200 } as Response;
+    });
+    const res = await fetchWithRetry(
+      "https://api.dexscreener.com/latest/dex/search?q=ETH",
+      undefined,
+      fetchMock as unknown as typeof fetch,
+      { attempts: 3, delaysMs: [0, 0] }
+    );
+    expect(res.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not retry non-transient errors", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    await expect(
+      fetchWithRetry(
+        "https://api.dexscreener.com/x",
+        undefined,
+        fetchMock as unknown as typeof fetch,
+        { attempts: 3, delaysMs: [0, 0] }
+      )
+    ).rejects.toThrow("boom");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("exports neutral DexScreener failure copy without ad-blocker", () => {
+    expect(DEX_FETCH_FAILED_MSG.toLowerCase()).not.toMatch(/ad-?blocker/);
+    expect(DEX_FETCH_FAILED_MSG).toMatch(/DexScreener|unreachable|quote/i);
   });
 });
