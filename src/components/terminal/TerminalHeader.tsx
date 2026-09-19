@@ -40,9 +40,10 @@ function PrimaryTabSwitch({
 
   return (
     <div
-      className="flex items-center gap-1 shrink-0"
+      className="flex items-center gap-1 shrink-0 max-md:basis-full max-md:min-w-0 max-md:overflow-x-auto"
       role="tablist"
       aria-label="Primary surface"
+      data-testid="primary-tab-strip"
     >
       {tabs.map((t) => {
         const active = primaryTab === t.id;
@@ -208,10 +209,10 @@ export default function TerminalHeader({
   ];
   return (
     <div
-      className={`absolute top-0 left-0 right-0 z-30 flex items-center gap-4 flex-wrap pl-[calc(0.75rem_+_env(safe-area-inset-left))] pr-[calc(0.75rem_+_env(safe-area-inset-right))] max-md:items-start max-md:py-1 ${theme.primary} ${HEADER_H}`}
+      className={`absolute top-0 left-0 right-0 z-30 flex items-center gap-x-4 gap-y-1 flex-wrap pl-[calc(0.75rem_+_env(safe-area-inset-left))] pr-[calc(0.75rem_+_env(safe-area-inset-right))] max-md:items-start max-md:py-1 ${theme.primary} ${HEADER_H}`}
       style={{ borderBottom: `2px solid ${theme.phosphor}` }}
     >
-      <div className="flex items-center gap-3 shrink-0 uppercase text-[10px] tracking-widest">
+      <div className="flex items-center gap-3 flex-wrap min-w-0 max-md:w-full uppercase text-[10px] tracking-widest">
         <span className="font-bold">0xTERM</span>
         <span className="tabular-nums">{clock}</span>
         {modeTabsEl}
