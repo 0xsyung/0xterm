@@ -49,6 +49,7 @@ describe("TickerWidget", () => {
     expect(screen.getByText("VOL 24H")).toBeTruthy();
     expect(screen.getByText(TICKER_FOOTER)).toBeTruthy();
     expect(screen.getByText("ZZZ")).toBeTruthy();
+    expect(screen.getByText("UNRESOLVED")).toBeTruthy();
     expect(screen.getByText("ETH")).toBeTruthy();
   });
 

@@ -4017,24 +4017,38 @@ export default function TerminalShell({
         const built = await buildTickerRows(prefs, activeChainId);
         writeTickerPrefs(storage, built.prefs, wallet);
         const entries: LogEntry[] = [];
+        // Surface all resolve/refresh warns (incl. DEX_FETCH_FAILED_MSG) — #87.
         for (const msg of built.messages) {
-          if (/No DexScreener USD pair/.test(msg)) {
-            entries.push({
-              id: generateId(),
-              type: "text",
-              text: msg.startsWith("No ") ? msg : msg,
-              warn: true
-            });
-          } else if (/DexScreener returned|API fetch failed/.test(msg)) {
-            entries.push({
-              id: generateId(),
-              type: "text",
-              text: msg,
-              warn: true
-            });
-          }
+          if (!msg) continue;
+          entries.push({
+            id: generateId(),
+            type: "text",
+            text: msg,
+            warn: true
+          });
         }
         if (parsed.op === "add") {
+          const addedRow = built.rows.find(
+            (r) => r.symbol.toLowerCase() === parsed.symbol.toLowerCase()
+          );
+          const unresolvedAdd = !!addedRow && !addedRow.pairAddress;
+          if (unresolvedAdd) {
+            // Keep the symbol on the board with UNRESOLVED row (best UX) —
+            // ensure explicit warn even if resolve returned no message.
+            const alreadyWarned = built.messages.some(
+              (m) =>
+                m.includes(parsed.symbol) ||
+                /DexScreener|unreachable|USD pair/i.test(m)
+            );
+            if (!alreadyWarned) {
+              entries.push({
+                id: generateId(),
+                type: "text",
+                text: `No DexScreener USD pair for ${parsed.symbol}`,
+                warn: true
+              });
+            }
+          }
           entries.push({
             id: generateId(),
             type: "text",
@@ -4054,7 +4068,8 @@ export default function TerminalShell({
           payload: {
             rows: built.rows,
             symbols: built.prefs.symbols,
-            stale: false
+            // Partial refresh / unresolved add must not force board STALE (#84/#87).
+            stale: built.stale === true
           }
         });
         return entries;

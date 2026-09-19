@@ -15,6 +15,7 @@ import {
   DEX_FETCH_FAILED_MSG,
   fetchSearchPairs,
   fetchTokensV1,
+  parseChange24h,
   pickDexPair,
   preferChainsForSymbol,
   quoteDexScreenerPairs,
@@ -298,8 +299,7 @@ const marksFromPair = (
         })();
   return {
     priceUsd,
-    change24h:
-      typeof pair.priceChange?.h24 === "number" ? pair.priceChange.h24 : null,
+    change24h: parseChange24h(pair),
     volume24h: typeof pair.volume?.h24 === "number" ? pair.volume.h24 : null,
     updatedAt: Date.now()
   };
@@ -427,7 +427,12 @@ export const buildTickerRows = async (
   prefs: TickerPrefs,
   activeChainId: number | null,
   fetchImpl: typeof fetch = fetch
-): Promise<{ rows: TickerRow[]; prefs: TickerPrefs; messages: string[] }> => {
+): Promise<{
+  rows: TickerRow[];
+  prefs: TickerPrefs;
+  messages: string[];
+  stale: boolean;
+}> => {
   const messages: string[] = [];
   const nextRows: Record<string, TickerRowIdentity> = { ...prefs.rows };
   const rows: TickerRow[] = [];
@@ -477,7 +482,9 @@ export const buildTickerRows = async (
   return {
     rows: refreshed.rows,
     prefs: { symbols: prefs.symbols, rows: nextRows },
-    messages: [...messages, ...refreshed.messages]
+    messages: [...messages, ...refreshed.messages],
+    // Unresolved rows (no pair) are skipped by refresh — do not STALE board (#87/#84).
+    stale: refreshed.stale
   };
 };
 

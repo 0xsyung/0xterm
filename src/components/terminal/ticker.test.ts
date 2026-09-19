@@ -155,6 +155,115 @@ describe("refreshTickerRows", () => {
     expect(out.rows[0].priceUsd).toBe(2384.1);
     expect(out.stale).toBe(false);
   });
+
+  it("maps priceChange.h24 into change24h for BTC/SOL/ETH (#86)", async () => {
+    const rows: TickerRow[] = [
+      {
+        symbol: "ETH",
+        pairAddress: "0xethusdc",
+        dsChain: "ethereum",
+        priceUsd: 2000,
+        change24h: null,
+        volume24h: null,
+        updatedAt: null
+      },
+      {
+        symbol: "BTC",
+        pairAddress: "0xbtcusdc",
+        dsChain: "ethereum",
+        priceUsd: 60000,
+        change24h: null,
+        volume24h: null,
+        updatedAt: null
+      },
+      {
+        symbol: "SOL",
+        pairAddress: "solusdc",
+        dsChain: "solana",
+        priceUsd: 140,
+        change24h: null,
+        volume24h: null,
+        updatedAt: null
+      }
+    ];
+    const fetchMock = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/ethereum/")) {
+        return {
+          ok: true,
+          json: async () => ({
+            pairs: [
+              {
+                chainId: "ethereum",
+                pairAddress: "0xethusdc",
+                priceUsd: "2384.1",
+                priceChange: { h24: 6.1 },
+                volume: { h24: 1.79e6 }
+              },
+              {
+                chainId: "ethereum",
+                pairAddress: "0xbtcusdc",
+                priceUsd: "64000",
+                priceChange: { h24: -1.2 },
+                volume: { h24: 9e6 }
+              }
+            ]
+          })
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          pairs: [
+            {
+              chainId: "solana",
+              pairAddress: "solusdc",
+              priceUsd: "141.5",
+              priceChange: { h24: 3.4 },
+              volume: { h24: 2e6 }
+            }
+          ]
+        })
+      };
+    });
+    const out = await refreshTickerRows(rows, fetchMock as unknown as typeof fetch);
+    expect(out.stale).toBe(false);
+    expect(out.rows.find((r) => r.symbol === "ETH")?.change24h).toBe(6.1);
+    expect(out.rows.find((r) => r.symbol === "BTC")?.change24h).toBe(-1.2);
+    expect(out.rows.find((r) => r.symbol === "SOL")?.change24h).toBe(3.4);
+  });
+
+  it("keeps change24h null when quote omits priceChange.h24 (#86)", async () => {
+    const rows: TickerRow[] = [
+      {
+        symbol: "BTC",
+        pairAddress: "ghostbtc",
+        dsChain: "solana",
+        priceUsd: 70000,
+        change24h: null,
+        volume24h: 1,
+        updatedAt: 1
+      }
+    ];
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        pairs: [
+          {
+            chainId: "solana",
+            pairAddress: "ghostbtc",
+            priceUsd: "79828",
+            priceChange: {},
+            volume: { h24: 42 }
+          }
+        ]
+      })
+    }));
+    const out = await refreshTickerRows(rows, fetchMock as unknown as typeof fetch);
+    expect(out.rows[0].priceUsd).toBe(79828);
+    expect(out.rows[0].volume24h).toBe(42);
+    expect(out.rows[0].change24h).toBeNull();
+  });
 });
 
 describe("refreshTickerRows partial failure (#84)", () => {
@@ -246,5 +355,70 @@ describe("resolveTickerSymbol error copy (#84)", () => {
     expect(out.unresolved).toBe(true);
     expect(out.error || "").not.toMatch(/ad-?blocker/i);
     expect(out.error).toBe(DEX_FETCH_FAILED_MSG);
+  });
+});
+
+describe("unresolved add does not STALE healthy board (#87)", () => {
+  it("refresh skips null-pair rows and stays fresh when others quote", async () => {
+    const rows: TickerRow[] = [
+      {
+        symbol: "ETH",
+        pairAddress: "0xethusdc",
+        dsChain: "ethereum",
+        priceUsd: 2000,
+        change24h: 1,
+        volume24h: 1e6,
+        updatedAt: 1
+      },
+      {
+        symbol: "LINK",
+        pairAddress: null,
+        dsChain: null,
+        priceUsd: null,
+        change24h: null,
+        volume24h: null,
+        updatedAt: null
+      }
+    ];
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        pairs: [
+          {
+            chainId: "ethereum",
+            pairAddress: "0xethusdc",
+            priceUsd: "2384.1",
+            priceChange: { h24: -2.76 },
+            volume: { h24: 1.79e6 }
+          }
+        ]
+      })
+    }));
+    const out = await refreshTickerRows(rows, fetchMock as unknown as typeof fetch);
+    expect(out.stale).toBe(false);
+    expect(out.rows[0].priceUsd).toBe(2384.1);
+    expect(out.rows[1].pairAddress).toBeNull();
+    expect(out.rows[1].priceUsd).toBeNull();
+  });
+
+  it("resolveTickerSymbol returns unresolved row when no USD pair", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/tokens/v1/")) {
+        return { ok: true, json: async () => [] };
+      }
+      if (u.includes("/search")) {
+        return { ok: true, json: async () => ({ pairs: [] }) };
+      }
+      return { ok: true, json: async () => ({ pairs: [] }) };
+    });
+    const out = await resolveTickerSymbol(
+      "ZZZNOPE",
+      1,
+      fetchMock as unknown as typeof fetch
+    );
+    expect(out.unresolved).toBe(true);
+    expect(out.row.pairAddress).toBeNull();
+    expect(out.error || "").toMatch(/No DexScreener USD pair/);
   });
 });

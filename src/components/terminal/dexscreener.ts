@@ -60,7 +60,7 @@ export type DexPair = {
   priceNative?: string | number | null;
   liquidity?: { usd?: number | null } | null;
   volume?: { h24?: number | null } | null;
-  priceChange?: { h24?: number | null } | null;
+  priceChange?: { h24?: number | string | null } | null;
   baseToken?: { symbol?: string; address?: string };
   quoteToken?: { symbol?: string; address?: string };
 };
@@ -98,6 +98,18 @@ export const parsePriceUsd = (p: DexPair): number | null => {
   const n = typeof raw === "number" ? raw : parseFloat(String(raw));
   return Number.isFinite(n) ? n : null;
 };
+
+/** Coerce DexScreener priceChange.h24 (number or numeric string) → number | null. */
+export const parseChange24hValue = (
+  raw: number | string | null | undefined
+): number | null => {
+  if (raw === undefined || raw === null || raw === "") return null;
+  const n = typeof raw === "number" ? raw : parseFloat(String(raw));
+  return Number.isFinite(n) ? n : null;
+};
+
+export const parseChange24h = (p: DexPair): number | null =>
+  parseChange24hValue(p.priceChange?.h24);
 
 export const parseLiquidityUsd = (p: DexPair): number => {
   const n = p.liquidity?.usd;
@@ -183,6 +195,13 @@ export const pickDexPair = (
     candidates = candidates.filter((p) => parseLiquidityUsd(p) > LIQUIDITY_FLOOR);
   }
 
+  // Prefer pairs that actually expose 24h change when any candidate has it (#86).
+  // Avoids mega-liq ghost pairs (common on Solana search) with empty priceChange.
+  const anyChange = candidates.some((p) => parseChange24h(p) !== null);
+  if (anyChange) {
+    candidates = candidates.filter((p) => parseChange24h(p) !== null);
+  }
+
   candidates = [...candidates].sort((a, b) => {
     const chainDelta =
       chainPreferenceScore(a.chainId, opts.preferChains) -
@@ -247,8 +266,7 @@ export const quoteDexScreenerPairs = async (
       );
       if (!pair) continue;
       const priceUsd = parsePriceUsd(pair);
-      const change24h =
-        typeof pair.priceChange?.h24 === "number" ? pair.priceChange.h24 : null;
+      const change24h = parseChange24h(pair);
       const volume24h =
         typeof pair.volume?.h24 === "number" ? pair.volume.h24 : null;
       out.set(wanted.toLowerCase(), { pair, priceUsd, change24h, volume24h });
