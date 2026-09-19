@@ -6,7 +6,7 @@
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
   _resetNewsCache,
   buildNewsFooter,
@@ -16,13 +16,17 @@ import {
   isAllowedNewsUrl,
   isSafeArticleUrl,
   newsPinKey,
+  formatNewsAsOf,
+  formatNewsTime,
   openNewsArticle,
   parseNewsCommand,
+  parseNewsDate,
   parseRss,
   parseRss2Json,
   sanitizeHeadline,
   type NewsItem
 } from "./news";
+import { formatLocalHm, formatLocalHms } from "./localTime";
 import { NEWS_ALLOWLIST } from "./newsAllowlist";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -280,7 +284,81 @@ describe("fetchNewsHeadlines", () => {
 });
 
 describe("openNewsArticle", () => {
-  it("rejects unsafe urls", () => {
+  it("rejects unsafe urls without touching the DOM", () => {
+    const spy = vi.spyOn(document, "createElement");
     expect(openNewsArticle("javascript:alert(1)")).toBe(false);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("opens via <a target=_blank> click — not window.open (#89)", () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    const clicks: { href: string; target: string; rel: string }[] = [];
+    const realCreate = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const el = realCreate(tag);
+      if (tag.toLowerCase() === "a") {
+        el.click = () => {
+          clicks.push({
+            href: (el as HTMLAnchorElement).href,
+            target: (el as HTMLAnchorElement).target,
+            rel: (el as HTMLAnchorElement).rel
+          });
+        };
+      }
+      return el;
+    });
+    const ok = openNewsArticle("https://decrypt.co/article/1");
+    expect(ok).toBe(true);
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(clicks).toHaveLength(1);
+    expect(clicks[0].href).toContain("https://decrypt.co/article/1");
+    expect(clicks[0].target).toBe("_blank");
+    expect(clicks[0].rel).toMatch(/noopener/);
+    expect(clicks[0].rel).toMatch(/noreferrer/);
+    openSpy.mockRestore();
+    vi.restoreAllMocks();
+  });
+});
+
+describe("parseNewsDate / formatNewsTime (#90)", () => {
+  it("treats rss2json TZ-less timestamps as UTC", () => {
+    // rss2json emits "YYYY-MM-DD HH:mm:ss" without zone; digits are UTC.
+    const ms = parseNewsDate("2026-09-19 20:24:00");
+    expect(ms).toBe(Date.parse("2026-09-19T20:24:00.000Z"));
+    // Explicit offsets still win.
+    expect(parseNewsDate("Sat, 19 Sep 2026 20:24:00 +0000")).toBe(
+      Date.parse("2026-09-19T20:24:00.000Z")
+    );
+    expect(parseNewsDate("Sat, 19 Sep 2026 20:24:00 GMT")).toBe(
+      Date.parse("2026-09-19T20:24:00.000Z")
+    );
+  });
+
+  it("formatNewsTime matches formatLocalHm / formatNewsAsOf prefix (local TZ)", () => {
+    const ms = Date.parse("2026-09-19T20:24:00.000Z");
+    expect(formatNewsTime(ms)).toBe(formatLocalHm(ms));
+    expect(formatNewsAsOf(ms)).toBe(formatLocalHms(ms));
+    // as-of is HH:MM:SS; TIME is the HH:MM prefix of the same local clock.
+    expect(formatNewsAsOf(ms).startsWith(formatNewsTime(ms))).toBe(true);
+    expect(formatNewsTime(null)).toBe("—");
+  });
+
+  it("parseRss2Json applies UTC-default parse to TZ-less pubDate", () => {
+    const items = parseRss2Json(
+      {
+        status: "ok",
+        items: [
+          {
+            title: "Skew check",
+            link: "https://decrypt.co/skew",
+            pubDate: "2026-09-19 20:24:00"
+          }
+        ]
+      },
+      "decrypt"
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0].publishedAt).toBe(Date.parse("2026-09-19T20:24:00.000Z"));
   });
 });

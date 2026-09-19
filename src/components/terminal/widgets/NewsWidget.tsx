@@ -78,7 +78,10 @@ export default function NewsWidget({
   const openAt = (idx: number) => {
     const it = items[idx];
     if (!it) return;
-    openNewsArticle(it.url);
+    // Gesture-safe open; only return focus to prompt on success (#89).
+    // Blocked/failed open: keep widget focused so j/k still work.
+    const ok = openNewsArticle(it.url);
+    if (!ok) return;
     onFocusPrompt?.();
     setFocused(false);
     rootRef.current?.blur();
