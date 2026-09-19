@@ -121,4 +121,35 @@ describe("NewsWidget", () => {
     expect(bubble.down).toBe(false);
   });
 
+  it("uses 6ch TIME template when TIME is shown (#85)", () => {
+    const { container } = render(
+      <NewsWidget
+        data={{
+          kind: "news",
+          widgetId: "news:all",
+          tag: "",
+          fetchedAt: Date.now(),
+          items: [
+            {
+              id: "1",
+              sourceId: "defiant",
+              title: "Gap check",
+              url: "https://thedefiant.io/x",
+              publishedAt: Date.now()
+            }
+          ]
+        }}
+        theme={theme}
+      />
+    );
+    const grids = container.querySelectorAll(".grid");
+    const withTime = [...grids].find((el) =>
+      (el.className || "").includes(
+        "grid-cols-[6ch_minmax(0,12ch)_minmax(0,1fr)]"
+      )
+    );
+    expect(withTime).toBeTruthy();
+    expect((withTime as HTMLElement).className).toContain("gap-x-2");
+    expect((withTime as HTMLElement).className).not.toContain("4.5ch");
+  });
 });

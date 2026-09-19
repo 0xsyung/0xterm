@@ -73,7 +73,7 @@ export default function NewsWidget({
 
   const colTemplate = dropTime
     ? "grid-cols-[minmax(0,12ch)_minmax(0,1fr)]"
-    : "grid-cols-[4.5ch_minmax(0,12ch)_minmax(0,1fr)]";
+    : "grid-cols-[6ch_minmax(0,12ch)_minmax(0,1fr)]";
 
   const openAt = (idx: number) => {
     const it = items[idx];
@@ -160,7 +160,7 @@ export default function NewsWidget({
       ) : (
         <>
           <div
-            className={`grid ${colTemplate} gap-1 ${theme.muted} text-[9px] uppercase`}
+            className={`grid ${colTemplate} gap-x-2 ${theme.muted} text-[9px] uppercase`}
           >
             {!dropTime && <div>TIME</div>}
             <div>SOURCE</div>
@@ -185,12 +185,14 @@ export default function NewsWidget({
                   setFocused(true);
                   rootRef.current?.focus();
                 }}
-                className={`grid ${colTemplate} gap-1 w-full text-left tabular-nums ${
+                className={`grid ${colTemplate} gap-x-2 w-full text-left tabular-nums ${
                   compact ? "text-[10px]" : "text-[11px]"
                 } ${active ? theme.primary : theme.text} bg-transparent border-0 p-0 cursor-pointer`}
               >
                 {!dropTime && (
-                  <div className={theme.muted}>{formatNewsTime(it.publishedAt)}</div>
+                  <div className={`${theme.muted} overflow-hidden tabular-nums`}>
+                    {formatNewsTime(it.publishedAt)}
+                  </div>
                 )}
                 <div className={`${theme.muted} uppercase truncate`}>
                   {sourceLabel(it.sourceId)}

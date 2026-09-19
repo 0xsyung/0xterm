@@ -87,7 +87,11 @@ import {
 } from "./helpers";
 import { detectTokenType } from "./tokenType";
 import { getNativePriceUsd } from "./pricing";
-import { quoteDexScreenerPair } from "./dexscreener";
+import {
+  DEX_FETCH_FAILED_MSG,
+  fetchWithRetry,
+  quoteDexScreenerPair
+} from "./dexscreener";
 import {
   TICKER_REFRESH_SEC,
   TICKER_WIDGET_ID,
@@ -3270,14 +3274,14 @@ export default function TerminalShell({
         let res;
 
         try {
-          res = await fetch(
+          res = await fetchWithRetry(
             `https://api.dexscreener.com/latest/dex/search?q=${encodedQuery}`
           );
         } catch (e) {
           return {
             id: generateId(),
             type: "text",
-            text: "[!] API Fetch Failed: Request timed out or was blocked. Ensure your ad-blocker isn't blocking 'api.dexscreener.com'."
+            text: `[!] ${DEX_FETCH_FAILED_MSG}`
           };
         }
 
@@ -4059,9 +4063,7 @@ export default function TerminalShell({
         return {
           id: generateId(),
           type: "text",
-          text: /fetch|network/i.test(msg)
-            ? "API fetch failed. Check ad-blocker vs api.dexscreener.com."
-            : msg,
+          text: /fetch|network/i.test(msg) ? DEX_FETCH_FAILED_MSG : msg,
           warn: true
         };
       }

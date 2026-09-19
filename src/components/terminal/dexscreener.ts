@@ -7,6 +7,51 @@
 
 export const DEXSCREENER_API = "https://api.dexscreener.com";
 
+/** Neutral copy for DexScreener network failures — do not blame ad-blockers (#84). */
+export const DEX_FETCH_FAILED_MSG = "DexScreener unreachable";
+
+export const isTransientFetchError = (e: unknown): boolean => {
+  if (e instanceof TypeError) return true;
+  const msg = String((e as { message?: unknown })?.message ?? e ?? "");
+  return /Failed to fetch|NetworkError|Load failed|network/i.test(msg);
+};
+
+export type FetchWithRetryOpts = {
+  /** Total attempts including the first. Default 3. */
+  attempts?: number;
+  /** Backoff after each failed attempt (ms). Default [200, 400]. */
+  delaysMs?: number[];
+};
+
+/**
+ * Retry transient network failures (TypeError / Failed to fetch).
+ * Does not retry HTTP error statuses — callers handle those.
+ */
+export const fetchWithRetry = async (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  fetchImpl: typeof fetch = fetch,
+  opts?: FetchWithRetryOpts
+): Promise<Response> => {
+  const attempts = opts?.attempts ?? 3;
+  const delays = opts?.delaysMs ?? [200, 400];
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetchImpl(input, init);
+    } catch (e) {
+      lastErr = e;
+      if (!isTransientFetchError(e) || i === attempts - 1) throw e;
+      const delay = delays[Math.min(i, delays.length - 1)] ?? 300;
+      if (delay > 0) {
+        await new Promise<void>((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastErr;
+};
+
+
 export type DexPair = {
   chainId: string;
   dexId?: string;
@@ -190,7 +235,7 @@ export const quoteDexScreenerPairs = async (
   for (let i = 0; i < unique.length; i += 30) {
     const batch = unique.slice(i, i + 30);
     const url = `${DEXSCREENER_API}/latest/dex/pairs/${encodeURIComponent(dsChain)}/${batch.join(",")}`;
-    const res = await fetchImpl(url);
+    const res = await fetchWithRetry(url, undefined, fetchImpl);
     if (!res.ok) {
       throw new Error(`DexScreener returned ${res.status}`);
     }
@@ -229,7 +274,7 @@ export const fetchTokensV1 = async (
   const addrs = tokenAddresses.filter(Boolean).slice(0, 30);
   if (!dsChain || addrs.length === 0) return [];
   const url = `${DEXSCREENER_API}/tokens/v1/${encodeURIComponent(dsChain)}/${addrs.join(",")}`;
-  const res = await fetchImpl(url);
+  const res = await fetchWithRetry(url, undefined, fetchImpl);
   if (!res.ok) throw new Error(`DexScreener returned ${res.status}`);
   return parseTokensV1Response(await res.json());
 };
@@ -239,7 +284,7 @@ export const fetchSearchPairs = async (
   fetchImpl: typeof fetch = fetch
 ): Promise<DexPair[]> => {
   const url = `${DEXSCREENER_API}/latest/dex/search?q=${encodeURIComponent(query)}`;
-  const res = await fetchImpl(url);
+  const res = await fetchWithRetry(url, undefined, fetchImpl);
   if (!res.ok) throw new Error(`DexScreener returned ${res.status}`);
   return parseSearchResponse(await res.json());
 };
