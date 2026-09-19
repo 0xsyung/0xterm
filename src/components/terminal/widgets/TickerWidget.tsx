@@ -193,10 +193,12 @@ export default function TickerWidget({
             key={r.symbol}
             className={`grid ${colTemplate} gap-1 tabular-nums ${compact ? "text-[10px]" : "text-[11px]"}`}
           >
-            <div className={`font-bold truncate ${symClass}`}>
-              {r.symbol}
+            <div className={`font-bold ${symClass} flex min-w-0 items-baseline gap-1`}>
+              <span className="truncate">{r.symbol}</span>
               {unresolved && (
-                <span className={`ml-1 font-normal ${theme.warn}`}>UNRESOLVED</span>
+                <span className={`shrink-0 font-normal ${theme.warn}`}>
+                  UNRESOLVED
+                </span>
               )}
             </div>
             <div className={`text-right ${unresolved ? theme.muted : theme.text}`}>

@@ -421,4 +421,37 @@ describe("unresolved add does not STALE healthy board (#87)", () => {
     expect(out.row.pairAddress).toBeNull();
     expect(out.error || "").toMatch(/No DexScreener USD pair/);
   });
+
+  it("resolves SOL via wrapped mint tokens/v1 when h24 present (#86)", async () => {
+    const urls: string[] = [];
+    const fetchImpl = async (input: RequestInfo | URL) => {
+      const u = String(input);
+      urls.push(u);
+      if (u.includes("/tokens/v1/solana/")) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              chainId: "solana",
+              pairAddress: "SoLusdcPair111",
+              baseToken: { symbol: "SOL", address: "So11111111111111111111111111111111111111112" },
+              quoteToken: { symbol: "USDC" },
+              priceUsd: "148.2",
+              liquidity: { usd: 5_000_000 },
+              volume: { h24: 9e6 },
+              priceChange: { h24: 2.5 }
+            }
+          ]
+        } as Response;
+      }
+      throw new Error(`unexpected ${u}`);
+    };
+    const r = await resolveTickerSymbol("SOL", null, fetchImpl as typeof fetch);
+    expect(r.unresolved).toBe(false);
+    if (r.unresolved) throw new Error("expected resolved");
+    expect(r.row.change24h).toBe(2.5);
+    expect(r.row.dsChain).toBe("solana");
+    expect(urls.some((u) => u.includes("/tokens/v1/solana/"))).toBe(true);
+  });
+
 });
