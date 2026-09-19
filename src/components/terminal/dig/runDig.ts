@@ -10,6 +10,7 @@ import {
   DIG_ERROR,
   DIG_RESERVED_DEPLOY,
   DIG_SUBCOMMANDS,
+  digUsageText,
   type DigEnvKind
 } from "./constants";
 import {
@@ -231,7 +232,7 @@ export type DigRunContext = {
 function usage(): DigTextResult {
   return {
     kind: "text",
-    text: "Usage: dig [new|open|edit|compile|ver|bytecode|abi|opcodes|artifact|deploy|env|at|ls|fn|call|send|logs|gas|receipt|debug|step|over|out|back|br|op|stack|mem|stor|vars] …"
+    text: digUsageText()
   };
 }
 
@@ -350,6 +351,10 @@ export async function runDig(
   }
 
   const sub = (argv[1] || "").toLowerCase();
+
+  if (sub === "help") {
+    return usage();
+  }
 
   if (!sub) {
     const summary = await loadDigLastSummary();

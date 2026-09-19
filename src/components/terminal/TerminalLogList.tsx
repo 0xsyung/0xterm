@@ -356,16 +356,23 @@ function renderLog(
 
   // Plain text / component logs. Price + dig-artifact are pinnable (#35 / #39).
   // Editor / opcodes / abi / non-live component widgets have nothing to pin.
+  // Dig usage (#88): wrap on spaces — never single-line truncate / ellipsis.
+  const isDigUsage =
+    typeof log.text === "string" && log.text.startsWith("Usage: dig");
+  const tone = log.warn
+    ? theme.warn
+    : log.muted
+      ? theme.muted
+      : `${theme.text}/90`;
   return (
     <div className="relative group">
       <div
         className={
-          log.warn
-            ? theme.warn
-            : log.muted
-              ? theme.muted
-              : `${theme.text}/90`
+          isDigUsage
+            ? `${tone} whitespace-normal break-words`
+            : tone
         }
+        data-dig-usage={isDigUsage ? "true" : undefined}
       >
         {log.text}
         {log.componentData?.kind === "price" ? (

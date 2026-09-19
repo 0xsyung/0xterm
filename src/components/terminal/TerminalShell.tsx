@@ -2228,6 +2228,8 @@ export default function TerminalShell({
                 mode={r.mode}
                 onClose={() => {
                   setLogs((prev) => prev.filter((l) => l.id !== id));
+                  // #92: Esc-to-close returns focus to the prompt.
+                  inputRef.current?.focus();
                 }}
               />
             )
