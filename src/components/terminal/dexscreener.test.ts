@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DEX_FETCH_FAILED_MSG,
   fetchWithRetry,
+  parseChange24h,
   parseTokensV1Response,
   pickDexPair,
   quoteDexScreenerPairs,
@@ -96,6 +97,35 @@ describe("pickDexPair", () => {
     });
     expect(picked!.chainId).toBe("solana");
   });
+
+  it("prefers pair with priceChange.h24 over mega-liq ghost without (#86)", () => {
+    const ghost: DexPair = {
+      chainId: "solana",
+      pairAddress: "ghostbtc",
+      priceUsd: "79828",
+      liquidity: { usd: 7_980_000_000 },
+      volume: { h24: 42 },
+      priceChange: {},
+      baseToken: { symbol: "BTC" },
+      quoteToken: { symbol: "USDC" }
+    };
+    const withChange: DexPair = {
+      chainId: "solana",
+      pairAddress: "realbtc",
+      priceUsd: "77200",
+      liquidity: { usd: 80_000_000 },
+      volume: { h24: 1_200_000 },
+      priceChange: { h24: 1.25 },
+      baseToken: { symbol: "BTC" },
+      quoteToken: { symbol: "USDC" }
+    };
+    const picked = pickDexPair([ghost, withChange], {
+      symbol: "BTC",
+      preferChains: ["ethereum", "base", "solana", "bsc"]
+    });
+    expect(picked!.pairAddress).toBe("realbtc");
+    expect(parseChange24h(picked!)).toBe(1.25);
+  });
 });
 
 describe("parseTokensV1Response", () => {
@@ -141,6 +171,45 @@ describe("quoteDexScreenerPairs", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const calledUrl = String(fetchMock.mock.calls[0][0]);
     expect(calledUrl).toMatch(/\/latest\/dex\/pairs\/ethereum\/0xethusdc/);
+  });
+
+  it("maps priceChange.h24 into change24h for multiple symbols (#86)", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        pairs: [
+          {
+            chainId: "ethereum",
+            pairAddress: "0xethusdc",
+            priceUsd: "2384.1",
+            priceChange: { h24: -2.76 },
+            volume: { h24: 1.79e6 }
+          },
+          {
+            chainId: "ethereum",
+            pairAddress: "0xbtcusdc",
+            priceUsd: "64000",
+            priceChange: { h24: "1.5" }, // numeric string
+            volume: { h24: 9e6 }
+          },
+          {
+            chainId: "ethereum",
+            pairAddress: "0xsolusdc",
+            priceUsd: "140",
+            // missing change → null
+            volume: { h24: 2e6 }
+          }
+        ]
+      })
+    }));
+    const map = await quoteDexScreenerPairs(
+      "ethereum",
+      ["0xethusdc", "0xbtcusdc", "0xsolusdc"],
+      fetchMock as unknown as typeof fetch
+    );
+    expect(map.get("0xethusdc")?.change24h).toBe(-2.76);
+    expect(map.get("0xbtcusdc")?.change24h).toBe(1.5);
+    expect(map.get("0xsolusdc")?.change24h).toBeNull();
   });
 });
 

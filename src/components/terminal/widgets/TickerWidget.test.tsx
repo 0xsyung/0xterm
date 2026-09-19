@@ -49,7 +49,34 @@ describe("TickerWidget", () => {
     expect(screen.getByText("VOL 24H")).toBeTruthy();
     expect(screen.getByText(TICKER_FOOTER)).toBeTruthy();
     expect(screen.getByText("ZZZ")).toBeTruthy();
+    expect(screen.getByText("UNRESOLVED")).toBeTruthy();
     expect(screen.getByText("ETH")).toBeTruthy();
+  });
+
+
+  it("shows UNRESOLVED badge even for long symbols (not truncated) (#87)", () => {
+    render(
+      <TickerWidget
+        data={{
+          kind: "ticker",
+          widgetId: "ticker:watchlist",
+          rows: [
+            {
+              symbol: "ZZZNOPE",
+              pairAddress: null,
+              dsChain: null,
+              priceUsd: null,
+              change24h: null,
+              volume24h: null,
+              updatedAt: null
+            }
+          ]
+        }}
+        theme={theme}
+      />
+    );
+    expect(screen.getByText("ZZZNOPE")).toBeTruthy();
+    expect(screen.getByText("UNRESOLVED")).toBeTruthy();
   });
 
   it("drops VOL when compact", () => {
