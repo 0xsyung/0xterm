@@ -204,9 +204,11 @@ export const THEME_ALIASES: Record<string, ThemeMode> = {
 
 // Single canonical header metrics — the Bloomberg terminal bar. Themes never
 // change layout, so there is exactly one header height/pad for every skin.
-export const HEADER_PAD = 'max-md:pt-[calc(80px_+_env(safe-area-inset-top))] md:pt-[calc(32px_+_env(safe-area-inset-top))]'
+// Narrow (#91): brand/mode + TERMINAL|SOCIAL wrap row + F-row ≈ three coarse
+// 44px bands with tight gaps → 152px floor (was 80px for two rows under #49).
+export const HEADER_PAD = 'max-md:pt-[calc(152px_+_env(safe-area-inset-top))] md:pt-[calc(32px_+_env(safe-area-inset-top))]'
 
-export const HEADER_H = 'max-md:h-auto max-md:min-h-[calc(80px_+_env(safe-area-inset-top))] md:h-[calc(32px_+_env(safe-area-inset-top))]'
+export const HEADER_H = 'max-md:h-auto max-md:min-h-[calc(152px_+_env(safe-area-inset-top))] md:h-[calc(32px_+_env(safe-area-inset-top))]'
 
 export function resolveThemeKey(raw?: string | null): ThemeMode {
   if (!raw) return 'matrix'
