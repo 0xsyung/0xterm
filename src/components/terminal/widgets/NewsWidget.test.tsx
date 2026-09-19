@@ -3,11 +3,12 @@
  * @file NewsWidget.test.tsx
  * @description Render smoke for news board chrome (#14)
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { THEMES } from "../constants";
 import NewsWidget from "./NewsWidget";
 import { NEWS_FOOTER_BASE } from "../newsAllowlist";
+import * as news from "../news";
 
 const theme = THEMES.matrix;
 
@@ -152,4 +153,100 @@ describe("NewsWidget", () => {
     expect((withTime as HTMLElement).className).toContain("gap-x-2");
     expect((withTime as HTMLElement).className).not.toContain("4.5ch");
   });
+
+  it("Enter opens via openNewsArticle; success blurs to prompt (#89)", () => {
+    const onFocusPrompt = vi.fn();
+    const openSpy = vi.spyOn(news, "openNewsArticle").mockReturnValue(true);
+    const { container } = render(
+      <NewsWidget
+        data={{
+          kind: "news",
+          widgetId: "news:all",
+          tag: "",
+          fetchedAt: Date.now(),
+          items: [
+            {
+              id: "1",
+              sourceId: "decrypt",
+              title: "Open me",
+              url: "https://decrypt.co/open-me",
+              publishedAt: Date.now()
+            }
+          ]
+        }}
+        theme={theme}
+        autoFocus
+        onFocusPrompt={onFocusPrompt}
+      />
+    );
+    const root = container.querySelector("[data-retain-focus]") as HTMLElement;
+    root.focus();
+    fireEvent.keyDown(root, { key: "Enter" });
+    expect(openSpy).toHaveBeenCalledWith("https://decrypt.co/open-me");
+    expect(onFocusPrompt).toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  it("Enter keeps focus on widget when open fails (#89)", () => {
+    const onFocusPrompt = vi.fn();
+    const openSpy = vi.spyOn(news, "openNewsArticle").mockReturnValue(false);
+    const { container } = render(
+      <NewsWidget
+        data={{
+          kind: "news",
+          widgetId: "news:all",
+          tag: "",
+          fetchedAt: Date.now(),
+          items: [
+            {
+              id: "1",
+              sourceId: "decrypt",
+              title: "Blocked",
+              url: "https://decrypt.co/blocked",
+              publishedAt: Date.now()
+            }
+          ]
+        }}
+        theme={theme}
+        autoFocus
+        onFocusPrompt={onFocusPrompt}
+      />
+    );
+    const root = container.querySelector("[data-retain-focus]") as HTMLElement;
+    root.focus();
+    fireEvent.keyDown(root, { key: "Enter" });
+    expect(openSpy).toHaveBeenCalled();
+    expect(onFocusPrompt).not.toHaveBeenCalled();
+    // j/k still wired: ArrowDown advances selection without throwing
+    fireEvent.keyDown(root, { key: "j" });
+    openSpy.mockRestore();
+  });
+
+  it("row click selects only — does not call openNewsArticle (#89)", () => {
+    const openSpy = vi.spyOn(news, "openNewsArticle");
+    render(
+      <NewsWidget
+        data={{
+          kind: "news",
+          widgetId: "news:all",
+          tag: "",
+          fetchedAt: Date.now(),
+          items: [
+            {
+              id: "1",
+              sourceId: "decrypt",
+              title: "Select only",
+              url: "https://decrypt.co/select",
+              publishedAt: Date.now()
+            }
+          ]
+        }}
+        theme={theme}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Select only/i }));
+    expect(openSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
 });
