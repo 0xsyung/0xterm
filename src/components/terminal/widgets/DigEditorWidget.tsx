@@ -89,7 +89,10 @@ export default function DigEditorWidget({
   if (phase === "pick") {
     return (
       <div
+        data-retain-focus=""
         className={`relative my-3 mb-3 p-3 border ${theme.border} ${theme.cardBg} ${theme.rounded} max-w-2xl ${theme.text}`}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <div
           className={`border-b ${theme.border} pb-1 mb-2 text-[10px] tracking-wider flex gap-2`}
@@ -123,7 +126,10 @@ export default function DigEditorWidget({
   return (
     <div
       data-dig-editor
+      data-retain-focus=""
       className={`relative my-3 mb-3 border ${theme.border} ${theme.cardBg} ${theme.rounded} max-w-2xl w-full min-h-0 flex flex-col overflow-hidden max-h-[min(50vh,calc(100dvh-14rem))]`}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
     >
       <div
         className={`shrink-0 border-b ${theme.border} px-2 py-1 text-[10px] tracking-wider flex gap-2 items-center`}
@@ -145,7 +151,7 @@ export default function DigEditorWidget({
       >
         <div
           ref={gutterRef}
-          className={`select-none text-right pr-2 pl-1 py-2 ${theme.muted} tabular-nums text-[9px] leading-[1.4] overflow-hidden shrink-0 border-r ${theme.border}`}
+          className={`select-none text-right pr-2 pl-1 py-2 ${theme.muted} tabular-nums text-[9px] leading-[1.4] overflow-hidden min-h-0 shrink-0 border-r ${theme.border}`}
           aria-hidden
         >
           {lines.map((n) => (

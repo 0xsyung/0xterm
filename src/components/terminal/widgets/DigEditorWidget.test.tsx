@@ -53,4 +53,47 @@ describe("DigEditorWidget (#92)", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("sets data-retain-focus so shell does not steal prompt focus", () => {
+    const { container } = render(
+      <DigEditorWidget
+        theme={theme}
+        filename="Counter.sol"
+        initialContent="pragma solidity ^0.8.37;"
+      />
+    );
+    const shell = container.querySelector("[data-dig-editor]");
+    expect(shell).toBeTruthy();
+    expect(shell!.hasAttribute("data-retain-focus")).toBe(true);
+  });
+
+  it("stopPropagation on mouseDown/click keeps retain-focus path", () => {
+    const { container } = render(
+      <DigEditorWidget
+        theme={theme}
+        filename="Counter.sol"
+        initialContent="pragma solidity ^0.8.37;"
+      />
+    );
+    const shell = container.querySelector("[data-dig-editor]") as HTMLElement;
+    const md = fireEvent.mouseDown(shell);
+    const cl = fireEvent.click(shell);
+    // fireEvent returns false when preventDefault was called; we only stopPropagation
+    expect(md).toBe(true);
+    expect(cl).toBe(true);
+  });
+
+  it("gutter has min-h-0 so line nums can scroll with textarea", () => {
+    const { container } = render(
+      <DigEditorWidget
+        theme={theme}
+        filename="Counter.sol"
+        initialContent={Array.from({ length: 40 }, (_, i) => `// ${i}`).join("\n")}
+      />
+    );
+    const gutter = container.querySelector("[data-dig-editor] [aria-hidden]");
+    expect(gutter).toBeTruthy();
+    expect(gutter!.className).toMatch(/\bmin-h-0\b/);
+  });
+
 });
