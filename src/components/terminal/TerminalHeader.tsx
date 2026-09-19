@@ -13,14 +13,10 @@ import { MODE_LABEL, MODE_ORDER } from "./mode";
 import type { TerminalMode } from "./mode";
 import type { PrimaryTab } from "./socialUnread";
 import { formatBadgeCount } from "./socialUnread";
+import { formatLocalHms } from "./localTime";
 
 function formatClock(d: Date) {
-  return d.toLocaleTimeString(undefined, {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
+  return formatLocalHms(d);
 }
 
 function PrimaryTabSwitch({

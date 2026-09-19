@@ -13,6 +13,7 @@ import {
   type NewsAllowItem,
   type NewsSourceId
 } from "./newsAllowlist";
+import { formatLocalHm, formatLocalHms } from "./localTime";
 
 export {
   NEWS_ALLOWLIST,
@@ -206,6 +207,28 @@ const firstChild = (parent: Element, local: string): Element | null => {
   return list[0] || null;
 };
 
+
+/**
+ * Parse RSS / rss2json pubDates to epoch ms.
+ * rss2json strips TZ and emits `YYYY-MM-DD HH:mm:ss` in UTC wall time; naive
+ * `Date.parse` treats that as **local**, skewing TIME by the DST offset vs the
+ * header clock (~1h in Europe). Timezone-less strings are forced to UTC.
+ */
+export const parseNewsDate = (raw: string | null | undefined): number | null => {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  // Explicit TZ: Z, ±HH:MM / ±HHMM, or GMT/UTC/UT token (RFC 822).
+  if (/(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(s) || /\b(?:GMT|UTC|UT)\b/i.test(s)) {
+    const t = Date.parse(s);
+    return Number.isFinite(t) ? t : null;
+  }
+  // ISO-like or rss2json "YYYY-MM-DD HH:mm:ss" without TZ → UTC.
+  const normalized = s.includes("T") ? s : s.replace(" ", "T");
+  const withZ = /[zZ]$/.test(normalized) ? normalized : `${normalized}Z`;
+  const t = Date.parse(withZ);
+  return Number.isFinite(t) ? t : null;
+};
+
 /**
  * Parse RSS XML with DOMParser. Ignores description/content HTML.
  * Returns items for a known allowlist source.
@@ -248,8 +271,7 @@ export const parseRss = (
       textContentOf(firstChild(node, "updated")) ||
       textContentOf(node.querySelector("pubDate, published, updated"));
     if (dateRaw) {
-      const t = Date.parse(dateRaw);
-      if (Number.isFinite(t)) publishedAt = t;
+      publishedAt = parseNewsDate(dateRaw);
     }
 
     out.push({
@@ -288,8 +310,7 @@ export const parseRss2Json = (
     if (!isSafeArticleUrl(link)) continue;
     let publishedAt: number | null = null;
     if (it.pubDate) {
-      const t = Date.parse(String(it.pubDate));
-      if (Number.isFinite(t)) publishedAt = t;
+      publishedAt = parseNewsDate(String(it.pubDate));
     }
     out.push({
       id: newsItemId(sourceId, link),
@@ -323,24 +344,19 @@ export const pageNewsItems = (
   return items.slice(start, start + pageSize);
 };
 
+/** Row TIME — browser local TZ (same source as header clock / formatNewsAsOf). */
 export const formatNewsTime = (ms: number | null): string => {
   if (ms === null || !Number.isFinite(ms)) return "—";
   try {
-    const d = new Date(ms);
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${hh}:${mm}`;
+    return formatLocalHm(ms);
   } catch {
     return "—";
   }
 };
 
+/** Widget "as of" — browser local TZ (aligned with header clock). */
 export const formatNewsAsOf = (ms: number): string => {
-  const d = new Date(ms);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  const ss = String(d.getSeconds()).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
+  return formatLocalHms(ms);
 };
 
 export const sourceLabel = (id: NewsSourceId): string => id.toUpperCase();
@@ -504,10 +520,26 @@ export const fetchNewsHeadlines = async (
   return { items: capped, usedRss2json, missing };
 };
 
+/**
+ * Open article via a real <a target=_blank> click (user-gesture safe).
+ * Does **not** call window.open — popup blockers treat bare open as suspect
+ * once the keydown gesture unwinds (#89).
+ * @returns false when URL is unsafe or DOM click could not run.
+ */
 export const openNewsArticle = (url: string): boolean => {
   if (!isSafeArticleUrl(url)) return false;
-  if (typeof window !== "undefined") {
-    window.open(url, "_blank", "noopener,noreferrer");
+  if (typeof document === "undefined") return false;
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return true;
+  } catch {
+    return false;
   }
-  return true;
 };
