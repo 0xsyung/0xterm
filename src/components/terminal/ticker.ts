@@ -15,6 +15,7 @@ import {
   DEX_FETCH_FAILED_MSG,
   fetchSearchPairs,
   fetchTokensV1,
+  parseChange24h,
   pickDexPair,
   preferChainsForSymbol,
   quoteDexScreenerPairs,
@@ -23,6 +24,10 @@ import {
 
 export const TICKER_MAX = 12;
 export const TICKER_DEFAULT_SYMBOLS = ["ETH", "BTC", "SOL"] as const;
+
+/** Solana native wrapped mint — tokens/v1 path like ETH→WETH (#86). */
+const WRAPPED_SOL_MINT = "So11111111111111111111111111111111111111112";
+
 export const TICKER_REFRESH_SEC = 15;
 export const TICKER_WIDGET_ID = "ticker:watchlist";
 export const TICKER_ANON_KEY = "0xterm_ticker_anon";
@@ -298,8 +303,7 @@ const marksFromPair = (
         })();
   return {
     priceUsd,
-    change24h:
-      typeof pair.priceChange?.h24 === "number" ? pair.priceChange.h24 : null,
+    change24h: parseChange24h(pair),
     volume24h: typeof pair.volume?.h24 === "number" ? pair.volume.h24 : null,
     updatedAt: Date.now()
   };
@@ -394,6 +398,29 @@ export const resolveTickerSymbol = async (
       // fall through to search for majors like BTC/SOL not in COMMON, or if tokens/v1 miss
     }
 
+    // SOL: prefer tokens/v1 on wrapped SOL (search often returns ghost pairs w/o h24).
+    if (display === "SOL") {
+      const pairs = await fetchTokensV1("solana", [WRAPPED_SOL_MINT], fetchImpl);
+      const picked = pickDexPair(pairs, {
+        symbol: display,
+        allowDai: false,
+        preferChains: ["solana"],
+        majorGuard: true
+      });
+      if (picked && parseChange24h(picked) !== null) {
+        return {
+          unresolved: false,
+          row: {
+            symbol: display,
+            ...identityFromPair(picked),
+            tokenAddress: WRAPPED_SOL_MINT,
+            ...marksFromPair(picked)
+          }
+        };
+      }
+      // fall through to search if tokens/v1 miss or lack h24
+    }
+
     // Search fallback
     const pairs = await fetchSearchPairs(display, fetchImpl);
     const picked = pickDexPair(pairs, {
@@ -427,7 +454,12 @@ export const buildTickerRows = async (
   prefs: TickerPrefs,
   activeChainId: number | null,
   fetchImpl: typeof fetch = fetch
-): Promise<{ rows: TickerRow[]; prefs: TickerPrefs; messages: string[] }> => {
+): Promise<{
+  rows: TickerRow[];
+  prefs: TickerPrefs;
+  messages: string[];
+  stale: boolean;
+}> => {
   const messages: string[] = [];
   const nextRows: Record<string, TickerRowIdentity> = { ...prefs.rows };
   const rows: TickerRow[] = [];
@@ -477,7 +509,9 @@ export const buildTickerRows = async (
   return {
     rows: refreshed.rows,
     prefs: { symbols: prefs.symbols, rows: nextRows },
-    messages: [...messages, ...refreshed.messages]
+    messages: [...messages, ...refreshed.messages],
+    // Unresolved rows (no pair) are skipped by refresh — do not STALE board (#87/#84).
+    stale: refreshed.stale
   };
 };
 
@@ -527,7 +561,7 @@ export const refreshTickerRows = async (
   // Board STALE only when every attempted refresh failed (partial OK).
   const stale = failedAny && !refreshedAny;
 
-  const next = rows.map((r) => {
+  let next = rows.map((r) => {
     if (!r.pairAddress || !r.dsChain) return r;
     const q = quoted.get(`${r.dsChain}:${r.pairAddress.toLowerCase()}`);
     if (!q) return r;
@@ -539,6 +573,28 @@ export const refreshTickerRows = async (
       updatedAt: Date.now()
     };
   });
+
+  // #86: majors with marks but no h24 — try once to rebind to a pair that exposes change.
+  for (let i = 0; i < next.length; i++) {
+    const r = next[i]!;
+    const sym = r.symbol.toUpperCase();
+    if (!["BTC", "SOL", "ETH"].includes(sym)) continue;
+    if (r.change24h !== null && r.change24h !== undefined) continue;
+    if (r.priceUsd === null || r.priceUsd === undefined) continue;
+    try {
+      const rebound = await resolveTickerSymbol(r.symbol, null, fetchImpl);
+      if (
+        !rebound.unresolved &&
+        rebound.row.pairAddress &&
+        rebound.row.change24h !== null &&
+        rebound.row.change24h !== undefined
+      ) {
+        next[i] = { ...r, ...rebound.row };
+      }
+    } catch {
+      /* keep last marks */
+    }
+  }
 
   return { rows: next, stale, messages };
 };
