@@ -33,7 +33,6 @@ export default function DigEditorWidget({
   );
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const bodyRef = useRef<HTMLDivElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
 
   const lines = useMemo(() => {
@@ -141,7 +140,6 @@ export default function DigEditorWidget({
         </button>
       </div>
       <div
-        ref={bodyRef}
         className="flex flex-1 min-h-0 overflow-hidden"
         style={{ minHeight: "12rem" }}
       >
