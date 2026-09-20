@@ -553,7 +553,12 @@ export const HELP_ROWS: HelpRow[] = [
   },
   {
     command: "pnl",
-    description: "Show portfolio P/L vs last snapshot",
+    description: "Live mark-to-quote P/L vs last snapshot (estimate)",
+    modes: ["invest"]
+  },
+  {
+    command: "pnl baseline now",
+    description: "Alias of `snapshot now` — reset baseline to current marks",
     modes: ["invest"]
   },
   {

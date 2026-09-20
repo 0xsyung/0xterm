@@ -107,6 +107,19 @@ import {
   type TickerRow
 } from "./ticker";
 import {
+  PNL_BALANCE_REFRESH_MS,
+  PNL_REFRESH_SEC,
+  PNL_WIDGET_ID,
+  attachPairIdentities,
+  buildPnlView,
+  parsePnlCommand,
+  pnlPinKey,
+  readPortfolioSnapshot,
+  refreshPnlMarks,
+  type PnlHolding,
+  type PnlView
+} from "./pnl";
+import {
   NEWS_ERROR,
   NEWS_PAGE_SIZE,
   NEWS_REFRESH_SEC,
@@ -122,7 +135,7 @@ import { fetchBillboard, fetchChatThread } from "./pinLoaders";
 import MatrixRain from "./MatrixRain";
 import {
   buildBalanceLog,
-  buildPnlLog,
+  buildPnlGate,
   buildThemeLog,
   buildTokensLog
 } from "./commands";
@@ -753,6 +766,33 @@ export default function TerminalShell({
         }
         continue;
       }
+      if (m.kind === "pnl") {
+        refs[m.id] = async () => {
+          const prior = (m.payload as PnlView) || null;
+          const view = await loadPnlView({
+            prior,
+            id: m.id,
+            forceBalances: false
+          });
+          if ("type" in view && (view as LogEntry).type === "text") {
+            throw new Error((view as LogEntry).text || "PnL refresh failed");
+          }
+          const v = view as PnlView;
+          setPinned((prev) =>
+            prev.map((p) =>
+              p.id === m.id
+                ? {
+                    ...p,
+                    pairOrSymbols: pnlPinKey(v.label, v.snapshotTime),
+                    payload: v
+                  }
+                : p
+            )
+          );
+          return v;
+        };
+        continue;
+      }
       if (m.kind === "ticker") {
         refs[m.id] = async () => {
           const rows: TickerRow[] = (m.payload?.rows as TickerRow[]) || [];
@@ -983,6 +1023,39 @@ export default function TerminalShell({
           };
         });
       }
+    } else if (log.type === "pnl") {
+      const pl = log.payload || {};
+      base.title = "PNL";
+      base.widgetId = PNL_WIDGET_ID;
+      base.pairOrSymbols = pnlPinKey(pl.label || "", pl.snapshotTime || 0);
+      base.refreshSec = PNL_REFRESH_SEC;
+      base.payload = { ...pl, kind: "pnl", widgetId: PNL_WIDGET_ID };
+      registerPinRefresh(log.id, async () => {
+        const current = pinnedRef.current.find((x) => x.id === log.id);
+        const prior = (current?.payload as PnlView) || (base.payload as PnlView);
+        const view = await loadPnlView({
+          prior,
+          id: log.id,
+          forceBalances: false
+        });
+        if ("type" in view && (view as LogEntry).type === "text") {
+          throw new Error((view as LogEntry).text || "PnL refresh failed");
+        }
+        const v = view as PnlView;
+        // Keep pin identity (widgetId) stable; update pairOrSymbols label+time.
+        setPinned((prev) =>
+          prev.map((p) =>
+            p.id === log.id
+              ? {
+                  ...p,
+                  pairOrSymbols: pnlPinKey(v.label, v.snapshotTime),
+                  payload: v
+                }
+              : p
+          )
+        );
+        return v;
+      });
     } else if (log.type === "ticker") {
       base.title = "TICKER";
       base.widgetId = TICKER_WIDGET_ID;
@@ -1065,6 +1138,28 @@ export default function TerminalShell({
   useEffect(() => {
     if (!isConnected || !address) return;
     const serializable = pinned.map(({ payload, component, ...rest }) => {
+      // pnl (#23): persist holdings + pair identities; one pin per kind
+      if (rest.kind === "pnl" && payload) {
+        return {
+          ...rest,
+          widgetId: PNL_WIDGET_ID,
+          refreshSec: PNL_REFRESH_SEC,
+          payload: {
+            kind: "pnl",
+            widgetId: PNL_WIDGET_ID,
+            label: payload.label,
+            snapshotTime: payload.snapshotTime,
+            netUsd: payload.netUsd,
+            pnlPrice: payload.pnlPrice,
+            pnlBalance: payload.pnlBalance,
+            snapNav: payload.snapNav,
+            stale: !!payload.stale,
+            updatedAt: payload.updatedAt,
+            holdings: payload.holdings || [],
+            snapshot: payload.snapshot || {}
+          }
+        };
+      }
       // ticker (#15): persist row pair identities so refresh stays deterministic
       if (rest.kind === "ticker" && payload) {
         return {
@@ -1722,8 +1817,14 @@ export default function TerminalShell({
       { generateId, fetchTokenBalanceData }
     );
 
-  const buildPnl = () =>
-    buildPnlLog(
+  const pnlBalanceAtRef = useRef<Record<string, number>>({});
+
+  const loadPnlView = async (opts?: {
+    forceBalances?: boolean;
+    prior?: PnlView | null;
+    id?: string;
+  }): Promise<PnlView | LogEntry> => {
+    const gate = buildPnlGate(
       { isConnected, address, activeChainId },
       {
         generateId,
@@ -1733,6 +1834,74 @@ export default function TerminalShell({
           )
       }
     );
+    if (gate) return gate;
+    const snap = readPortfolioSnapshot(
+      typeof window !== "undefined" ? window.localStorage : null,
+      address as Address
+    );
+    if (!snap) {
+      return {
+        id: generateId(),
+        type: "text",
+        text: "No snapshot found. Run 'snapshot' first to establish a P/L baseline."
+      };
+    }
+
+    const trackId = opts?.id || "live";
+    const lastBal = pnlBalanceAtRef.current[trackId] || 0;
+    const needBalances =
+      !!opts?.forceBalances ||
+      !opts?.prior?.holdings?.length ||
+      Date.now() - lastBal >= PNL_BALANCE_REFRESH_MS;
+
+    let holdings: PnlHolding[] = (opts?.prior?.holdings as PnlHolding[]) || [];
+    let stale = !!opts?.prior?.stale;
+
+    if (needBalances) {
+      const fresh = (await fetchPortfolioHoldings(
+        address as Address
+      )) as PnlHolding[];
+      holdings = await attachPairIdentities(fresh);
+      pnlBalanceAtRef.current[trackId] = Date.now();
+    } else {
+      const marked = await refreshPnlMarks(holdings);
+      holdings = marked.holdings;
+      stale = marked.stale;
+    }
+
+    return buildPnlView(holdings, snap, {
+      stale,
+      fetching: false,
+      updatedAt: Date.now()
+    });
+  };
+
+
+  const onPnlRefreshLog = async (log: LogEntry) => {
+    const prior = (log.payload as PnlView) || null;
+    const view = await loadPnlView({
+      prior,
+      id: log.id,
+      forceBalances: false
+    });
+    if ("type" in view && (view as LogEntry).type === "text") return;
+    const v = view as PnlView;
+    setLogs((prev) =>
+      prev.map((l) => (l.id === log.id ? { ...l, payload: v } : l))
+    );
+    // Keep pinned twin in sync when same identity is pinned
+    setPinned((prev) =>
+      prev.map((p) =>
+        p.kind === "pnl"
+          ? {
+              ...p,
+              pairOrSymbols: pnlPinKey(v.label, v.snapshotTime),
+              payload: v
+            }
+          : p
+      )
+    );
+  };
 
   const buildTokens = (args: string[]) =>
     buildTokensLog(args, activeChainId, { generateId, customTokens });
@@ -4034,7 +4203,37 @@ export default function TerminalShell({
         text: `[✓] Snapshot "${label}" saved (${count} holdings) at ${new Date().toLocaleString()}. Run 'portfolio' to see P/L vs this snapshot.`
       };
     },
-    pnl: async () => buildPnl(),
+    pnl: async (args) => {
+      const parsed = parsePnlCommand(args);
+      if (parsed.op === "baseline") {
+        // Alias of `snapshot <label>` — same prefs key, no fork.
+        return commands.snapshot(
+          ["snapshot", parsed.label],
+          `snapshot ${parsed.label}`
+        );
+      }
+      const gate = buildPnlGate(
+        { isConnected, address, activeChainId },
+        {
+          generateId,
+          readPreference: (addr) =>
+            JSON.parse(
+              localStorage.getItem(`0xterm_user_${addr.toLowerCase()}`) || "{}"
+            )
+        }
+      );
+      if (gate) return gate;
+
+      const id = generateId();
+      const view = await loadPnlView({ forceBalances: true, id });
+      if ("type" in view && view.type === "text") return view;
+      return {
+        id,
+        type: "pnl",
+        title: "PNL",
+        payload: view as PnlView
+      };
+    },
     ticker: async (args) => {
       const parsed = parseTickerCommand(args);
       if (parsed.op === "usage") {
@@ -6337,6 +6536,7 @@ export default function TerminalShell({
                       ].slice(-MAX_LOGS)
                     );
                   }}
+                  onPnlRefresh={onPnlRefreshLog}
                 />
               </div>
             </div>
