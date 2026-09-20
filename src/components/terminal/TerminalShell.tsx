@@ -207,6 +207,8 @@ import { decodeDigLogs } from "./dig/encode";
 import { formatGas } from "./dig/gas";
 import PinnedPanel from "./PinnedPanel";
 import SocialPanel from "./SocialPanel";
+import SettingsPanel from "./widgets/SettingsPanel";
+import { applyImportBlob } from "./settingsPrefs";
 import {
   DEFAULT_CHAT_FEE_WEI,
   NO_ACTIVE_CHANNEL_MSG,
@@ -1777,6 +1779,83 @@ export default function TerminalShell({
       typeof window !== "undefined" ? window.localStorage : null,
       tab
     );
+  };
+
+  // --- Settings panel (#81): same storage keys as commands -----------------
+  const handleSettingsRpcChange = (
+    next: typeof rpcProviders,
+    active: typeof activeRpcProviders
+  ) => {
+    setRpcProviders(next);
+    setActiveRpcProviders(active);
+    savePreference("rpcProviders", next);
+    savePreference("activeRpcProviders", active);
+  };
+
+  const handleSettingsTokensChange = (next: CustomTokensMap) => {
+    setCustomTokens(next);
+    saveCustomTokenToStorage(next);
+  };
+
+  const handleSettingsApplyImport = (
+    patch: ReturnType<typeof applyImportBlob>
+  ) => {
+    if (patch.theme) {
+      handleThemeSwitch(patch.theme);
+    }
+    if (patch.mode) {
+      applyTerminalMode(patch.mode, { silent: true });
+    }
+    if (patch.rpcProviders) {
+      setRpcProviders(patch.rpcProviders);
+      savePreference("rpcProviders", patch.rpcProviders);
+    }
+    if (patch.activeRpcProviders) {
+      setActiveRpcProviders(patch.activeRpcProviders);
+      savePreference("activeRpcProviders", patch.activeRpcProviders);
+    }
+    if (patch.customTokens) {
+      setCustomTokens(patch.customTokens);
+      saveCustomTokenToStorage(patch.customTokens);
+    }
+    if (patch.pinned) {
+      setPinned(patch.pinned);
+      rehydratePinRefresh(patch.pinned);
+      savePreference("pinned", patch.pinned);
+    }
+    if (patch.channelStore) {
+      persistChannels(patch.channelStore);
+    }
+    // Persist merged preference bag under the wallet key (same as import cmd).
+    if (isConnected && address && patch.preferencesToPersist) {
+      const userKey = `0xterm_user_${address.toLowerCase()}`;
+      try {
+        const existing = localStorage.getItem(userKey);
+        const prefs = existing ? JSON.parse(existing) : {};
+        Object.assign(prefs, patch.preferencesToPersist);
+        if (patch.theme) prefs.theme = patch.theme;
+        if (patch.mode) prefs.mode = patch.mode;
+        if (patch.rpcProviders) prefs.rpcProviders = patch.rpcProviders;
+        if (patch.activeRpcProviders)
+          prefs.activeRpcProviders = patch.activeRpcProviders;
+        if (patch.pinned) prefs.pinned = patch.pinned;
+        localStorage.setItem(userKey, JSON.stringify(prefs));
+      } catch {
+        // storage unavailable — in-memory state still applied
+      }
+    }
+  };
+
+  const readExistingPreferences = (): Record<string, unknown> => {
+    if (!isConnected || !address) return {};
+    try {
+      const raw = localStorage.getItem(`0xterm_user_${address.toLowerCase()}`);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
   };
 
   const catchUpChatBaseline = async () => {
@@ -6160,6 +6239,32 @@ export default function TerminalShell({
                 if (!chain || !contract) return null;
                 return fetchBillboard(getClient(chain), contract as Address, 5);
               }}
+            />
+          </div>
+        ) : primaryTab === "settings" ? (
+          <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
+            <SettingsPanel
+              theme={theme}
+              currentThemeKey={currentThemeKey}
+              onThemeChange={handleThemeSwitch}
+              mode={terminalMode}
+              onModeChange={(m) => applyTerminalMode(m)}
+              rpcProviders={rpcProviders}
+              activeRpcProviders={activeRpcProviders}
+              onRpcChange={handleSettingsRpcChange}
+              customTokens={customTokens}
+              onCustomTokensChange={handleSettingsTokensChange}
+              channelStore={channelStore}
+              onChannelStoreChange={persistChannels}
+              pinned={pinned}
+              onPinnedChange={(next) => {
+                setPinned(next);
+                savePreference("pinned", next);
+              }}
+              walletAddress={address ?? null}
+              isConnected={!!isConnected && !!address}
+              existingPreferences={readExistingPreferences()}
+              onApplyImport={handleSettingsApplyImport}
             />
           </div>
         ) : (

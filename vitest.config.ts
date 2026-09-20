@@ -29,6 +29,8 @@ export default defineConfig({
         "src/components/terminal/widgets/DigRunWidget.tsx",
         "src/components/terminal/widgets/DigConfirmWidget.tsx",
         "src/components/terminal/widgets/DigDebugWidget.tsx",
+        // Settings panel (#81): presentational chrome; pure helpers in settingsPrefs.ts
+        "src/components/terminal/widgets/SettingsPanel.tsx",
         // static marketing page — pure presentational, no logic to cover
         "src/app/page.tsx",
         // app entry — viewport/keyboard wiring, no testable logic (issue #49)
@@ -36,14 +38,13 @@ export default defineConfig({
         "src/**/*.test.{ts,tsx}",
       ],
       thresholds: {
-        // Ratchet — measured 2026-09-20 under CI Node after #89/#90 (main):
-        // Lines 40.09%, Statements 40.30%, Functions 43.32%, Branches 32.38%.
-        // Prior mistaken dig-local floors (lesson #73). Hard-fail at floor(measured).
-        // Climb toward 90% is tracked in #37.
-        lines: 40,
-        statements: 40,
-        functions: 43,
-        branches: 32,
+        // Ratchet — measured 2026-09-20 under CI Node after #81 Settings:
+        // Lines 41.96%, Statements 42.21%, Functions 45.66%, Branches 34.67%.
+        // Hard-fail at floor(measured). Climb toward 90% is tracked in #37.
+        lines: 41,
+        statements: 42,
+        functions: 45,
+        branches: 34,
       },
 
 
