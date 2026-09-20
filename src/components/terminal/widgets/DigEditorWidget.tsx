@@ -79,7 +79,7 @@ export default function DigEditorWidget({
     setPhase("edit");
   };
 
-  /** Keep gutter line numbers aligned while the textarea scrolls (#92). */
+  /** Keep gutter line numbers aligned while the textarea scrolls (#98). */
   const onTaScroll = () => {
     if (gutterRef.current && taRef.current) {
       gutterRef.current.scrollTop = taRef.current.scrollTop;
@@ -149,13 +149,19 @@ export default function DigEditorWidget({
         className="flex flex-1 min-h-0 overflow-hidden"
         style={{ minHeight: "12rem" }}
       >
+        {/* #98: overflow-y-auto so scrollTop moves; scrollbar hidden (textarea owns chrome).
+            Match textarea text size + leading + vertical pad for 1:1 line align on non-wrapped rows.
+            Source may wrap (overflowWrap); gutter rows stay single-line — wrap misalign is accepted. */}
         <div
           ref={gutterRef}
-          className={`select-none text-right pr-2 pl-1 py-2 ${theme.muted} tabular-nums text-[9px] leading-[1.4] overflow-hidden min-h-0 shrink-0 border-r ${theme.border}`}
+          data-dig-gutter
+          className={`select-none text-right pr-2 pl-2 py-2 ${theme.muted} tabular-nums font-mono text-[16px] md:text-[12px] leading-[1.4] overflow-y-auto overflow-x-hidden min-h-0 shrink-0 border-r ${theme.border} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`}
           aria-hidden
         >
           {lines.map((n) => (
-            <div key={n}>{n}</div>
+            <div key={n} className="whitespace-nowrap">
+              {n}
+            </div>
           ))}
         </div>
         <textarea
