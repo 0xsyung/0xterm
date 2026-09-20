@@ -35,7 +35,8 @@ function PrimaryTabSwitch({
   const badge = formatBadgeCount(socialBadge);
   const tabs: { id: PrimaryTab; label: string }[] = [
     { id: "terminal", label: "TERMINAL" },
-    { id: "social", label: "SOCIAL" }
+    { id: "social", label: "SOCIAL" },
+    { id: "settings", label: "SETTINGS" }
   ];
 
   return (

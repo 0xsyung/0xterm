@@ -106,15 +106,24 @@ export const SOCIAL_POLL_MS = 60_000;
 
 export const PRIMARY_TAB_STORAGE_KEY = "0xterm.primaryTab";
 
-export type PrimaryTab = "terminal" | "social";
+export type PrimaryTab = "terminal" | "social" | "settings";
 export type SocialSubTab = "inbox" | "board";
+
+const PRIMARY_TAB_ALLOWLIST: readonly PrimaryTab[] = [
+  "terminal",
+  "social",
+  "settings"
+];
 
 export function loadPrimaryTab(
   storage: { getItem(key: string): string | null } | null | undefined
 ): PrimaryTab {
   try {
     const raw = storage?.getItem(PRIMARY_TAB_STORAGE_KEY);
-    return raw === "social" ? "social" : "terminal";
+    if (raw && (PRIMARY_TAB_ALLOWLIST as readonly string[]).includes(raw)) {
+      return raw as PrimaryTab;
+    }
+    return "terminal";
   } catch {
     return "terminal";
   }

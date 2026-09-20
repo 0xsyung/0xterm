@@ -25,6 +25,7 @@ describe("TerminalHeader primary tabs (#91)", () => {
     );
     expect(screen.getByRole("tab", { name: "TERMINAL" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "SOCIAL" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "SETTINGS" })).toBeTruthy();
   });
 
   it("marks the active tab selected and keeps inactive outlined via border class", () => {
@@ -94,5 +95,20 @@ describe("TerminalHeader primary tabs (#91)", () => {
     expect(screen.getByText("F3 DEX")).toBeTruthy();
     expect(screen.getByText("F4 THEME")).toBeTruthy();
     expect(screen.getByText("F5 SWAP")).toBeTruthy();
+  });
+
+  it("invokes onPrimaryTabChange when SETTINGS is tapped", () => {
+    const onPrimaryTabChange = vi.fn();
+    render(
+      <TerminalHeader
+        theme={theme}
+        currentThemeKey="matrix"
+        onThemeChange={vi.fn()}
+        primaryTab="terminal"
+        onPrimaryTabChange={onPrimaryTabChange}
+      />
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "SETTINGS" }));
+    expect(onPrimaryTabChange).toHaveBeenCalledWith("settings");
   });
 });
