@@ -149,7 +149,7 @@ describe("formatBadgeCount", () => {
 });
 
 describe("primary tab persistence", () => {
-  it("defaults to terminal and round-trips social", () => {
+  it("defaults to terminal and round-trips social + settings", () => {
     const store: Record<string, string> = {};
     const storage = {
       getItem: (k: string) => store[k] ?? null,
@@ -160,6 +160,19 @@ describe("primary tab persistence", () => {
     expect(loadPrimaryTab(storage)).toBe("terminal");
     persistPrimaryTab(storage, "social");
     expect(loadPrimaryTab(storage)).toBe("social");
+    persistPrimaryTab(storage, "settings");
+    expect(loadPrimaryTab(storage)).toBe("settings");
+  });
+
+  it("rejects unknown tab values (allowlist)", () => {
+    const store: Record<string, string> = { "0xterm.primaryTab": "gear" };
+    const storage = {
+      getItem: (k: string) => store[k] ?? null,
+      setItem: (k: string, v: string) => {
+        store[k] = v;
+      }
+    };
+    expect(loadPrimaryTab(storage)).toBe("terminal");
   });
 });
 
