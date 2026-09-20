@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * @file DigEditorWidget.test.tsx
- * @description Dig editor layout chrome — min-h-0 + internal scroll (#92)
+ * @description Dig editor layout + gutter scroll sync (#92 #98)
  */
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -14,7 +14,7 @@ vi.mock("../dig/idb", () => ({
 
 const theme = THEMES.matrix;
 
-describe("DigEditorWidget (#92)", () => {
+describe("DigEditorWidget (#92 #98)", () => {
   it("editor shell uses min-h-0, internal overflow scroll, and prompt gap", () => {
     const { container } = render(
       <DigEditorWidget
@@ -83,7 +83,7 @@ describe("DigEditorWidget (#92)", () => {
     expect(cl).toBe(true);
   });
 
-  it("gutter has min-h-0 so line nums can scroll with textarea", () => {
+  it("gutter is overflow-y scrollable with scrollbar hidden (#98)", () => {
     const { container } = render(
       <DigEditorWidget
         theme={theme}
@@ -91,9 +91,41 @@ describe("DigEditorWidget (#92)", () => {
         initialContent={Array.from({ length: 40 }, (_, i) => `// ${i}`).join("\n")}
       />
     );
-    const gutter = container.querySelector("[data-dig-editor] [aria-hidden]");
+    const gutter = container.querySelector("[data-dig-gutter]") as HTMLElement;
     expect(gutter).toBeTruthy();
-    expect(gutter!.className).toMatch(/\bmin-h-0\b/);
+    expect(gutter.className).toMatch(/\boverflow-y-auto\b/);
+    expect(gutter.className).toMatch(/\bmin-h-0\b/);
+    expect(gutter.className).toMatch(/scrollbar-width:none/);
+    // Match textarea type size for vertical align
+    expect(gutter.className).toMatch(/text-\[16px\]/);
+    expect(gutter.className).toMatch(/md:text-\[12px\]/);
+  });
+
+  it("textarea scrollTop syncs to gutter scrollTop (#98)", () => {
+    const { container } = render(
+      <DigEditorWidget
+        theme={theme}
+        filename="Counter.sol"
+        initialContent={Array.from({ length: 80 }, (_, i) => `// line ${i}`).join("\n")}
+      />
+    );
+    const ta = screen.getByLabelText("Source Counter.sol") as HTMLTextAreaElement;
+    const gutter = container.querySelector("[data-dig-gutter]") as HTMLElement;
+    expect(gutter).toBeTruthy();
+
+    // jsdom: set scrollTop + fire scroll; assert sync handler copies value
+    Object.defineProperty(ta, "scrollTop", { configurable: true, value: 120, writable: true });
+    Object.defineProperty(gutter, "scrollTop", {
+      configurable: true,
+      get() {
+        return (gutter as HTMLElement & { _st?: number })._st ?? 0;
+      },
+      set(v: number) {
+        (gutter as HTMLElement & { _st?: number })._st = v;
+      }
+    });
+    fireEvent.scroll(ta);
+    expect(gutter.scrollTop).toBe(120);
   });
 
 });
