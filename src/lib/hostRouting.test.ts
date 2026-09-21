@@ -1,6 +1,6 @@
 /**
  * @file hostRouting.test.ts
- * @description Unit tests for host / redirect helpers (#78)
+ * @description Unit tests for host / redirect helpers — two-repo model (#78)
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
@@ -12,6 +12,7 @@ import {
   resolveHostRedirect,
   shouldBootTerminalAtRoot,
   shouldRenderTerminalAtAppPath,
+  shouldShowLanding,
   stripAppPrefix,
   terminalLaunchHref,
   defaultSiteUrl
@@ -56,7 +57,51 @@ describe("stripAppPrefix", () => {
 });
 
 describe("resolveHostRedirect", () => {
-  it("apex /app → app origin root, preserves query", () => {
+  it("app host /app/... → strip prefix silently (primary production story)", () => {
+    expect(
+      resolveHostRedirect({
+        hostname: APP_HOST,
+        pathname: "/app",
+        search: ""
+      })
+    ).toEqual({ href: "/" });
+
+    expect(
+      resolveHostRedirect({
+        hostname: APP_HOST,
+        pathname: "/app/foo",
+        search: "?q=1"
+      })
+    ).toEqual({ href: "/foo?q=1" });
+  });
+
+  it("app host root and non-/app paths do not redirect", () => {
+    expect(
+      resolveHostRedirect({
+        hostname: APP_HOST,
+        pathname: "/",
+        search: ""
+      })
+    ).toBeNull();
+
+    expect(
+      resolveHostRedirect({
+        hostname: APP_HOST,
+        pathname: "/settings",
+        search: ""
+      })
+    ).toBeNull();
+  });
+
+  it("apex → app origin (defensive; production apex is 0xterm-dot-xyz)", () => {
+    expect(
+      resolveHostRedirect({
+        hostname: "0xterm.xyz",
+        pathname: "/",
+        search: ""
+      })
+    ).toEqual({ href: `${APP_ORIGIN}/` });
+
     expect(
       resolveHostRedirect({
         hostname: "0xterm.xyz",
@@ -80,43 +125,17 @@ describe("resolveHostRedirect", () => {
         search: "?x=1"
       })
     ).toEqual({ href: `${APP_ORIGIN}/foo?x=1` });
-  });
 
-  it("app host /app/... → strip prefix silently", () => {
-    expect(
-      resolveHostRedirect({
-        hostname: APP_HOST,
-        pathname: "/app",
-        search: ""
-      })
-    ).toEqual({ href: "/" });
-
-    expect(
-      resolveHostRedirect({
-        hostname: APP_HOST,
-        pathname: "/app/foo",
-        search: "?q=1"
-      })
-    ).toEqual({ href: "/foo?q=1" });
-  });
-
-  it("does not redirect landing or local dual-surface", () => {
     expect(
       resolveHostRedirect({
         hostname: "0xterm.xyz",
-        pathname: "/",
+        pathname: "/docs",
         search: ""
       })
-    ).toBeNull();
+    ).toEqual({ href: `${APP_ORIGIN}/docs` });
+  });
 
-    expect(
-      resolveHostRedirect({
-        hostname: APP_HOST,
-        pathname: "/",
-        search: ""
-      })
-    ).toBeNull();
-
+  it("local dual-surface never redirects", () => {
     expect(
       resolveHostRedirect({
         hostname: "localhost",
@@ -132,6 +151,14 @@ describe("resolveHostRedirect", () => {
         search: "?x=1"
       })
     ).toBeNull();
+
+    expect(
+      resolveHostRedirect({
+        hostname: "localhost",
+        pathname: "/",
+        search: ""
+      })
+    ).toBeNull();
   });
 });
 
@@ -142,24 +169,30 @@ describe("surface helpers", () => {
     expect(shouldBootTerminalAtRoot("localhost")).toBe(false);
   });
 
+  it("shows landing only on local (dev dual-surface)", () => {
+    expect(shouldShowLanding("localhost")).toBe(true);
+    expect(shouldShowLanding(APP_HOST)).toBe(false);
+    expect(shouldShowLanding("0xterm.xyz")).toBe(false);
+  });
+
   it("keeps /app terminal only on local", () => {
     expect(shouldRenderTerminalAtAppPath("localhost")).toBe(true);
     expect(shouldRenderTerminalAtAppPath(APP_HOST)).toBe(false);
     expect(shouldRenderTerminalAtAppPath("0xterm.xyz")).toBe(false);
   });
 
-  it("launch href points at app subdomain on apex", () => {
-    expect(terminalLaunchHref("0xterm.xyz")).toBe(`${APP_ORIGIN}/`);
+  it("launch href: local /app, app /, apex → app origin", () => {
     expect(terminalLaunchHref("localhost")).toBe("/app");
     expect(terminalLaunchHref(APP_HOST)).toBe("/");
+    expect(terminalLaunchHref("0xterm.xyz")).toBe(`${APP_ORIGIN}/`);
   });
 });
 
 describe("defaultSiteUrl", () => {
-  it("defaults to apex origin", () => {
+  it("defaults to app origin (this repo's Pages host)", () => {
     const prev = process.env.NEXT_PUBLIC_SITE_URL;
     delete process.env.NEXT_PUBLIC_SITE_URL;
-    expect(defaultSiteUrl()).toBe("https://0xterm.xyz");
+    expect(defaultSiteUrl()).toBe(APP_ORIGIN);
     if (prev !== undefined) process.env.NEXT_PUBLIC_SITE_URL = prev;
   });
 

@@ -1,14 +1,24 @@
 /**
  * @file hostRouting.ts
- * @description Host-aware routing helpers for apex vs app.0xterm.xyz (#78)
+ * @description Host-aware routing for the two-repo split (#78).
+ *
+ * Production (two Pages sites):
+ * - `0xsyung/0xterm` → `app.0xterm.xyz` — terminal at `/` (this artifact)
+ * - `0xsyung/0xterm-dot-xyz` → `0xterm.xyz` — landing (+ optional static `/app/` redirect)
+ *
+ * This repo does **not** serve production apex marketing. Localhost keeps
+ * dual-surface (landing + `/app`) for dev ergonomics.
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 
-/** Production apex hosts that serve marketing only. */
+/**
+ * Apex hostnames. Production marketing lives on `0xterm-dot-xyz`, not this
+ * artifact. Kept so a mis-pointed DNS still classifies and bounces to app.
+ */
 export const APEX_HOSTS = new Set(["0xterm.xyz", "www.0xterm.xyz"]);
 
-/** Production terminal host. */
+/** Production terminal host (this repo's Pages custom domain). */
 export const APP_HOST = "app.0xterm.xyz";
 
 /** Canonical origin for the terminal subdomain. */
@@ -32,7 +42,6 @@ export function classifyHost(hostname: string): HostKind {
 export function stripAppPrefix(pathname: string): string | null {
   let p = pathname || "/";
   if (!p.startsWith("/")) p = `/${p}`;
-  // Normalize repeated slashes except leave as-is for matching
   if (p === "/app" || p === "/app/") return "/";
   if (p.startsWith("/app/")) {
     const rest = p.slice("/app".length); // begins with /
@@ -46,12 +55,20 @@ export type RedirectDecision = {
   href: string;
 };
 
+function normalizePath(rest: string): string {
+  return rest === "/" ? "/" : rest.replace(/\/+$/, "") || "/";
+}
+
 /**
  * Silent redirect target for host/path pairs, or null when the current
  * URL should render as-is.
  *
- * - apex `/app/...` → `https://app.0xterm.xyz/...` (preserve query)
- * - app  `/app/...` → `/...` on the same host (preserve query)
+ * Production story for **this** artifact (app host):
+ * - app `/app/...` → `/...` on the same host (preserve query) — bookmark strip
+ *
+ * Defensive only (apex is owned by `0xterm-dot-xyz` in production):
+ * - apex any path → `https://app.0xterm.xyz/...` (strip `/app` when present)
+ *
  * - local: never redirects (landing + `/app` dual surface)
  */
 export function resolveHostRedirect(opts: {
@@ -62,19 +79,21 @@ export function resolveHostRedirect(opts: {
   const kind = classifyHost(opts.hostname);
   if (kind === "local") return null;
 
-  const rest = stripAppPrefix(opts.pathname);
-  if (rest === null) return null;
-
   const search = opts.search ?? "";
-  // Spec examples omit forcing trailing slash on the destination.
-  const path = rest === "/" ? "/" : rest.replace(/\/+$/, "") || "/";
+  const stripped = stripAppPrefix(opts.pathname);
 
-  if (kind === "apex") {
-    return { href: `${APP_ORIGIN}${path === "/" ? "/" : path}${search}` };
+  if (kind === "app") {
+    // Primary production redirect for this Pages site: silent /app → /
+    if (stripped === null) return null;
+    const path = normalizePath(stripped);
+    return { href: `${path}${search}` };
   }
 
-  // app host: strip /app → same-origin path
-  return { href: `${path}${search}` };
+  // apex — defensive bounce to app host. Production `/app` redirect on apex
+  // belongs on the landing repo (`0xterm-dot-xyz` static `/app/`).
+  const raw = stripped ?? (opts.pathname || "/");
+  const path = normalizePath(raw.startsWith("/") ? raw : `/${raw}`);
+  return { href: `${APP_ORIGIN}${path === "/" ? "/" : path}${search}` };
 }
 
 /** On `app.0xterm.xyz`, root boots the terminal (no landing). */
@@ -83,16 +102,24 @@ export function shouldBootTerminalAtRoot(hostname: string): boolean {
 }
 
 /**
+ * Marketing landing is **localhost/dev only** on this artifact.
+ * Production apex marketing ships from `0xterm-dot-xyz`.
+ */
+export function shouldShowLanding(hostname: string): boolean {
+  return classifyHost(hostname) === "local";
+}
+
+/**
  * `/app` still serves the terminal only on local/dev hosts.
- * Production hosts redirect away via `resolveHostRedirect`.
+ * App host strips via `resolveHostRedirect`; apex bounces to app (defensive).
  */
 export function shouldRenderTerminalAtAppPath(hostname: string): boolean {
   return classifyHost(hostname) === "local";
 }
 
 /**
- * Landing CTA target: production apex → app subdomain; local → `/app`;
- * app host → `/`.
+ * Landing CTA target (dev dual-surface): local → `/app`; app → `/`;
+ * apex (defensive) → app subdomain.
  */
 export function terminalLaunchHref(hostname: string): string {
   const kind = classifyHost(hostname);
@@ -101,11 +128,14 @@ export function terminalLaunchHref(hostname: string): string {
   return "/app";
 }
 
-/** Default site URL for metadataBase when env is unset. */
+/**
+ * Default site URL for metadataBase when env is unset.
+ * This repo's Pages host is the app subdomain.
+ */
 export function defaultSiteUrl(): string {
   return (
     (typeof process !== "undefined" &&
       process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "")) ||
-    "https://0xterm.xyz"
+    APP_ORIGIN
   );
 }

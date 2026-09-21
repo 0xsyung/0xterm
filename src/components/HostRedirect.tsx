@@ -1,6 +1,6 @@
 /**
  * @file HostRedirect.tsx
- * @description Silent client redirect / surface gate for #78 host routing
+ * @description Silent client redirect / surface gate for #78 two-repo host split
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
@@ -10,7 +10,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   resolveHostRedirect,
   shouldBootTerminalAtRoot,
-  shouldRenderTerminalAtAppPath
+  shouldRenderTerminalAtAppPath,
+  shouldShowLanding
 } from "@/lib/hostRouting";
 
 type RootSurface = "pending" | "landing" | "terminal" | "redirecting";
@@ -22,8 +23,10 @@ function Hold() {
 }
 
 /**
- * Root (`/`) gate: app host → terminal; apex/local → landing.
- * Also honors any redirect decision (none expected at `/`).
+ * Root (`/`) gate:
+ * - app host → terminal
+ * - local → landing (dev dual-surface)
+ * - apex → defensive redirect to app (production apex is 0xterm-dot-xyz)
  */
 export function RootHostGate({
   landing,
@@ -42,7 +45,16 @@ export function RootHostGate({
       window.location.replace(redirect.href);
       return;
     }
-    setSurface(shouldBootTerminalAtRoot(hostname) ? "terminal" : "landing");
+    if (shouldBootTerminalAtRoot(hostname)) {
+      setSurface("terminal");
+      return;
+    }
+    if (shouldShowLanding(hostname)) {
+      setSurface("landing");
+      return;
+    }
+    // Unexpected production host without redirect — blank hold
+    setSurface("redirecting");
   }, []);
 
   if (surface === "pending" || surface === "redirecting") return <Hold />;
@@ -51,7 +63,10 @@ export function RootHostGate({
 }
 
 /**
- * `/app` gate: apex → app.0xterm.xyz; app host → strip `/app`; local → terminal.
+ * `/app` gate:
+ * - app host → silent strip `/app` → `/`
+ * - local → terminal (dev dual-surface)
+ * - apex → defensive bounce to app (production apex `/app` is landing-repo static)
  */
 export function AppPathHostGate({ terminal }: { terminal: ReactNode }) {
   const [surface, setSurface] = useState<AppSurface>("pending");

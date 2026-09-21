@@ -149,9 +149,9 @@ function LandingPage() {
             </a>
           </div>
           <p className="mt-4 text-xs opacity-50 tracking-wide">
-            Terminal lives at app.0xterm.xyz
+            Production terminal: app.0xterm.xyz (landing ships from 0xterm-dot-xyz)
             <span className="mx-2 opacity-40">·</span>
-            Prefs are host-scoped — Export on this host, Import in Settings on app.
+            Prefs are host-scoped — Export here, Import in Settings on app.
           </p>
         </section>
 
