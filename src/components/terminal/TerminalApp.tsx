@@ -70,7 +70,6 @@ const queryClient = new QueryClient();
 
 export default function TerminalApp() {
   const [currentThemeKey, setCurrentThemeKey] = useState<ThemeMode>("matrix");
-  const [isRainActive, setIsRainActive] = useState(false);
   const [shellReady, setShellReady] = useState(false);
   const [minHoldDone, setMinHoldDone] = useState(false);
   const vvHeight = useVisualViewportHeight();
@@ -83,7 +82,6 @@ export default function TerminalApp() {
     return () => window.clearTimeout(hold);
   }, []);
 
-  const toggleRain = () => setIsRainActive(!isRainActive);
   const showSplash = !(shellReady && minHoldDone);
 
   return (
@@ -99,7 +97,6 @@ export default function TerminalApp() {
             </div>
           )}
           <TerminalShell
-            onToggleRain={toggleRain}
             currentThemeKey={currentThemeKey}
             onThemeChange={setCurrentThemeKey}
           />

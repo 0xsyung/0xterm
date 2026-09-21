@@ -225,7 +225,7 @@ export default function AddLiquidityWidget({
 
   return (
     <div
-      className={`relative group my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} ${theme.font} text-xs space-y-3`}
+      className={`relative group my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} ${theme.font} text-xs space-y-3 w-full`}
     >
       {!pinned && (
         <PinButton
@@ -259,7 +259,7 @@ export default function AddLiquidityWidget({
       </div>
 
       {step === "error" && (
-        <div className="p-2 border border-red-500/50 bg-red-950/40 text-red-400 rounded">
+        <div className={`p-2 border rounded ${theme.warn}`}>
           ERROR: {errorMsg}
         </div>
       )}

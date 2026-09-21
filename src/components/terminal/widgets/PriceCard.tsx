@@ -41,7 +41,7 @@ export default function PriceCard({
 }) {
   // Shared compact chrome: tight padding, small font. When `compact` (pinned
   // panel) it also drops the pool-address footer to save vertical space.
-  const shell = `my-3 p-2 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-[10px] space-y-1`;
+  const shell = `my-3 p-2 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-[10px] space-y-1 w-full`;
   const header = `flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`;
   const label = `text-[9px] ${theme.text}/50`;
   const value = `font-bold ${theme.primary}`;
@@ -104,7 +104,7 @@ export default function PriceCard({
         </div>
         <div>
           <div className={label}>PRICE (USD)</div>
-          <div className={`text-xs ${value}`}>
+          <div className={`text-xs ${value} tabular-nums`}>
             $
             {data.priceUsd
               ? parseFloat(data.priceUsd).toLocaleString(undefined, {
@@ -116,7 +116,7 @@ export default function PriceCard({
         </div>
         <div>
           <div className={label}>PRICE ({data.quoteSymbol})</div>
-          <div className={`text-xs ${value}`}>
+          <div className={`text-xs ${value} tabular-nums`}>
             {data.priceNative
               ? parseFloat(data.priceNative).toLocaleString(undefined, {
                   maximumFractionDigits: 6
@@ -127,11 +127,11 @@ export default function PriceCard({
         <div>
           <div className={label}>24H CHANGE</div>
           <div
-            className={`text-xs ${
+            className={`text-xs tabular-nums ${
               h24 === undefined
                 ? theme.muted
                 : h24 < 0
-                  ? "text-red-400"
+                  ? theme.warn
                   : theme.primary
             }`}
           >

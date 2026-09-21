@@ -57,7 +57,7 @@ export default function BillboardWidget({
 
   return (
     <div
-      className={`relative group my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} text-xs space-y-2 max-w-2xl`}
+      className={`relative group my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} text-xs space-y-2 w-full`}
     >
       {!pinned && (
         <PinButton
@@ -115,7 +115,7 @@ export default function BillboardWidget({
           </button>
         )}
         {pageLabel && <span className="text-[10px] opacity-60">{pageLabel}</span>}
-        {error && <span className="text-red-400 text-[10px]">error: {error}</span>}
+        {error && <span className={`${theme.warn} text-[10px]`}>error: {error}</span>}
       </div>
     </div>
   );

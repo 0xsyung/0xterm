@@ -56,7 +56,7 @@ export default function ChatWidget({
 
   return (
     <div
-      className={`relative group my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} text-xs space-y-2 max-w-2xl`}
+      className={`relative group my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} text-xs space-y-2 w-full`}
     >
       {!pinned && (
         <PinButton
@@ -90,7 +90,7 @@ export default function ChatWidget({
         </div>
       )}
       {keyChanged && (
-        <div className={`text-[10px] text-red-400 border border-red-400/40 rounded px-2 py-1`}>
+        <div className={`text-[10px] ${theme.warn} rounded px-2 py-1`}>
           ⚠ peer&apos;s chat key changed since last contact — verify this is the
           same person before sharing anything sensitive
         </div>
@@ -119,7 +119,7 @@ export default function ChatWidget({
                 } ${theme.border} border`}
               >
                 {m.decryptFailed ? (
-                  <span className="text-red-400">[cannot decrypt — wrong key]</span>
+                  <span className={theme.warn}>[cannot decrypt — wrong key]</span>
                 ) : m.decrypted !== undefined ? (
                   m.decrypted
                 ) : (

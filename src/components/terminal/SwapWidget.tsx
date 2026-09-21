@@ -188,7 +188,7 @@ export default function SwapWidget({
   };
 
   return (
-    <div className={`my-2 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} max-w-lg text-xs space-y-3`}>
+    <div className={`my-2 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} w-full text-xs space-y-3`}>
       <div className={`flex justify-between items-center border-b ${theme.border} pb-2`}>
         <span className={`font-bold ${theme.primary}`}>
           DEX SWAP ROUTE [AGGREGATED]
@@ -201,13 +201,13 @@ export default function SwapWidget({
       <div className={`grid grid-cols-2 gap-2 ${theme.text} font-mono`}>
         <div>
           <div className={`text-[10px] ${theme.muted}`}>YOU PAY</div>
-          <div className={`text-base font-bold ${theme.primary}`}>
+          <div className={`text-base font-bold ${theme.primary} tabular-nums`}>
             {fromAmountFormatted} {fromToken.symbol}
           </div>
         </div>
         <div>
           <div className={`text-[10px] ${theme.muted}`}>EXPECTED OUTPUT</div>
-          <div className={`text-base font-bold ${theme.primary}`}>
+          <div className={`text-base font-bold ${theme.primary} tabular-nums`}>
             ≈ {toAmountFormatted} {toToken.symbol}
           </div>
         </div>
@@ -216,13 +216,13 @@ export default function SwapWidget({
       {estimatedGasUsd && (
         <div className={`text-[11px] ${theme.muted} border-t ${theme.border} pt-2 flex justify-between`}>
           <span>ESTIMATED NETWORK FEE:</span>
-          <span className={`font-bold ${theme.primary}`}>${estimatedGasUsd}</span>
+          <span className={`font-bold ${theme.primary} tabular-nums`}>${estimatedGasUsd}</span>
         </div>
       )}
 
       <div className={`text-[11px] ${theme.muted} border-t ${theme.border} pt-2 flex justify-between`}>
         <span>SLIPPAGE TOLERANCE:</span>
-        <span className={`font-bold ${theme.primary}`}>
+        <span className={`font-bold ${theme.primary} tabular-nums`}>
           {slippagePct}%
           {amountOutMin > 0n && (
             <span className="ml-2 opacity-70">
@@ -233,7 +233,7 @@ export default function SwapWidget({
       </div>
 
       {errorMsg && (
-        <div className="p-2 border border-red-500/50 bg-red-950/40 text-red-400 rounded">
+        <div className={`p-2 border rounded ${theme.warn}`}>
           ERROR: {errorMsg}
         </div>
       )}

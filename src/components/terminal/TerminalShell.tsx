@@ -132,7 +132,6 @@ import {
 } from "./news";
 import { getPoolPriceRatio } from "./poolPrice";
 import { fetchBillboard, fetchChatThread } from "./pinLoaders";
-import MatrixRain from "./MatrixRain";
 import {
   buildBalanceLog,
   buildPnlGate,
@@ -278,19 +277,6 @@ import {
 
 const MAX_LOGS = 100;
 
-// #79 easter egg: famous crypto-community phrases. Deliberately NOT commands —
-// typing one fires a brief Matrix-rain burst instead of "not recognized".
-const EASTER_EGG_PHRASES = new Set<string>([
-  "hodl",
-  "gm",
-  "wen moon",
-  "wagmi",
-  "ngmi",
-  "btfd",
-  "to the moon",
-  "not your keys not your coins"
-]);
-
 // Peer-key continuity (finding C-1): load the persisted map of peer address →
 // last-seen registered chat key. SSR-safe (TerminalShell is a client component,
 // but guard anyway for build-time module evaluation).
@@ -357,7 +343,7 @@ function ExportWidget({
 
   return (
     <div
-      className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2 max-w-xl`}
+      className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2 w-full`}
     >
       <div
         className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
@@ -406,11 +392,9 @@ function ExportWidget({
 }
 
 export default function TerminalShell({
-  onToggleRain,
   currentThemeKey,
   onThemeChange
 }: {
-  onToggleRain: () => void;
   currentThemeKey: ThemeMode;
   onThemeChange: (theme: ThemeMode) => void;
 }) {
@@ -429,22 +413,6 @@ export default function TerminalShell({
   // Custom user-registered tokens, flat list per chain so multiple tokens can
   // share a symbol. `id` is the stable uniqueness key.
   const [customTokens, setCustomTokens] = useState<CustomTokensMap>({});
-
-  // Easter egg (#79): secret crypto phrase fires a short Matrix-rain burst.
-  // Ephemeral — fade in ~1s, play ~20s, fade out; clean the rest of the time.
-  const [easterEggRain, setEasterEggRain] = useState(false);
-  const easterEggTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const triggerEasterEgg = () => {
-    if (easterEggTimer.current) clearTimeout(easterEggTimer.current);
-    setEasterEggRain(true);
-    easterEggTimer.current = setTimeout(() => setEasterEggRain(false), 20_000);
-  };
-  useEffect(
-    () => () => {
-      if (easterEggTimer.current) clearTimeout(easterEggTimer.current);
-    },
-    []
-  );
 
   // Chat channels (#58): saved list + active id (presets live in constants).
   const [channelStore, setChannelStore] = useState<ChannelStore>(() =>
@@ -1543,7 +1511,7 @@ export default function TerminalShell({
 
       if (!pairAddress || pairAddress === NATIVE_TOKEN_ADDRESS) {
         return (
-          <div className={`${theme.warn} my-2 p-3 border ${theme.rounded} max-w-md text-xs`}>
+          <div className={`${theme.warn} my-2 p-3 border ${theme.rounded} w-full text-xs`}>
             <div className="font-bold mb-1">NO POOL FOUND</div>
             <div>
               No {activeDex.type} pool exists for {tokenA.symbol}/
@@ -1577,7 +1545,7 @@ export default function TerminalShell({
       );
     } catch (err: any) {
       return (
-        <div className="text-red-400 my-2 p-3 border border-red-900/50 bg-red-950/30 rounded max-w-md text-xs space-y-1">
+        <div className={`${theme.warn} my-2 p-3 border rounded w-full text-xs space-y-1`}>
           <div className="font-bold">DEBUG ERROR DETAILS:</div>
           <div className="font-mono text-[10px] break-all">
             {err.message || String(err)}
@@ -1593,7 +1561,7 @@ export default function TerminalShell({
   ) => {
     if (!isAddress(poolAddress))
       return (
-        <div className="text-red-400">
+        <div className={theme.warn}>
           Error: Provide a valid pool contract address (0x...).
         </div>
       );
@@ -1776,7 +1744,7 @@ export default function TerminalShell({
         );
       } catch {
         return (
-          <div className="text-red-400 my-1 p-2 border border-red-900/50 bg-red-950/30 rounded max-w-md text-xs">
+          <div className={`${theme.warn} my-1 p-2 border rounded w-full text-xs`}>
             <div className="font-bold">Failed to read pool contract.</div>
             <div>
               Ensure {poolAddress} is a valid V2 pair or V3 pool address.
@@ -3612,7 +3580,7 @@ export default function TerminalShell({
 
         const priceWidget = (
           <div
-            className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2`}
+            className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2 w-full`}
           >
             <div
               className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
@@ -3633,7 +3601,7 @@ export default function TerminalShell({
                 <div className={`text-[10px] ${theme.text}/50`}>
                   PRICE (USD)
                 </div>
-                <div className={`text-base font-bold ${theme.primary}`}>
+                <div className={`text-base font-bold ${theme.primary} tabular-nums`}>
                   $
                   {priceUsd
                     ? parseFloat(priceUsd).toLocaleString(undefined, {
@@ -3647,7 +3615,7 @@ export default function TerminalShell({
                 <div className={`text-[10px] ${theme.text}/50`}>
                   PRICE ({quoteSymbol})
                 </div>
-                <div className={`text-base font-bold ${theme.primary}`}>
+                <div className={`text-base font-bold ${theme.primary} tabular-nums`}>
                   {priceNative
                     ? parseFloat(priceNative).toLocaleString(undefined, {
                         maximumFractionDigits: 6
@@ -3658,7 +3626,13 @@ export default function TerminalShell({
               <div>
                 <div className={`text-[10px] ${theme.text}/50`}>24H CHANGE</div>
                 <div
-                  className={`text-base font-bold ${h24 >= 0 ? theme.primary : "text-red-400"}`}
+                  className={`text-base font-bold tabular-nums ${
+                    h24 === undefined
+                      ? theme.muted
+                      : h24 < 0
+                        ? theme.warn
+                        : theme.primary
+                  }`}
                 >
                   {h24 !== undefined ? `${h24 > 0 ? "+" : ""}${h24}%` : "N/A"}
                 </div>
@@ -5149,8 +5123,12 @@ export default function TerminalShell({
       return { id: generateId(), type: "text", text: "Disconnected." };
     },
     rain: () => {
-      onToggleRain();
-      return { id: generateId(), type: "text", text: "Rain toggled." };
+      return {
+        id: generateId(),
+        type: "text",
+        text: "rain is disabled.",
+        muted: true
+      };
     },
     share: async (args) => {
       const sub = (args[1] || "status").toLowerCase();
@@ -5875,12 +5853,6 @@ export default function TerminalShell({
     const handler = commands[command];
 
     if (!handler) {
-      // Hidden easter egg (#79): famous crypto phrases aren't commands — they
-      // fire a brief Matrix-rain burst instead of the "not recognized" error.
-      if (EASTER_EGG_PHRASES.has(trimmed)) {
-        triggerEasterEgg();
-        return;
-      }
       setLogs((prev) =>
         [
           ...prev,
@@ -6356,11 +6328,6 @@ export default function TerminalShell({
           }
         />
       )}
-
-      {/* #79 easter egg: secret crypto phrase → brief Matrix-rain burst.
-          Fade in ~1s via CSS transition; pointer-events-none so it never
-          blocks the mouse-first UI. */}
-      <MatrixRain active={easterEggRain} opacity={easterEggRain ? 0.2 : 0} />
 
       {/* TOP HEADER BAR */}
       <TerminalHeader

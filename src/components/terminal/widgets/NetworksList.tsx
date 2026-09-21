@@ -19,7 +19,7 @@ export default function NetworksList({
 }) {
   return (
     <div
-      className={`relative group my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-3`}
+      className={`relative group my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-3 w-full`}
     >
       {!pinned && (
         <PinButton

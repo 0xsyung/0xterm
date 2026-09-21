@@ -22,7 +22,7 @@ export default function BalanceWidget({
 }) {
   return (
     <div
-      className={`relative group my-3 p-3 border ${theme.border} ${theme.cardBg} ${theme.rounded} max-w-md text-xs font-bold ${theme.primary}`}
+      className={`relative group my-3 p-3 border ${theme.border} ${theme.cardBg} ${theme.rounded} w-full text-xs font-bold ${theme.primary} tabular-nums`}
     >
       {balance} {symbol}
       {!pinned && (

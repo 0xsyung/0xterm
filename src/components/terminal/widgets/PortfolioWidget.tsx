@@ -95,20 +95,20 @@ export default function PortfolioWidget({
             <tr key={h.type === "erc20" && h.address ? `${h.chainId}-${h.address.toLowerCase()}` : `${h.chainId}-${h.symbol}`} className={`border-b ${theme.border}/50`}>
               <td className="py-1 pr-2 whitespace-nowrap">{h.chainName}</td>
               <td className="py-1 pr-2 font-bold">{h.symbol}</td>
-              <td className="py-1 pr-2 text-right whitespace-nowrap">{h.balance}</td>
-              <td className="py-1 pr-2 text-right whitespace-nowrap">
+              <td className="py-1 pr-2 text-right whitespace-nowrap tabular-nums">{h.balance}</td>
+              <td className="py-1 pr-2 text-right whitespace-nowrap tabular-nums">
                 {h.valueUsd !== null ? `$${h.valueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
               </td>
-              <td className={`py-1 pr-2 text-right whitespace-nowrap ${h.change24h === null ? "" : h.change24h >= 0 ? theme.primary : "text-red-400"}`}>
+              <td className={`py-1 pr-2 text-right whitespace-nowrap tabular-nums ${h.change24h === null ? "" : h.change24h >= 0 ? theme.primary : theme.warn}`}>
                 {h.change24h !== null ? `${h.change24h > 0 ? "+" : ""}${h.change24h}%` : "—"}
               </td>
               {showPnl && hasSnapshot && (
-                <td className={`py-1 pr-2 text-right whitespace-nowrap ${pnlPrice === null ? "" : pnlPrice >= 0 ? theme.primary : "text-red-400"}`}>
+                <td className={`py-1 pr-2 text-right whitespace-nowrap tabular-nums ${pnlPrice === null ? "" : pnlPrice >= 0 ? theme.primary : theme.warn}`}>
                   {pnlPrice !== null ? `${pnlPrice >= 0 ? "+" : ""}$${pnlPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
                 </td>
               )}
               {showPnl && hasSnapshot && (
-                <td className={`py-1 pr-2 text-right whitespace-nowrap ${pnlBalance === null ? "" : pnlBalance >= 0 ? theme.primary : "text-red-400"}`}>
+                <td className={`py-1 pr-2 text-right whitespace-nowrap tabular-nums ${pnlBalance === null ? "" : pnlBalance >= 0 ? theme.primary : theme.warn}`}>
                   {pnlBalance !== null ? `${pnlBalance >= 0 ? "+" : ""}$${pnlBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
                 </td>
               )}
@@ -122,15 +122,15 @@ export default function PortfolioWidget({
           <tr className={`font-bold ${theme.primary}`}>
             <td className="py-1 pr-2 pt-2" colSpan={2}>TOTAL</td>
             <td className="py-1 pr-2 pt-2 text-right">—</td>
-            <td className="py-1 pr-2 pt-2 text-right whitespace-nowrap">${totalUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+            <td className="py-1 pr-2 pt-2 text-right whitespace-nowrap tabular-nums">${totalUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
             <td className="py-1 pr-2 pt-2 text-right">—</td>
             {hasSnapshot && (
-              <td className={`py-1 pr-2 pt-2 text-right whitespace-nowrap ${totalPnlPrice >= 0 ? theme.primary : "text-red-400"}`}>
+              <td className={`py-1 pr-2 pt-2 text-right whitespace-nowrap tabular-nums ${totalPnlPrice >= 0 ? theme.primary : theme.warn}`}>
                 {totalPnlPrice >= 0 ? "+" : ""}${totalPnlPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </td>
             )}
             {hasSnapshot && (
-              <td className={`py-1 pr-2 pt-2 text-right whitespace-nowrap ${totalPnlBalance >= 0 ? theme.primary : "text-red-400"}`}>
+              <td className={`py-1 pr-2 pt-2 text-right whitespace-nowrap tabular-nums ${totalPnlBalance >= 0 ? theme.primary : theme.warn}`}>
                 {totalPnlBalance >= 0 ? "+" : ""}${totalPnlBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </td>
             )}
@@ -142,7 +142,7 @@ export default function PortfolioWidget({
   );
 
   return (
-    <div className={`relative group my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2 max-w-full overflow-x-auto`}>
+    <div className={`relative group my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-2 w-full overflow-x-auto`}>
       {!pinned && (
         <PinButton
           onPin={onPin}

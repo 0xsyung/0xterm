@@ -174,7 +174,7 @@ export default function DeployWidget({
 
   return (
     <div
-      className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-3 max-w-xl`}
+      className={`my-3 p-4 border ${theme.border} ${theme.cardBg} ${theme.rounded} ${theme.glow} text-xs space-y-3 w-full`}
     >
       <div
         className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-2`}
@@ -207,7 +207,7 @@ export default function DeployWidget({
       </div>
 
       {error && (
-        <div className="text-red-400 p-2 border border-red-900/50 bg-red-950/30 rounded mt-2">
+        <div className={`${theme.warn} p-2 border rounded mt-2`}>
           {error}
         </div>
       )}
