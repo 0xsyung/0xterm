@@ -931,6 +931,10 @@ export default function SettingsPanel(props: SettingsPanelProps) {
             JSON of RPC, tokens, theme, mode, channels, pins
           </span>
         </div>
+        <p className={`text-[10px] leading-snug ${theme.muted}`}>
+          localStorage is host-scoped — after moving to app.0xterm.xyz, Export here
+          (or on 0xterm.xyz) and Import on the app host.
+        </p>
         <textarea
           value={importText}
           onChange={(e) => {

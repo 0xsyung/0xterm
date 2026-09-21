@@ -8,6 +8,7 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
+import { defaultSiteUrl } from "@/lib/hostRouting";
 
 const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
@@ -16,7 +17,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://0xterm.xyz"),
+  metadataBase: new URL(defaultSiteUrl()),
   title: "0xterm",
   description: "Matrix-style Web3 Terminal Interface"
 };
