@@ -1,6 +1,7 @@
 /**
  * @file SocialPanel.tsx
  * @description Social surface: Inbox + Board sub-tabs (#63). No pin affordances.
+ * Shared inbox list/thread views live in inbox/InboxViews (#82).
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
@@ -11,8 +12,15 @@ import type { Address } from "viem";
 import type { ThemeConfig } from "./types";
 import type { SocialSubTab } from "./socialUnread";
 import { formatBadgeCount } from "./socialUnread";
-import type { ChatMessage } from "./widgets/ChatWidget";
 import type { BillboardPost } from "./widgets/BillboardWidget";
+import {
+  InboxThreadList,
+  InboxThreadMessages,
+  type InboxSenderSummary,
+  type InboxThreadView
+} from "./inbox/InboxViews";
+
+export type { InboxSenderSummary, InboxThreadView };
 
 function errMessage(err: unknown, fallback: string): string {
   if (err && typeof err === "object" && "message" in err) {
@@ -21,21 +29,6 @@ function errMessage(err: unknown, fallback: string): string {
   }
   return fallback;
 }
-
-export type InboxSenderSummary = {
-  peer: Address;
-  count: number;
-  label?: string;
-};
-
-export type InboxThreadView = {
-  messages: ChatMessage[];
-  peer: Address;
-  self: Address;
-  peerLabel?: string;
-  peerFingerprint?: string;
-  keyChanged?: boolean;
-};
 
 export type BoardView = {
   posts: BillboardPost[];
@@ -261,7 +254,8 @@ export default function SocialPanel({
               channelLabel &&
               senders &&
               senders.length === 0 &&
-              !inboxLoading && (
+              !inboxLoading &&
+              !thread && (
                 <div className={theme.muted}>
                   No messages yet. Send with{" "}
                   <span className={theme.primary}>
@@ -270,102 +264,23 @@ export default function SocialPanel({
                   .
                 </div>
               )}
-            {senders && senders.length > 0 && !thread && (
-              <div className="space-y-1">
-                <div className={`font-bold ${theme.primary} text-[10px] uppercase tracking-widest`}>
-                  Threads
-                </div>
-                {senders.map((s) => {
-                  const short = `${s.peer.slice(0, 6)}…${s.peer.slice(-4)}`;
-                  return (
-                    <button
-                      key={s.peer}
-                      type="button"
-                      onClick={() => void openThread(s.peer)}
-                      className={`w-full text-left px-2 py-2 border ${theme.border} ${theme.text} cursor-pointer pointer-coarse:min-h-[44px] hover:opacity-90 ${radius}`}
-                    >
-                      <span className="font-bold">{s.label || short}</span>
-                      <span className={`ml-2 ${theme.muted}`}>
-                        {s.count} msg{s.count === 1 ? "" : "s"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+            {senders && senders.length > 0 && !thread && !threadLoading && (
+              <InboxThreadList
+                theme={theme}
+                senders={senders}
+                onOpenThread={(peer) => void openThread(peer)}
+                emptyLabel="No conversations"
+                radius={radius}
+              />
             )}
             {threadLoading && <div className={theme.muted}>Decrypting…</div>}
             {thread && (
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setThread(null);
-                                }}
-                  className={`uppercase text-[10px] underline cursor-pointer ${theme.primary} pointer-coarse:min-h-[44px]`}
-                >
-                  ‹ threads
-                </button>
-                <div
-                  className={`flex justify-between items-center ${theme.text}/70 border-b ${theme.border} pb-1`}
-                >
-                  <span className="font-bold">
-                    CHAT ·{" "}
-                    {thread.peerLabel ||
-                      `${thread.peer.slice(0, 6)}…${thread.peer.slice(-4)}`}
-                  </span>
-                  <span className={`uppercase text-[10px] ${theme.muted}`}>
-                    encrypted
-                  </span>
-                </div>
-                {thread.peerFingerprint && (
-                  <div className={`text-[10px] ${theme.muted}`}>
-                    KEY {thread.peerFingerprint}
-                  </div>
-                )}
-                {thread.keyChanged && (
-                  <div className={`text-[10px] ${theme.muted}`}>
-                    Peer chat key changed since last contact — verify before
-                    trusting.
-                  </div>
-                )}
-                {thread.messages.length === 0 ? (
-                  <div className={theme.muted}>No messages in this conversation.</div>
-                ) : (
-                  thread.messages.map((m, i) => {
-                    const isSelf =
-                      m.from.toLowerCase() === thread.self.toLowerCase();
-                    const dt = new Date(m.timestamp * 1000);
-                    const time = `${dt.toLocaleDateString()} ${dt.toLocaleTimeString()}`;
-                    return (
-                      <div
-                        key={i}
-                        className={`flex flex-col gap-0.5 ${
-                          isSelf ? "items-end" : "items-start"
-                        }`}
-                      >
-                        <div
-                          className={`px-3 py-1.5 border ${theme.border} ${
-                            isSelf ? theme.primary : theme.text
-                          } bg-black/30`}
-                        >
-                          {m.decryptFailed ? (
-                            <span className={theme.muted}>
-                              [cannot decrypt — wrong key]
-                            </span>
-                          ) : m.decrypted !== undefined ? (
-                            m.decrypted
-                          ) : (
-                            <span className={theme.muted}>[encrypted]</span>
-                          )}
-                        </div>
-                        <div className={`text-[10px] ${theme.muted}`}>
-                          {isSelf ? "you" : "peer"} · {time}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+              <InboxThreadMessages
+                theme={theme}
+                thread={thread}
+                onBack={() => setThread(null)}
+                emptyLabel="No messages in this conversation."
+              />
             )}
           </>
         )}
