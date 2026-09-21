@@ -26,11 +26,99 @@ export const APP_ORIGIN = "https://app.0xterm.xyz";
 
 export type HostKind = "apex" | "app" | "local";
 
+/** Lowercase, strip trailing DNS dot and `:port` (defensive). */
+export function normalizeHostname(hostname: string): string {
+  let h = (hostname || "").trim().toLowerCase();
+  // Strip brackets from IPv6 literals before port split.
+  if (h.startsWith("[") && h.includes("]")) {
+    const end = h.indexOf("]");
+    const hostPart = h.slice(1, end);
+    const rest = h.slice(end + 1);
+    h = rest.startsWith(":") ? hostPart : hostPart + rest;
+  } else {
+    // hostname:port (IPv4 / DNS) — window.location.hostname omits port, but
+    // callers sometimes pass host headers.
+    const colon = h.lastIndexOf(":");
+    if (colon > -1 && /^\d+$/.test(h.slice(colon + 1))) {
+      h = h.slice(0, colon);
+    }
+  }
+  return h.replace(/\.$/, "");
+}
+
+function isApexHost(h: string): boolean {
+  return APEX_HOSTS.has(h);
+}
+
+/** Exact app host, www.app, or any subdomain of the app host. */
+function isAppHostName(h: string): boolean {
+  if (!h) return false;
+  if (h === APP_HOST) return true;
+  if (h === `www.${APP_HOST}`) return true;
+  if (h.endsWith(`.${APP_HOST}`)) return true;
+  return false;
+}
+
+/**
+ * Explicit local / preview hosts that keep the dual-surface (landing + `/app`).
+ * Everything else on this Pages artifact defaults to terminal-at-root.
+ */
+export function isLocalDevHost(hostname: string): boolean {
+  const h = normalizeHostname(hostname);
+  if (!h) return false;
+  if (h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0" || h === "::1") {
+    return true;
+  }
+  if (h.endsWith(".localhost") || h.endsWith(".local")) return true;
+  // Common tunnel / preview hosts used for local QA
+  if (
+    h.endsWith(".trycloudflare.com") ||
+    h.endsWith(".loca.lt") ||
+    h.endsWith(".bore.pub") ||
+    h === "bore.pub" ||
+    h.endsWith(".ngrok-free.app") ||
+    h.endsWith(".ngrok.io")
+  ) {
+    return true;
+  }
+  // Private IPv4 (dev servers bound to LAN)
+  const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h);
+  if (m) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    if (a === 10) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+  }
+  return false;
+}
+
+/**
+ * This package's production artifact is the app subdomain. When
+ * NEXT_PUBLIC_SITE_URL points at the app origin (or is unset → APP_ORIGIN),
+ * unknown non-apex hosts must boot terminal — never marketing.
+ */
+export function isAppPagesArtifact(): boolean {
+  try {
+    const raw =
+      (typeof process !== "undefined" &&
+        process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "")) ||
+      APP_ORIGIN;
+    const host = normalizeHostname(new URL(raw).hostname);
+    return isAppHostName(host) || host === "" || raw === APP_ORIGIN;
+  } catch {
+    return true;
+  }
+}
+
 /** Classify a hostname into apex / app / local (dev dual-surface). */
 export function classifyHost(hostname: string): HostKind {
-  const h = (hostname || "").toLowerCase().replace(/\.$/, "");
-  if (h === APP_HOST) return "app";
-  if (APEX_HOSTS.has(h)) return "apex";
+  const h = normalizeHostname(hostname);
+  if (isApexHost(h)) return "apex";
+  if (isAppHostName(h)) return "app";
+  if (isLocalDevHost(h)) return "local";
+  // Empty / CDN / github.io / unknown on the app artifact → terminal.
+  if (isAppPagesArtifact()) return "app";
   return "local";
 }
 
@@ -96,7 +184,7 @@ export function resolveHostRedirect(opts: {
   return { href: `${APP_ORIGIN}${path === "/" ? "/" : path}${search}` };
 }
 
-/** On `app.0xterm.xyz`, root boots the terminal (no landing). */
+/** On app host (and app-artifact unknowns), root boots the terminal. */
 export function shouldBootTerminalAtRoot(hostname: string): boolean {
   return classifyHost(hostname) === "app";
 }

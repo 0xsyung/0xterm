@@ -9,6 +9,8 @@ import {
   APP_HOST,
   APP_ORIGIN,
   classifyHost,
+  isLocalDevHost,
+  normalizeHostname,
   resolveHostRedirect,
   shouldBootTerminalAtRoot,
   shouldRenderTerminalAtAppPath,
@@ -18,6 +20,14 @@ import {
   defaultSiteUrl
 } from "./hostRouting";
 
+describe("normalizeHostname", () => {
+  it("lowercases, strips trailing dot and port", () => {
+    expect(normalizeHostname("APP.0xterm.xyz.")).toBe("app.0xterm.xyz");
+    expect(normalizeHostname("app.0xterm.xyz:443")).toBe("app.0xterm.xyz");
+    expect(normalizeHostname("  App.0xterm.xyz ")).toBe("app.0xterm.xyz");
+  });
+});
+
 describe("classifyHost", () => {
   it("classifies apex and www", () => {
     expect(classifyHost("0xterm.xyz")).toBe("apex");
@@ -25,15 +35,26 @@ describe("classifyHost", () => {
     expect(classifyHost("0xterm.xyz.")).toBe("apex");
   });
 
-  it("classifies app subdomain", () => {
+  it("classifies app subdomain variants", () => {
     expect(classifyHost(APP_HOST)).toBe("app");
     expect(classifyHost("APP.0xterm.xyz")).toBe("app");
+    expect(classifyHost("www.app.0xterm.xyz")).toBe("app");
+    expect(classifyHost("app.0xterm.xyz:443")).toBe("app");
   });
 
-  it("treats localhost and unknowns as local", () => {
+  it("treats localhost-family as local (dev dual-surface)", () => {
     expect(classifyHost("localhost")).toBe("local");
     expect(classifyHost("127.0.0.1")).toBe("local");
     expect(classifyHost("preview.bore.pub")).toBe("local");
+    expect(classifyHost("foo.trycloudflare.com")).toBe("local");
+    expect(isLocalDevHost("192.168.1.10")).toBe(true);
+  });
+
+  it("defaults empty / unknown hosts to app on this Pages artifact", () => {
+    // Empty hostname previously fell through to local → marketing. Bad.
+    expect(classifyHost("")).toBe("app");
+    expect(classifyHost("0xsyung.github.io")).toBe("app");
+    expect(classifyHost("weird-cdn.example")).toBe("app");
   });
 });
 
@@ -160,11 +181,23 @@ describe("resolveHostRedirect", () => {
       })
     ).toBeNull();
   });
+
+  it("unknown app-artifact host strips /app like app host", () => {
+    expect(
+      resolveHostRedirect({
+        hostname: "0xsyung.github.io",
+        pathname: "/app/foo",
+        search: "?x=1"
+      })
+    ).toEqual({ href: "/foo?x=1" });
+  });
 });
 
 describe("surface helpers", () => {
-  it("boots terminal at root only on app host", () => {
+  it("boots terminal at root on app host and artifact unknowns", () => {
     expect(shouldBootTerminalAtRoot(APP_HOST)).toBe(true);
+    expect(shouldBootTerminalAtRoot("")).toBe(true);
+    expect(shouldBootTerminalAtRoot("0xsyung.github.io")).toBe(true);
     expect(shouldBootTerminalAtRoot("0xterm.xyz")).toBe(false);
     expect(shouldBootTerminalAtRoot("localhost")).toBe(false);
   });
@@ -172,6 +205,7 @@ describe("surface helpers", () => {
   it("shows landing only on local (dev dual-surface)", () => {
     expect(shouldShowLanding("localhost")).toBe(true);
     expect(shouldShowLanding(APP_HOST)).toBe(false);
+    expect(shouldShowLanding("")).toBe(false);
     expect(shouldShowLanding("0xterm.xyz")).toBe(false);
   });
 
