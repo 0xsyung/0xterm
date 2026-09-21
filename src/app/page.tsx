@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { RootHostGate } from "@/components/HostRedirect";
+import TerminalApp from "@/components/terminal/TerminalApp";
+import { terminalLaunchHref } from "@/lib/hostRouting";
 
 const CHAINS = [
   "Ethereum",
@@ -79,7 +82,12 @@ function Scramble({ text }: { text: string }) {
   );
 }
 
-export default function LandingPage() {
+function LandingPage() {
+  const [launchHref, setLaunchHref] = useState("/app");
+  useEffect(() => {
+    setLaunchHref(terminalLaunchHref(window.location.hostname));
+  }, []);
+
   return (
     <div
       className="w-full min-h-screen h-full overflow-x-hidden overflow-y-auto bg-black text-[#00ff66] font-plex relative"
@@ -104,7 +112,7 @@ export default function LandingPage() {
             <span className="font-bold tracking-widest">0XTERM</span>
           </div>
           <Link
-            href="/app"
+            href={launchHref}
             className="border border-[#00ff66]/50 px-4 py-2 text-sm hover:bg-[#00ff66]/10 hover:border-[#00ff66] transition-colors"
           >
             Launch Terminal
@@ -126,9 +134,9 @@ export default function LandingPage() {
             your way across chains — portfolio, balances, swaps, and contract
             probes, all in a keyboard-first interface.
           </p>
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-wrap gap-4 items-center">
             <Link
-              href="/app"
+              href={launchHref}
               className="bg-[#00ff66] text-black font-bold px-6 py-3 hover:bg-[#00ff66]/90 transition-colors"
             >
               [ Launch Terminal ]
@@ -140,6 +148,11 @@ export default function LandingPage() {
               Commands
             </a>
           </div>
+          <p className="mt-4 text-xs opacity-50 tracking-wide">
+            Terminal lives at app.0xterm.xyz
+            <span className="mx-2 opacity-40">·</span>
+            Prefs are host-scoped — Export on this host, Import in Settings on app.
+          </p>
         </section>
 
         {/* features */}
@@ -200,7 +213,7 @@ export default function LandingPage() {
         {/* footer */}
         <footer className="px-6 max-w-6xl mx-auto w-full py-8 border-t border-[#00ff66]/20 text-xs opacity-50 flex flex-wrap justify-between gap-2">
           <span>© 2026 0XTERM</span>
-          <Link href="/app" className="hover:opacity-80">
+          <Link href={launchHref} className="hover:opacity-80">
             Launch the terminal
           </Link>
         </footer>
@@ -208,3 +221,13 @@ export default function LandingPage() {
     </div>
   );
 }
+
+export default function RootPage() {
+  return (
+    <RootHostGate
+      landing={<LandingPage />}
+      terminal={<TerminalApp />}
+    />
+  );
+}
+
