@@ -31,20 +31,24 @@ export default defineConfig({
         "src/components/terminal/widgets/DigDebugWidget.tsx",
         // Settings panel (#81): presentational chrome; pure helpers in settingsPrefs.ts
         "src/components/terminal/widgets/SettingsPanel.tsx",
-        // static marketing page — pure presentational, no logic to cover
+        // localhost-only marketing page — pure presentational; prod landing is 0xterm-dot-xyz
         "src/app/page.tsx",
-        // app entry — viewport/keyboard wiring, no testable logic (issue #49)
+        // app entry — thin host gate; TerminalApp holds shell wiring (#78)
         "src/app/app/page.tsx",
+        // terminal shell entry (extracted from app/page; viewport wiring #49/#78)
+        "src/components/terminal/TerminalApp.tsx",
+        // client host gate chrome — logic covered by hostRouting unit tests (#78)
+        "src/components/HostRedirect.tsx",
         "src/**/*.test.{ts,tsx}",
       ],
       thresholds: {
-        // Ratchet — measured 2026-09-20 under CI Node after #81 Settings:
-        // Lines 41.96%, Statements 42.21%, Functions 45.66%, Branches 34.67%.
+        // Ratchet — measured 2026-09-21 after #78 host routing (two-repo revise):
+        // Lines 42.95%, Statements 43%, Functions 45.8%, Branches 35.95%.
         // Hard-fail at floor(measured). Climb toward 90% is tracked in #37.
-        lines: 41,
+        lines: 42,
         statements: 42,
         functions: 45,
-        branches: 34,
+        branches: 35,
       },
 
 
