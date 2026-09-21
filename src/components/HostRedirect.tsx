@@ -9,7 +9,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   resolveHostRedirect,
-  shouldBootTerminalAtRoot,
   shouldRenderTerminalAtAppPath,
   shouldShowLanding
 } from "@/lib/hostRouting";
@@ -45,16 +44,13 @@ export function RootHostGate({
       window.location.replace(redirect.href);
       return;
     }
-    if (shouldBootTerminalAtRoot(hostname)) {
-      setSurface("terminal");
-      return;
-    }
+    // Landing only on explicit local/dev hosts. Everything else on this
+    // artifact (app host, empty hostname, github.io, CDN) → terminal.
     if (shouldShowLanding(hostname)) {
       setSurface("landing");
       return;
     }
-    // Unexpected production host without redirect — blank hold
-    setSurface("redirecting");
+    setSurface("terminal");
   }, []);
 
   if (surface === "pending" || surface === "redirecting") return <Hold />;
