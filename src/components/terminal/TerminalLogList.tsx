@@ -12,6 +12,7 @@ import InitializePoolWidget from "./widgets/InitializePoolWidget";
 import AddLiquidityWidget from "./widgets/AddLiquidityWidget";
 import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
+import PnlWidget from "./widgets/PnlWidget";
 import TickerWidget from "./widgets/TickerWidget";
 import NewsWidget from "./widgets/NewsWidget";
 import ChatWidget from "./widgets/ChatWidget";
@@ -42,7 +43,8 @@ export default function TerminalLogList({
   onLogText,
   hasActiveChannel = false,
   narrow = false,
-  onFocusPrompt
+  onFocusPrompt,
+  onPnlRefresh
 }: {
   logs: LogEntry[];
   theme: any;
@@ -56,6 +58,7 @@ export default function TerminalLogList({
   hasActiveChannel?: boolean;
   narrow?: boolean;
   onFocusPrompt?: () => void;
+  onPnlRefresh?: (log: LogEntry) => Promise<void>;
 }) {
   const explorerUrl =
     SUPPORTED_CHAINS.find((c) => c.id === activeChainId)?.blockExplorers
@@ -80,7 +83,8 @@ export default function TerminalLogList({
                 hasActiveChannel,
                 explorerUrl,
                 narrow,
-                onFocusPrompt
+                onFocusPrompt,
+                onPnlRefresh
               }
             )}
           </div>
@@ -105,6 +109,7 @@ function renderLog(
     explorerUrl?: string | null;
     narrow?: boolean;
     onFocusPrompt?: () => void;
+    onPnlRefresh?: (log: LogEntry) => Promise<void>;
   }
 ) {
   if (log.type === "input") {
@@ -152,6 +157,34 @@ function renderLog(
     return <BalanceWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   if (log.type === "portfolio")
     return <PortfolioWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
+  if (log.type === "pnl")
+    return (
+      <PnlWidget
+        data={{
+          kind: "pnl",
+          widgetId: "pnl:snapshot",
+          label: log.payload?.label || "",
+          snapshotTime: log.payload?.snapshotTime || 0,
+          netUsd: log.payload?.netUsd ?? null,
+          pnlPrice: log.payload?.pnlPrice ?? null,
+          pnlBalance: log.payload?.pnlBalance ?? null,
+          snapNav: log.payload?.snapNav ?? null,
+          stale: !!log.payload?.stale,
+          fetching: !!log.payload?.fetching,
+          updatedAt: log.payload?.updatedAt || Date.now(),
+          holdings: log.payload?.holdings || [],
+          snapshot: log.payload?.snapshot || {}
+        }}
+        theme={theme}
+        narrow={!!actions?.narrow}
+        onPin={() => onPin(log)}
+        pinned={isPinned}
+        liveRefresh
+        onRefresh={
+          actions?.onPnlRefresh ? () => actions.onPnlRefresh!(log) : undefined
+        }
+      />
+    );
   if (log.type === "ticker")
     return (
       <TickerWidget

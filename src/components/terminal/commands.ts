@@ -64,10 +64,11 @@ export type BuildPnlLogDeps = {
   };
 };
 
-export const buildPnlLog = (
+/** No-wallet / no-snapshot gates for `pnl`. Returns null when ready to open widget. */
+export const buildPnlGate = (
   state: ConnectedState,
   deps: BuildPnlLogDeps
-): LogEntry => {
+): LogEntry | null => {
   if (!state.isConnected || !state.address) return notConnected(deps.generateId);
   const snap = deps.readPreference(state.address).portfolioSnapshot;
   if (!snap) {
@@ -77,12 +78,36 @@ export const buildPnlLog = (
       text: "No snapshot found. Run 'snapshot' first to establish a P/L baseline."
     };
   }
+  return null;
+};
+
+/** @deprecated stub kept for call-sites during #23 — prefer buildPnlGate + widget. */
+export const buildPnlLog = (
+  state: ConnectedState,
+  deps: BuildPnlLogDeps
+): LogEntry => {
+  const gate = buildPnlGate(state, deps);
+  if (gate) return gate;
+  const snap = deps.readPreference(state.address!).portfolioSnapshot!;
   return {
     id: deps.generateId(),
-    type: "text",
-    text: `Snapshot "${snap.label}" at ${new Date(
-      snap.timestamp
-    ).toLocaleString()} with ${Object.keys(snap.holdings).length} holdings. Run 'portfolio' for per-token P/L.`
+    type: "pnl",
+    title: "PNL",
+    payload: {
+      kind: "pnl",
+      widgetId: "pnl:snapshot",
+      label: snap.label,
+      snapshotTime: snap.timestamp,
+      netUsd: null,
+      pnlPrice: null,
+      pnlBalance: null,
+      snapNav: null,
+      stale: false,
+      fetching: true,
+      updatedAt: Date.now(),
+      holdings: [],
+      snapshot: snap.holdings || {}
+    }
   };
 };
 

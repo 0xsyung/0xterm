@@ -16,12 +16,22 @@ import {
   uniV3FactoryAbi,
   uniV3PoolAbi
 } from "./constants";
+import {
+  fetchSearchPairs,
+  fetchTokensV1,
+  parsePriceUsd,
+  pickDexPair
+} from "./dexscreener";
 
 const token0Abi = parseAbi(["function token0() view returns (address)"]);
 
 // Native token USD price via DexScreener (cache per chain in-memory).
 const nativePriceCache: Record<number, number | null> = {};
 
+/**
+ * Native USD via tokens/v1 on wrapped native (hardened — no search pairs[0]).
+ * Falls back to search + pickDexPair when tokens/v1 misses.
+ */
 export const getNativePriceUsd = async (
   chain: Chain,
   fetchImpl: typeof fetch = fetch
@@ -30,22 +40,46 @@ export const getNativePriceUsd = async (
   const slug = DEXSCREENER_CHAIN[chain.id];
   let price: number | null = null;
   if (slug) {
-    try {
-      const res = await fetchImpl(
-        `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(chain.nativeCurrency.symbol)}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const pair = (data.pairs || []).find(
-          (p: any) => p.chainId.toLowerCase() === slug
-        );
-        if (pair && pair.priceUsd) {
-          const usd = parseFloat(pair.priceUsd);
-          if (Number.isFinite(usd) && usd > 0) price = usd;
+    const wrapped = WRAPPED_NATIVE[chain.id];
+    if (wrapped && wrapped !== NATIVE_TOKEN_ADDRESS) {
+      try {
+        const pairs = await fetchTokensV1(slug, [wrapped], fetchImpl);
+        const picked = pickDexPair(pairs, {
+          symbol: chain.nativeCurrency.symbol,
+          allowDai: true,
+          preferChains: [slug],
+          majorGuard: true
+        });
+        if (picked) {
+          const usd = parsePriceUsd(picked);
+          if (usd !== null && usd > 0) price = usd;
         }
+      } catch {
+        // fall through to search
       }
-    } catch {
-      // leave null
+    }
+    if (price === null) {
+      try {
+        const pairs = await fetchSearchPairs(
+          chain.nativeCurrency.symbol,
+          fetchImpl
+        );
+        const onChain = pairs.filter(
+          (p) => (p.chainId || "").toLowerCase() === slug
+        );
+        const picked = pickDexPair(onChain.length ? onChain : pairs, {
+          symbol: chain.nativeCurrency.symbol,
+          allowDai: false,
+          preferChains: [slug],
+          majorGuard: true
+        });
+        if (picked) {
+          const usd = parsePriceUsd(picked);
+          if (usd !== null && usd > 0) price = usd;
+        }
+      } catch {
+        // leave null
+      }
     }
   }
   nativePriceCache[chain.id] = price;
@@ -60,27 +94,53 @@ export const getTokenPriceUsd = async (
   client: PublicClient,
   fetchImpl: typeof fetch = fetch
 ): Promise<number | null> => {
-  // 1) DexScreener
   const slug = DEXSCREENER_CHAIN[chain.id];
+
+  // Native: tokens/v1 on wrapped + pickDexPair (never pairs[0])
+  if (isNative) return getNativePriceUsd(chain, fetchImpl);
+
+  // 1) DexScreener tokens/v1 by address + pickDexPair
   if (slug) {
     try {
-      const res = await fetchImpl(
-        `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(symbol)}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const pairs: any[] = data.pairs || [];
-        const pair = pairs.find(
-          (p: any) =>
-            p.chainId.toLowerCase() === slug &&
-            (isNative
-              ? true
-              : p.baseToken.symbol.toLowerCase() === symbol.toLowerCase() &&
-                p.baseToken.address?.toLowerCase() === address.toLowerCase())
+      const pairs = await fetchTokensV1(slug, [address], fetchImpl);
+      const picked = pickDexPair(pairs, {
+        symbol,
+        allowDai: true,
+        preferChains: [slug],
+        majorGuard: true
+      });
+      if (picked) {
+        const usd = parsePriceUsd(picked);
+        if (usd !== null && usd > 0) return usd;
+      }
+    } catch {
+      // fall through
+    }
+
+    // 2) Search + pickDexPair (still no pairs[0])
+    try {
+      const pairs = await fetchSearchPairs(symbol, fetchImpl);
+      const onChain = pairs.filter((p) => {
+        if ((p.chainId || "").toLowerCase() !== slug) return false;
+        const base = p.baseToken?.address?.toLowerCase();
+        const baseSym = (p.baseToken?.symbol || "").toLowerCase();
+        return (
+          base === address.toLowerCase() ||
+          baseSym === symbol.toLowerCase()
         );
-        if (pair && pair.priceUsd) {
-          const usd = parseFloat(pair.priceUsd);
-          if (Number.isFinite(usd) && usd > 0) return usd;
+      });
+      const picked = pickDexPair(onChain.length ? onChain : pairs, {
+        symbol,
+        allowDai: false,
+        preferChains: [slug],
+        majorGuard: true
+      });
+      if (picked) {
+        // Prefer address match when available
+        const base = picked.baseToken?.address?.toLowerCase();
+        if (!base || base === address.toLowerCase()) {
+          const usd = parsePriceUsd(picked);
+          if (usd !== null && usd > 0) return usd;
         }
       }
     } catch {
@@ -88,11 +148,8 @@ export const getTokenPriceUsd = async (
     }
   }
 
-  // Native: priced via DexScreener only (no pool pair to read).
-  if (isNative) return getNativePriceUsd(chain, fetchImpl);
-
-  // 2) On-chain V3 pool (quote vs wrapped native)
-  // 3) On-chain V2 pool (quote vs wrapped native)
+  // 3) On-chain V3 pool (quote vs wrapped native)
+  // 4) On-chain V2 pool (quote vs wrapped native)
   const dexes = DEX_REGISTRY[chain.id] || [];
   const wrappedNative = WRAPPED_NATIVE[chain.id];
   if (!wrappedNative || dexes.length === 0) return null;

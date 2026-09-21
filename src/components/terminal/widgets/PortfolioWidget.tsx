@@ -6,6 +6,7 @@
  */
 import React from "react";
 import PinButton from "./PinButton";
+import { computePnl, snapKeyForHolding } from "../pnlMath";
 
 export type PortfolioHolding = {
   chainName: string;
@@ -52,34 +53,12 @@ export default function PortfolioWidget({
   const mainnetHoldings = holdings.filter((h) => !h.isTestnet);
   const testnetHoldings = holdings.filter((h) => h.isTestnet);
 
-  // aggregate totals (mainnet only — testnet assets have no real USD value)
-  let totalUsd = 0;
-  let totalPnlPrice = 0;
-  let totalPnlBalance = 0;
-  let pricedCount = 0;
-
-  for (const h of mainnetHoldings) {
-    if (h.valueUsd !== null) {
-      totalUsd += h.valueUsd;
-      pricedCount++;
-    }
-    const snapKey = h.type === "erc20" && h.address
-      ? `${h.chainId}:${h.address.toLowerCase()}`
-      : `${h.chainId}:${h.symbol}`;
-    const snap = snapshot?.[snapKey];
-    if (snap && hasSnapshot) {
-      if (h.valueUsd !== null && snap.price !== null) {
-        // price-based P/L: (now - snapPrice) * current balance
-        const snapValue = snap.price * parseFloat(h.balance);
-        totalPnlPrice += (h.valueUsd ?? 0) - snapValue;
-      }
-      // balance-based delta: (now value) - (snap value at snap balance/price)
-      const snapValue2 = snap.price !== null ? snap.price * parseFloat(snap.balance) : null;
-      if (h.valueUsd !== null && snapValue2 !== null) {
-        totalPnlBalance += h.valueUsd - snapValue2;
-      }
-    }
-  }
+  // aggregate totals via shared computePnl (#23) — mainnet only
+  const totals = computePnl(holdings, hasSnapshot ? snapshot : null);
+  const totalUsd = totals.netUsd ?? 0;
+  const totalPnlPrice = totals.pnlPrice ?? 0;
+  const totalPnlBalance = totals.pnlBalance ?? 0;
+  const pricedCount = mainnetHoldings.filter((h) => h.valueUsd !== null).length;
 
   const renderTable = (rows: PortfolioHolding[], showPnl: boolean) => (
     <table className={`w-full text-left ${theme.text}`}>
@@ -101,10 +80,7 @@ export default function PortfolioWidget({
       </thead>
       <tbody>
         {rows.map((h) => {
-          const snapKey = h.type === "erc20" && h.address
-            ? `${h.chainId}:${h.address.toLowerCase()}`
-            : `${h.chainId}:${h.symbol}`;
-          const snap = snapshot?.[snapKey];
+          const snap = snapshot?.[snapKeyForHolding(h)];
           let pnlPrice: number | null = null;
           let pnlBalance: number | null = null;
           if (snap && hasSnapshot) {
