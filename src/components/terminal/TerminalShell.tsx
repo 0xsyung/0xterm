@@ -220,6 +220,7 @@ import { decodeDigLogs } from "./dig/encode";
 import { formatGas } from "./dig/gas";
 import PinnedPanel from "./PinnedPanel";
 import SocialPanel from "./SocialPanel";
+import FloatingChat from "./widgets/FloatingChat";
 import SettingsPanel from "./widgets/SettingsPanel";
 import { applyImportBlob } from "./settingsPrefs";
 import {
@@ -1935,12 +1936,30 @@ export default function TerminalShell({
   }, [boardUnread]);
   const primaryTabRef = useRef(primaryTab);
   const socialSubTabRef = useRef(socialSubTab);
+  const floatingChatOpenRef = useRef(false);
+  const promptWrapRef = useRef<HTMLDivElement>(null);
+  const [promptClearancePx, setPromptClearancePx] = useState(112);
   useEffect(() => {
     primaryTabRef.current = primaryTab;
   }, [primaryTab]);
   useEffect(() => {
     socialSubTabRef.current = socialSubTab;
   }, [socialSubTab]);
+  // Measure prompt chrome so floater sits ≥12px above it (#82 Stephy).
+  useEffect(() => {
+    const el = promptWrapRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const apply = () => {
+      const h = el.getBoundingClientRect().height;
+      // prompt is inside content with pb-1.5rem; clearance from shell bottom ≈
+      // prompt height + content bottom padding (1.5rem ≈ 24).
+      setPromptClearancePx(Math.ceil(h + 24));
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [primaryTab, narrow]);
 
   const handlePrimaryTabChange = (tab: PrimaryTab) => {
     setPrimaryTab(tab);
@@ -2185,10 +2204,11 @@ export default function TerminalShell({
           }
         }
 
-        // Already viewing Inbox on Social — catch up baseline, keep badge clear.
+        // Already viewing Inbox on Social OR floating messenger open — keep badge clear.
         if (
-          primaryTabRef.current === "social" &&
-          socialSubTabRef.current === "inbox"
+          floatingChatOpenRef.current ||
+          (primaryTabRef.current === "social" &&
+            socialSubTabRef.current === "inbox")
         ) {
           chatBaseline.current = fresh;
           setInboxUnread(0);
@@ -6556,35 +6576,112 @@ export default function TerminalShell({
         )}
 
         {/* TWO-LINE PROMPT LAYOUT */}
-        <TerminalPrompt
-          theme={theme}
-          input={input}
-          setInput={(val: string) => {
-            setInput(val);
-            if (suggestions.length > 0) {
-              setSuggestions([]);
-              setSuggestionIdx(-1);
-            }
-            if (pendingTokenPick) {
-              setPendingTokenPick(null);
-            }
-          }}
-          handleKeyDown={handleKeyDown}
-          inputRef={inputRef}
-          suggestions={suggestions}
-          suggestionIdx={suggestionIdx}
-          onSelectSuggestion={selectSuggestion}
-          activeChainId={activeChainId}
-          activeDexId={activeDexId}
-          isConnected={isConnected}
-          address={address}
-          mounted={mounted}
-          isNarrow={narrow}
-          chatChannelLabel={chatChipLabel}
-          mode={terminalMode}
-          onModeChipTap={openModeChoices}
-        />
+        <div ref={promptWrapRef}>
+          <TerminalPrompt
+            theme={theme}
+            input={input}
+            setInput={(val: string) => {
+              setInput(val);
+              if (suggestions.length > 0) {
+                setSuggestions([]);
+                setSuggestionIdx(-1);
+              }
+              if (pendingTokenPick) {
+                setPendingTokenPick(null);
+              }
+            }}
+            handleKeyDown={handleKeyDown}
+            inputRef={inputRef}
+            suggestions={suggestions}
+            suggestionIdx={suggestionIdx}
+            onSelectSuggestion={selectSuggestion}
+            activeChainId={activeChainId}
+            activeDexId={activeDexId}
+            isConnected={isConnected}
+            address={address}
+            mounted={mounted}
+            isNarrow={narrow}
+            chatChannelLabel={chatChipLabel}
+            mode={terminalMode}
+            onModeChipTap={openModeChoices}
+          />
+        </div>
       </div>
+
+      {/* Floating messenger (#82) — shell root, all tabs/modes. */}
+      <FloatingChat
+        theme={theme}
+        themeKey={currentThemeKey}
+        inboxUnread={inboxUnread}
+        channelLabel={
+          activeChatChannel
+            ? activeChannelChipLabel(activeChatChannel, allChannelsForLabel)
+            : null
+        }
+        isConnected={!!isConnected && !!address}
+        promptClearancePx={promptClearancePx}
+        primaryTab={primaryTab}
+        onAckInbox={() => {
+          setInboxUnread(0);
+          void catchUpChatBaseline();
+        }}
+        onOpenChange={(open) => {
+          floatingChatOpenRef.current = open;
+        }}
+        loadSenders={async () => {
+          if (!isConnected || !address) return [];
+          const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+          const contract = activeChatContractOnChain(chain?.id);
+          if (!chain || !contract) return [];
+          const me = getAddress(address);
+          const client = getClient(chain);
+          const senders = (await client.readContract({
+            address: contract as Address,
+            abi: chatAbi,
+            functionName: "getSenders",
+            args: [me]
+          })) as readonly Address[];
+          const out = [];
+          for (const s of senders) {
+            const count = Number(
+              await client.readContract({
+                address: contract as Address,
+                abi: chatAbi,
+                functionName: "threadCount",
+                args: [me, s]
+              })
+            );
+            const label = (await ensNameFor(s)) || undefined;
+            out.push({ peer: s, count, label });
+          }
+          return out;
+        }}
+        loadThread={async (peer) => {
+          if (!isConnected || !address) throw new Error("Connect a wallet.");
+          const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+          const contract = activeChatContractOnChain(chain?.id);
+          if (!chain || !contract) throw new Error("No chat channel.");
+          const me = getAddress(address);
+          const refreshed = await fetchChatThread(
+            getClient(chain),
+            contract as Address,
+            me,
+            peer,
+            { getChatKeyPair, ensNameFor }
+          );
+          return {
+            ...refreshed,
+            peerFingerprint: undefined as string | undefined,
+            keyChanged: false
+          };
+        }}
+        sendMessage={async (peer, text) => {
+          await handleCommand(`chat ${peer} ${text}`);
+        }}
+        onFocusPrompt={() => {
+          inputRef.current?.focus();
+        }}
+      />
     </div>
   );
 }
