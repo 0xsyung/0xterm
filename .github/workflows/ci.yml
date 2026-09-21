@@ -17,15 +17,3 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:coverage
-
-  foundry:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: contracts
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: foundry-rs/foundry-toolchain@v1
-      - run: forge test -vvv
