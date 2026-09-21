@@ -11,15 +11,15 @@
 ### Smart Contracts
 1. **MockUSDC** (ERC20, 6 decimals, 1M supply)
    - Address: `0x7f837e0F0D3127AdfEEC592EB08578099A4e0501`
-   - ✅ Deployed via [contracts/script/DeployTokens.s.sol](contracts/script/DeployTokens.s.sol)
+   - ✅ Deployed via [0xterm-contracts/script/DeployTokens.s.sol](0xterm-contracts/script/DeployTokens.s.sol)
 
 2. **MockDAI** (ERC20, 18 decimals, 1M supply)
    - Address: `0x07592af899FD0160F3192Efb8A33D997709e1c71`
-   - ✅ Deployed via [contracts/script/DeployTokens.s.sol](contracts/script/DeployTokens.s.sol)
+   - ✅ Deployed via [0xterm-contracts/script/DeployTokens.s.sol](0xterm-contracts/script/DeployTokens.s.sol)
 
 3. **WETH9** (Wrapped Ether, v0.4.19)
    - Address: `0x3BC0C527F9cE047Cb2665157Cfe32a298C5d67EC`
-   - ✅ Compiled and deployed from [contracts/src/WETH9.sol](contracts/src/WETH9.sol)
+   - ✅ Compiled and deployed from [0xterm-contracts/src/WETH9.sol](0xterm-contracts/src/WETH9.sol)
 
 4. **UniswapV2Factory** (v2-core v1.0.1)
    - Address: `0xb59cf62962B5740694166DCa3a178e3e5383ce40`
@@ -28,7 +28,7 @@
 
 5. **SimpleRouter** (Custom lightweight router)
    - Address: `0xb67a8a0E69919cfE4486B777EFcE1d461783cFB9`
-   - ✅ Deployed from [contracts/src/SimpleRouter.sol](contracts/src/SimpleRouter.sol)
+   - ✅ Deployed from [0xterm-contracts/src/SimpleRouter.sol](0xterm-contracts/src/SimpleRouter.sol)
    - Functions: `swapExactTokensForTokens()`, `addLiquidity()`, `getReserves()`
    - Rationale: Router02 exceeded contract size limit (~24KB) - SimpleRouter provides core functionality
 
@@ -74,7 +74,7 @@ Updated DEX registry in [src/components/terminal/constants.ts](src/components/te
 ## Technical Implementation
 
 ### Foundry Configuration
-- **File**: [contracts/foundry.toml](contracts/foundry.toml)
+- **File**: [0xterm-contracts/foundry.toml](0xterm-contracts/foundry.toml)
 - **Key Remappings**:
   ```toml
   @uniswap/v2-core/ = lib/v2-core/
@@ -85,7 +85,7 @@ Updated DEX registry in [src/components/terminal/constants.ts](src/components/te
 - **Solc Versions Supported**: 0.4.19+, 0.5.16, 0.6.6, 0.8.35
 
 ### Environment Configuration
-- **File**: [contracts/.env](contracts/.env) (gitignored)
+- **File**: [0xterm-contracts/.env](0xterm-contracts/.env) (gitignored)
 - Stores deployed contract addresses and RPC URLs
 - All values used by terminal app and deployment scripts
 

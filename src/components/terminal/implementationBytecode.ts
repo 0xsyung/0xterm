@@ -1,7 +1,7 @@
 /**
  * @file implementationBytecode.ts
  * @description Compiled creation bytecode for ERC20Base/ERC721Base logic contracts.
- *   Generated from contracts/out via forge build — do not edit by hand.
+ *   Generated from 0xterm-contracts/out via forge build — do not edit by hand.
  *   Contracts have no constructor args and bake no chain-specific values, so a single
  *   copy works on every supported testnet.
  * @license Proprietary / All Rights Reserved

@@ -408,7 +408,7 @@ export function resolveShareContract(
       : "this chain";
   return {
     ok: false,
-    message: `[!] No share contract on ${name}. Operator must deploy via contracts/script/DeployPortfolioShare.s.sol and set SHARE_CONTRACT.`
+    message: `[!] No share contract on ${name}. Operator must deploy via 0xterm-contracts/script/DeployPortfolioShare.s.sol and set SHARE_CONTRACT.`
   };
 }
 

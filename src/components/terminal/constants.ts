@@ -257,7 +257,7 @@ export const WRAPPED_NATIVE: Record<number, Address> = {
   84532: '0x4200000000000000000000000000000000000006',
   137: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270',
   // 80002 (Polygon Amoy): no official Uniswap V3 — 0xterm deploys its own fork
-  // (see contracts/script-univ3/DeployUniswapV3Fork.s.sol). Fill this and
+  // (see 0xterm-contracts/script-univ3/DeployUniswapV3Fork.s.sol). Fill this and
   // DEX_REGISTRY[80002] after the fork is broadcast.
   // 80002: '<WETH9 from fork deploy>',
   10: '0x4200000000000000000000000000000000000006',
@@ -305,7 +305,7 @@ export const DEX_REGISTRY: Record<number, DexProtocol[]> = {
     { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },
   ],
   // 80002 (Polygon Amoy): no official Uniswap V3 — 0xterm deploys its own
-  // fork via contracts/script-univ3/DeployUniswapV3Fork.s.sol. Until it is
+  // fork via 0xterm-contracts/script-univ3/DeployUniswapV3Fork.s.sol. Until it is
   // broadcast, Amoy has NO DEX: `swap`/`createpool`/`price pool` surface a
   // clear "no DEX on this chain" error instead of stale wrong-chain addresses.
   // Fill this with the fork's router/factory after deploy:
@@ -525,7 +525,7 @@ export const CHAT_CONTRACT: Record<number, Address> = Object.fromEntries(
 // 0xterm's own ENS registry + resolver (testnets only) — name ↔ address on
 // the ACTIVE chain. Mainnet keeps the canonical ENS (resolved via viem's v1
 // universal resolver). Fill with the deployed proxy address from
-// contracts/script/EnsDeploy.md.
+// 0xterm-contracts/script/EnsDeploy.md.
 export const ENS_CONTRACT: Record<number, Address> = {
   11155111: '0x1C9104434DecEDCCa8C02Ec2c324aaFdE5f5e06f',
 }
@@ -539,7 +539,7 @@ export const ensRegistryAbi = parseAbi([
 
 // Public notice board (testnets only) — anyone posts plaintext, anyone reads
 // all posts. Fill with the deployed proxy address from
-// contracts/script/BillboardDeploy.md.
+// 0xterm-contracts/script/BillboardDeploy.md.
 export const BILLBOARD_CONTRACT: Record<number, Address> = {
   11155111: '0xe5128c8E5FA33a5d1dd4E230EAF017a313c34701',
 }
@@ -553,7 +553,7 @@ export const billboardAbi = parseAbi([
 
 // Portfolio / PnL share index (testnets only) — one combined card per owner.
 // Fill with the deployed proxy address from
-// contracts/script/PortfolioShareDeploy.md. Empty until Sepolia is wired —
+// 0xterm-contracts/script/PortfolioShareDeploy.md. Empty until Sepolia is wired —
 // share / look / feed fail closed with a deploy tip (same posture as
 // CHAT_FACTORY before #68).
 export const SHARE_CONTRACT: Record<number, Address> = {

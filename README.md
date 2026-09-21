@@ -20,20 +20,18 @@
 ## **Project Architecture**
 
 ```text
-0xterm-main/
-├── contracts/             # Foundry smart contracts workspace
-│   ├── script/            # Deployment scripts (DeployTokens.s.sol, DeployERC20Base.s.sol)
-│   ├── src/               # Smart contract sources (MockToken, SimpleRouter, WETH9,
-│   │                      #   ERC20Base, ERC721Base, Counter)
-│   └── test/              # Foundry test files
-├── logo-generator/        # Python script utility for generating project logos
-└── src/                   # Next.js frontend application
-    ├── app/               # App router pages, global styles, and providers
-    ├── components/        # Terminal shell, prompt, logs, and matrix visual effects
+0xterm-app/                  # This repo — Next.js frontend application
+└── src/                     # Next.js frontend application
+    ├── app/                 # App router pages, global styles, and providers
+    ├── components/          # Terminal shell, prompt, logs, and matrix visual effects
     │   └── terminal/
-    │       └── widgets/   # Modular DeFi UI widgets (Swap, Liquidity, Balance, etc.)
-    └── config/            # Web3 and Wagmi configurations
+    │       └── widgets/     # Modular DeFi UI widgets (Swap, Liquidity, Balance, etc.)
+    └── config/              # Web3 and Wagmi configurations
 ```
+
+Related repositories:
+- **0xterm-contracts** — Foundry smart contracts workspace (script/, src/, test/)
+- **0xterm-logo-generator** — Python script utility for generating project logos
 
 ---
 
@@ -56,9 +54,10 @@
 3. Open http://localhost:3000 in your browser.
 
 ### **3. Smart Contracts (Foundry)**
-Navigate to the contracts/ directory to run tests or deploy contracts:
+The smart contracts live in the separate [0xterm-contracts](https://github.com/0xsyung/0xterm-contracts) repository:
 ```bash
-cd contracts
+git clone git@github.com-bob:0xsyung/0xterm-contracts.git
+cd 0xterm-contracts
 forge test
 ```
 

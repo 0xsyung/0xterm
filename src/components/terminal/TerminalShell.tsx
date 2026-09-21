@@ -1407,7 +1407,7 @@ export default function TerminalShell({
     const contract = ENS_CONTRACT[chain.id];
     if (!contract)
       throw new Error(
-        `No ENS on ${chain.name} yet — deploy via contracts/script/EnsDeploy.md.`
+        `No ENS on ${chain.name} yet — deploy via 0xterm-contracts/script/EnsDeploy.md.`
       );
     const node = namehash(trimmed.toLowerCase());
     const addr = (await getClient(chain).readContract({
@@ -4592,7 +4592,7 @@ export default function TerminalShell({
           return {
             id: generateId(),
             type: "text",
-            text: `[!] No ENS on ${chain.name} yet — deploy via contracts/script/EnsDeploy.md.`
+            text: `[!] No ENS on ${chain.name} yet — deploy via 0xterm-contracts/script/EnsDeploy.md.`
           };
         if (chain.id === 1)
           return {
@@ -4996,7 +4996,7 @@ export default function TerminalShell({
         return {
           id: generateId(),
           type: "text",
-          text: `[!] No billboard deployed on ${chain.name}. Testnets only — see contracts/script/BillboardDeploy.md.`
+          text: `[!] No billboard deployed on ${chain.name}. Testnets only — see 0xterm-contracts/script/BillboardDeploy.md.`
         };
       if (chain.id === 1)
         return {
@@ -5727,7 +5727,7 @@ export default function TerminalShell({
         return {
           id: generateId(),
           type: "text",
-          text: `[!] No chat factory on ${chain.name}. Operator must deploy via contracts/script/DeployChatFactory.s.sol and set CHAT_FACTORY.`
+          text: `[!] No chat factory on ${chain.name}. Operator must deploy via 0xterm-contracts/script/DeployChatFactory.s.sol and set CHAT_FACTORY.`
         };
       }
       const name_ = args[2] || "";
