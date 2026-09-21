@@ -7,6 +7,7 @@
 import React from "react";
 import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
+import PnlWidget from "./widgets/PnlWidget";
 import PriceCard from "./widgets/PriceCard";
 import DigArtifactWidget from "./widgets/DigArtifactWidget";
 import DigRunWidget from "./widgets/DigRunWidget";
@@ -127,6 +128,28 @@ function renderPinned(p: PinnedManifest, theme: any) {
       return <BalanceWidget {...payload} theme={theme} />;
     case "portfolio":
       return <PortfolioWidget {...payload} theme={theme} />;
+    case "pnl":
+      return (
+        <PnlWidget
+          data={{
+            kind: "pnl",
+            widgetId: "pnl:snapshot",
+            label: payload.label || "",
+            snapshotTime: payload.snapshotTime || 0,
+            netUsd: payload.netUsd ?? null,
+            pnlPrice: payload.pnlPrice ?? null,
+            pnlBalance: payload.pnlBalance ?? null,
+            snapNav: payload.snapNav ?? null,
+            stale: !!payload.stale,
+            fetching: !!payload.fetching,
+            updatedAt: payload.updatedAt || Date.now(),
+            holdings: payload.holdings || [],
+            snapshot: payload.snapshot || {}
+          }}
+          theme={theme}
+          compact
+        />
+      );
     case "ticker":
       return (
         <TickerWidget

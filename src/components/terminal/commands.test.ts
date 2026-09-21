@@ -11,6 +11,7 @@ import { SUPPORTED_CHAINS } from "./constants";
 import {
   buildBalanceLog,
   buildPnlLog,
+  buildPnlGate,
   buildThemeLog,
   buildTokensLog,
   type BuildBalanceLogDeps,
@@ -113,16 +114,26 @@ describe("buildPnlLog", () => {
     });
   });
 
-  it("formats the snapshot label, timestamp, and holdings count", () => {
+  it("returns a fetching pnl widget shell when snapshot exists", () => {
     const snap = {
       label: "my-snap",
       timestamp: 1700000000000,
       holdings: { a: {}, b: {} }
     };
     const res = buildPnlLog(connected, deps(snap));
-    expect(res.text).toBe(
-      `Snapshot "my-snap" at ${new Date(1700000000000).toLocaleString()} with 2 holdings. Run 'portfolio' for per-token P/L.`
-    );
+    expect(res.type).toBe("pnl");
+    expect(res.payload.widgetId).toBe("pnl:snapshot");
+    expect(res.payload.label).toBe("my-snap");
+    expect(res.payload.fetching).toBe(true);
+  });
+
+  it("buildPnlGate returns null when ready", () => {
+    const snap = {
+      label: "my-snap",
+      timestamp: 1700000000000,
+      holdings: { a: {} }
+    };
+    expect(buildPnlGate(connected, deps(snap))).toBeNull();
   });
 });
 

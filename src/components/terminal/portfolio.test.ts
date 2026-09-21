@@ -119,7 +119,17 @@ describe("fetchPortfolioHoldings", () => {
   it("uses a fetched price for value when available", async () => {
     const client = mockClient({ readContract: async () => 1_000_000n }); // 1 FOO (decimals 6)
     const fetchImpl = (vi.fn(async () =>
-      jsonRes({ pairs: [{ chainId: "base", baseToken: { symbol: "FOO", address: TOKEN }, priceUsd: "5" }] })
+      jsonRes([
+        {
+          chainId: "base",
+          pairAddress: "0xfooPair",
+          baseToken: { symbol: "FOO", address: TOKEN },
+          quoteToken: { symbol: "USDC", address: "0xusdc" },
+          priceUsd: "5",
+          liquidity: { usd: 1_000_000 },
+          priceChange: { h24: 0 }
+        }
+      ])
     ) as unknown) as typeof fetch;
     const d = deps({ getClient: vi.fn(() => client), fetchImpl });
     const res = await fetchPortfolioHoldings(USER, oneTokenMap(), "erc20", d);
@@ -207,9 +217,19 @@ describe("fetchPortfolioSnapshot", () => {
   });
 
   it("uses a fetched price for the token when available", async () => {
-    const client = mockClient({ readContract: async () => 1_000_000n }); // 1 FOO (decimals 6)
+    const client = mockClient({ readContract: async () => 1_000_000n });
     const fetchImpl = (vi.fn(async () =>
-      jsonRes({ pairs: [{ chainId: "base", baseToken: { symbol: "FOO", address: TOKEN }, priceUsd: "5" }] })
+      jsonRes([
+        {
+          chainId: "base",
+          pairAddress: "0xfooPair",
+          baseToken: { symbol: "FOO", address: TOKEN },
+          quoteToken: { symbol: "USDC", address: "0xusdc" },
+          priceUsd: "5",
+          liquidity: { usd: 1_000_000 },
+          priceChange: { h24: 0 }
+        }
+      ])
     ) as unknown) as typeof fetch;
     const d = deps({ getClient: vi.fn(() => client), fetchImpl });
     const res = await fetchPortfolioSnapshot(USER, oneTokenMap(), d);
