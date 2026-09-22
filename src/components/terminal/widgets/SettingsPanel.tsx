@@ -10,6 +10,7 @@ import React, { useMemo, useState } from "react";
 import { getAddress, isAddress, type Address } from "viem";
 import type { ThemeConfig, ThemeMode, CustomTokensMap, CustomTokenEntry, PinnedManifest } from "../types";
 import type { RpcProviders, ActiveRpcProviders } from "../rpc";
+import type { ExplorerKeys } from "../explorerKeys";
 import type { TerminalMode } from "../mode";
 import { MODE_LABEL, MODE_ORDER } from "../mode";
 import { SUPPORTED_CHAINS, THEME_ORDER, THEMES } from "../constants";
@@ -143,6 +144,8 @@ export type SettingsPanelProps = {
     next: RpcProviders,
     active: ActiveRpcProviders
   ) => void;
+  explorerKeys: ExplorerKeys;
+  onExplorerKeysChange: (next: ExplorerKeys) => void;
   customTokens: CustomTokensMap;
   onCustomTokensChange: (next: CustomTokensMap) => void;
   channelStore: ChannelStore;
@@ -167,6 +170,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     rpcProviders,
     activeRpcProviders,
     onRpcChange,
+    explorerKeys,
+    onExplorerKeysChange,
     customTokens,
     onCustomTokensChange,
     channelStore,
@@ -185,6 +190,10 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     chainId: String(SUPPORTED_CHAINS[0]?.id ?? 1),
     name: "",
     url: ""
+  });
+  const [explorerDraft, setExplorerDraft] = useState({
+    chainId: String(SUPPORTED_CHAINS[0]?.id ?? 1),
+    key: ""
   });
   const [tokenDraft, setTokenDraft] = useState({
     symbol: "",
@@ -229,6 +238,25 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     }
     return rows;
   }, [rpcProviders, activeRpcProviders]);
+
+  const explorerRows = useMemo(() => {
+    const rows: {
+      chainId: number;
+      chainName: string;
+      key: string;
+    }[] = [];
+    for (const chain of SUPPORTED_CHAINS) {
+      const key = explorerKeys[chain.id];
+      if (key) {
+        rows.push({
+          chainId: chain.id,
+          chainName: chain.name,
+          key
+        });
+      }
+    }
+    return rows;
+  }, [explorerKeys]);
 
   const tokenRows = useMemo(() => {
     const rows: (CustomTokenEntry & { chainId: number; chainName: string })[] =
@@ -288,6 +316,25 @@ export default function SettingsPanel(props: SettingsPanelProps) {
       { ...activeRpcProviders, [chainId]: name }
     );
     setRpcDraft((d) => ({ ...d, name: "", url: "" }));
+    setStatusMsg(null);
+  };
+
+  const removeExplorerKey = (chainId: number) => {
+    const next = { ...explorerKeys };
+    delete next[chainId];
+    onExplorerKeysChange(next);
+    setPendingRemove(null);
+  };
+
+  const addExplorerKey = () => {
+    const chainId = Number(explorerDraft.chainId);
+    const key = explorerDraft.key.trim();
+    if (!key) {
+      setStatusMsg("Explorer key cannot be empty.");
+      return;
+    }
+    onExplorerKeysChange({ ...explorerKeys, [chainId]: key });
+    setExplorerDraft((d) => ({ ...d, key: "" }));
     setStatusMsg(null);
   };
 
@@ -583,6 +630,101 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               mono
             />
             <PhosphorChip theme={theme} label="Add" onClick={addRpc} />
+          </div>
+        )}
+      </section>
+
+      {/* 1b. Explorer API keys */}
+      <section className="space-y-1.5">
+        <SectionLabel theme={theme}>Explorer API keys</SectionLabel>
+        {!isConnected && (
+          <div className={theme.muted}>Connect wallet to manage Explorer API keys.</div>
+        )}
+        {isConnected && explorerRows.length === 0 && (
+          <div className={theme.muted}>No Explorer API keys configured</div>
+        )}
+        {isConnected && explorerRows.length > 0 && (
+          <div className={`border ${theme.border}`}>
+            <div
+              className={`grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] gap-1 px-1 py-0.5 uppercase tracking-widest text-[10px] ${theme.muted} border-b ${theme.border}`}
+            >
+              <span>Chain</span>
+              <span>API key</span>
+              <span />
+            </div>
+            {explorerRows.map((row) => {
+              const reveal = !!revealedKeys[`explorer:${row.chainId}`];
+              const confirmKey = `explorer:${row.chainId}`;
+              return (
+                <div
+                  key={row.chainId}
+                  className={`grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] gap-1 px-1 py-0.5 items-center border-b ${theme.border} last:border-b-0`}
+                >
+                  <span className="truncate" title={row.chainName}>
+                    {row.chainName}
+                  </span>
+                  <span
+                    className="font-mono tabular-nums truncate"
+                    title={reveal ? row.key : undefined}
+                  >
+                    {maskSecret(row.key, { reveal })}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <GhostChip
+                      theme={theme}
+                      label={reveal ? "HIDE" : "SHOW"}
+                      onClick={() => toggleReveal(`explorer:${row.chainId}`)}
+                    />
+                    {pendingRemove === confirmKey ? (
+                      <>
+                        <PhosphorChip
+                          theme={theme}
+                          label="Confirm"
+                          warn
+                          onClick={() => removeExplorerKey(row.chainId)}
+                        />
+                        <GhostChip
+                          theme={theme}
+                          label="Cancel"
+                          onClick={() => setPendingRemove(null)}
+                        />
+                      </>
+                    ) : (
+                      <GhostChip
+                        theme={theme}
+                        label="Remove"
+                        onClick={() => setPendingRemove(confirmKey)}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {isConnected && (
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-1 items-center">
+            <select
+              value={explorerDraft.chainId}
+              onChange={(e) =>
+                setExplorerDraft((d) => ({ ...d, chainId: e.target.value }))
+              }
+              className={`border ${theme.border} ${theme.bg} ${theme.text} text-[11px] font-mono px-1 py-0.5`}
+            >
+              {SUPPORTED_CHAINS.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <FieldInput
+              theme={theme}
+              value={explorerDraft.key}
+              onChange={(v) => setExplorerDraft((d) => ({ ...d, key: v }))}
+              placeholder="Your Etherscan API key"
+              mono
+            />
+            <PhosphorChip theme={theme} label="Add" onClick={addExplorerKey} />
           </div>
         )}
       </section>

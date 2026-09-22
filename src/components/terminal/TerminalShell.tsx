@@ -172,6 +172,17 @@ import {
 } from "./autocomplete";
 import { resolveRpcAction } from "./rpc";
 import {
+  buildVerifyRequest,
+  explorerApiUrl,
+  findDigDeploymentForVerify,
+  parseVerifyResponse,
+  pollVerifyStatus,
+  resolveVerifyKeyCommand,
+  VERIFY_USAGE,
+  type VerifyTarget
+} from "./explorer";
+import { loadExplorerKeys, type ExplorerKeys } from "./explorerKeys";
+import {
   formatProbeReport,
   probeCoreFunctions,
   probeErc165,
@@ -210,8 +221,10 @@ import { digDebugPinTitle } from "./widgets/DigDebugWidget";
 import { runDig, type DigResult } from "./dig/runDig";
 import { digArtifactPinTitle } from "./dig/artifact";
 import { DIG_ERROR } from "./dig/constants";
+import { loadDigSource } from "./dig/idb";
 import {
   addDigDeployment,
+  listDigDeployments,
   setLastDigPanel,
   setLastDigReceipt
 } from "./dig/session";
@@ -221,6 +234,7 @@ import PinnedPanel from "./PinnedPanel";
 import SocialPanel from "./SocialPanel";
 import FloatingChat from "./widgets/FloatingChat";
 import SettingsPanel from "./widgets/SettingsPanel";
+import VerifyWidget, { type VerifyWidgetData } from "./widgets/VerifyWidget";
 import { applyImportBlob } from "./settingsPrefs";
 import {
   DEFAULT_CHAT_FEE_WEI,
@@ -409,6 +423,17 @@ export default function TerminalShell({
   const [activeRpcProviders, setActiveRpcProviders] = useState<
     Record<number, string>
   >({});
+  const [explorerKeys, setExplorerKeys] = useState<ExplorerKeys>(() => {
+    if (typeof window === "undefined") return {};
+    let prefs: Record<string, unknown> = {};
+    try {
+      const raw = localStorage.getItem("0xterm_user_");
+      if (raw) prefs = JSON.parse(raw);
+    } catch {
+      prefs = {};
+    }
+    return loadExplorerKeys(prefs);
+  });
 
   // Custom user-registered tokens, flat list per chain so multiple tokens can
   // share a symbol. `id` is the stable uniqueness key.
@@ -1233,6 +1258,7 @@ export default function TerminalShell({
           if (prefs.rpcProviders) setRpcProviders(prefs.rpcProviders);
           if (prefs.activeRpcProviders)
             setActiveRpcProviders(prefs.activeRpcProviders);
+          setExplorerKeys(loadExplorerKeys(prefs));
 
           if (Array.isArray(prefs.pinned) && prefs.pinned.length > 0) {
             const clean = prefs.pinned.filter(isPinnableManifest);
@@ -1948,6 +1974,11 @@ export default function TerminalShell({
     savePreference("activeRpcProviders", active);
   };
 
+  const handleSettingsExplorerKeysChange = (next: ExplorerKeys) => {
+    setExplorerKeys(next);
+    savePreference("explorerKeys", next);
+  };
+
   const handleSettingsTokensChange = (next: CustomTokensMap) => {
     setCustomTokens(next);
     saveCustomTokenToStorage(next);
@@ -1970,6 +2001,7 @@ export default function TerminalShell({
       setActiveRpcProviders(patch.activeRpcProviders);
       savePreference("activeRpcProviders", patch.activeRpcProviders);
     }
+    setExplorerKeys(loadExplorerKeys(patch.preferencesToPersist));
     if (patch.customTokens) {
       setCustomTokens(patch.customTokens);
       saveCustomTokenToStorage(patch.customTokens);
@@ -2837,6 +2869,159 @@ export default function TerminalShell({
       }
       return { id: generateId(), type: "text", text: result.text };
     },
+    verify: async (args) => {
+      if (!args[1]) {
+        return { id: generateId(), type: "text", text: VERIFY_USAGE };
+      }
+
+      // verify key [chain] [key]
+      if (args[1].toLowerCase() === "key") {
+        if (!isConnected || !address) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: "[!] Connect a wallet to save explorer keys."
+          };
+        }
+        const keyResult = resolveVerifyKeyCommand(args, explorerKeys);
+        if (keyResult.kind === "saved") {
+          setExplorerKeys(keyResult.nextKeys);
+          savePreference("explorerKeys", keyResult.nextKeys);
+        }
+        return { id: generateId(), type: "text", text: keyResult.text };
+      }
+
+      // verify <name|0xaddress>
+      if (!isConnected || !address) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "[!] Connect a wallet to verify a deployed contract."
+        };
+      }
+      const targetChain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!targetChain) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network first using 'network <name>'."
+        };
+      }
+      const apiUrl = explorerApiUrl(targetChain);
+      if (!apiUrl) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] No block explorer API configured for ${targetChain.name}.`
+        };
+      }
+      const apiKey = explorerKeys[targetChain.id];
+      if (!apiKey) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] No Etherscan API key for ${targetChain.name}. Set one via "verify key ${targetChain.name} <API_KEY>".`
+        };
+      }
+
+      const dep = findDigDeploymentForVerify(listDigDeployments(), args[1]);
+      if (!dep) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] No dig deployment "${args[1]}" this session. Run "dig ls" or "dig at <0xaddress> <Contract>".`
+        };
+      }
+      const source = await loadDigSource();
+      if (!source) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "[!] No source in the dig workspace. Type dig new before verifying."
+        };
+      }
+
+      const target: VerifyTarget = {
+        name: dep.name,
+        address: getAddress(dep.address),
+        chainId: targetChain.id,
+        chainName: targetChain.name,
+        source: source.content,
+        apiUrl,
+        explorerUrl: targetChain.blockExplorers?.default?.url ?? ""
+      };
+
+      // Push a SUBMITTING widget first so the user sees live state.
+      const pushWidget = (state: VerifyWidgetData["state"], message?: string) =>
+        setLogs((prev) =>
+          [
+            ...prev,
+            {
+              id: generateId(),
+              type: "component",
+              title: `VERIFY ${target.name.toUpperCase()}`,
+              component: (
+                <VerifyWidget
+                  theme={theme}
+                  data={{
+                    kind: "verify",
+                    state,
+                    name: target.name,
+                    address: target.address,
+                    chainName: target.chainName,
+                    explorerUrl: target.explorerUrl,
+                    message
+                  }}
+                />
+              )
+            } as LogEntry
+          ].slice(-MAX_LOGS)
+        );
+
+      pushWidget("submitting");
+      try {
+        const body = buildVerifyRequest({ target, apiKey });
+        const submitRes = await fetch(`${apiUrl}`, {
+          method: "POST",
+          body: body.toString(),
+          headers: { "content-type": "application/x-www-form-urlencoded" }
+        });
+        const submitRaw = await submitRes.text();
+        const parsed = parseVerifyResponse(submitRaw);
+        if (!parsed.accepted) {
+          pushWidget("failed", parsed.message);
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[!] Verify rejected: ${parsed.message}`
+          };
+        }
+        pushWidget("pending");
+        const status = await pollVerifyStatus(apiUrl, parsed.guid!, apiKey);
+        if (status.verified) {
+          pushWidget("verified");
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[✓] ${target.name} verified on ${target.chainName}.`
+          };
+        }
+        pushWidget("failed", status.message);
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] Verification failed: ${status.message}`
+        };
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        pushWidget("failed", msg);
+        return {
+          id: generateId(),
+          type: "text",
+          text: `[!] Verify error: ${msg}`
+        };
+      }
+    },
     register: async (args) => {
       if (!activeChainId)
         return {
@@ -3263,6 +3448,7 @@ export default function TerminalShell({
             setRpcProviders(data.preferences.rpcProviders);
           if (data.preferences.activeRpcProviders)
             setActiveRpcProviders(data.preferences.activeRpcProviders);
+          setExplorerKeys(loadExplorerKeys(data.preferences));
           if (data.preferences.chainId) {
             setActiveChainId(data.preferences.chainId);
             if (data.preferences.dexId) {
@@ -6438,6 +6624,8 @@ export default function TerminalShell({
               rpcProviders={rpcProviders}
               activeRpcProviders={activeRpcProviders}
               onRpcChange={handleSettingsRpcChange}
+              explorerKeys={explorerKeys}
+              onExplorerKeysChange={handleSettingsExplorerKeysChange}
               customTokens={customTokens}
               onCustomTokensChange={handleSettingsTokensChange}
               channelStore={channelStore}

@@ -160,6 +160,31 @@ describe("MatrixRain is not mounted (issue #5 motion/rain)", () => {
   });
 });
 
+describe("verify command wiring (issue #105)", () => {
+  it("TerminalShell registers a verify command that submits + polls", () => {
+    const shellSrc = readFileSync(
+      resolve(__dirname, "../TerminalShell.tsx"),
+      "utf8"
+    );
+    expect(shellSrc).toMatch(/verify: async \(args\)/);
+    expect(shellSrc).toContain("buildVerifyRequest");
+    expect(shellSrc).toContain("pollVerifyStatus");
+    expect(shellSrc).toContain("resolveVerifyKeyCommand");
+    expect(shellSrc).toContain("VerifyWidget");
+  });
+
+  it("verify uses the no-0x constructor args + multichain chainId helpers", () => {
+    const src = readFileSync(
+      resolve(__dirname, "../explorer.ts"),
+      "utf8"
+    );
+    expect(src).toContain('action", "verifysourcecode"');
+    expect(src).toContain("constructorArguements");
+    expect(src).toContain("/v2/api");
+    expect(src).toContain("checkverifystatus");
+  });
+});
+
 describe("wagmi-bound widget shells are w-full (issue #5 width)", () => {
   const WIDGET_SRC: Record<string, string> = {
     SwapWidget: readFileSync(resolve(__dirname, "../SwapWidget.tsx"), "utf8"),
