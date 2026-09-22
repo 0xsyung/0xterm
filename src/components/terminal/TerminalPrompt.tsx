@@ -32,7 +32,8 @@ export default function TerminalPrompt({
   isNarrow,
   chatChannelLabel,
   mode = DEFAULT_MODE,
-  onModeChipTap
+  onModeChipTap,
+  fkeyFooter
 }: {
   theme: ThemeConfig;
   input: string;
@@ -54,6 +55,8 @@ export default function TerminalPrompt({
   mode?: TerminalMode;
   /** Tap MODE chip → CHOICES of three modes (no cycle-on-tap). */
   onModeChipTap?: () => void;
+  /** F-key hint footer (LINE 4), from the bindings keymap (#28). */
+  fkeyFooter?: string | null;
 }) {
   const chainObj = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
   const activeDexObj = DEX_REGISTRY[activeChainId!]?.find(
@@ -150,6 +153,7 @@ export default function TerminalPrompt({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder=""
+          data-0xterm-prompt=""
           // 16px below 768 avoids iOS zoom-on-focus (issue #49).
           className={`flex-1 bg-transparent outline-none ${isNarrow ? "text-base" : "text-xs"} ${theme.text} [caret-color:var(--phosphor)] [caret-shape:block]`}
           autoFocus={!isCoarsePointer()}
@@ -180,6 +184,16 @@ export default function TerminalPrompt({
           ))}
         </div>
       )}
+
+      {/* LINE 4: F-key hint footer (#28) */}
+      {fkeyFooter ? (
+        <div
+          className={`text-[10px] ${theme.muted} leading-tight`}
+          data-testid="fkey-footer"
+        >
+          {fkeyFooter}
+        </div>
+      ) : null}
     </div>
   );
 }

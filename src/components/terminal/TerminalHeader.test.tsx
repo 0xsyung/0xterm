@@ -17,8 +17,6 @@ describe("TerminalHeader primary tabs (#91)", () => {
     render(
       <TerminalHeader
         theme={theme}
-        currentThemeKey="matrix"
-        onThemeChange={vi.fn()}
         primaryTab="terminal"
         onPrimaryTabChange={vi.fn()}
       />
@@ -32,8 +30,6 @@ describe("TerminalHeader primary tabs (#91)", () => {
     render(
       <TerminalHeader
         theme={theme}
-        currentThemeKey="matrix"
-        onThemeChange={vi.fn()}
         primaryTab="social"
         onPrimaryTabChange={vi.fn()}
         socialBadge={3}
@@ -52,8 +48,6 @@ describe("TerminalHeader primary tabs (#91)", () => {
     render(
       <TerminalHeader
         theme={theme}
-        currentThemeKey="matrix"
-        onThemeChange={vi.fn()}
         primaryTab="terminal"
         onPrimaryTabChange={vi.fn()}
       />
@@ -69,8 +63,6 @@ describe("TerminalHeader primary tabs (#91)", () => {
     render(
       <TerminalHeader
         theme={theme}
-        currentThemeKey="matrix"
-        onThemeChange={vi.fn()}
         primaryTab="terminal"
         onPrimaryTabChange={onPrimaryTabChange}
       />
@@ -79,22 +71,48 @@ describe("TerminalHeader primary tabs (#91)", () => {
     expect(onPrimaryTabChange).toHaveBeenCalledWith("social");
   });
 
-  it("keeps F1–F5 labels unchanged", () => {
+  it("keeps F1–F5 labels from the factory defaults", () => {
     render(
       <TerminalHeader
         theme={theme}
-        currentThemeKey="matrix"
-        onThemeChange={vi.fn()}
         onCommand={vi.fn()}
         primaryTab="terminal"
         onPrimaryTabChange={vi.fn()}
       />
     );
     expect(screen.getByText("F1 HELP")).toBeTruthy();
-    expect(screen.getByText("F2 NET")).toBeTruthy();
-    expect(screen.getByText("F3 DEX")).toBeTruthy();
+    expect(screen.getByText("F2 NETWOR")).toBeTruthy();
+    expect(screen.getByText("F3 DEXES")).toBeTruthy();
     expect(screen.getByText("F4 THEME")).toBeTruthy();
     expect(screen.getByText("F5 SWAP")).toBeTruthy();
+  });
+
+  it("fires the bound command from a custom binding via onCommand", () => {
+    const onCommand = vi.fn();
+    render(
+      <TerminalHeader
+        theme={theme}
+        onCommand={onCommand}
+        primaryTab="terminal"
+        onPrimaryTabChange={vi.fn()}
+        bindings={{ version: 1, footer: true, map: { F2: "balance" } }}
+      />
+    );
+    fireEvent.click(screen.getByText("F2 BALANC"));
+    expect(onCommand).toHaveBeenCalledWith("balance");
+  });
+
+  it("shows an em-dash for a cleared binding", () => {
+    render(
+      <TerminalHeader
+        theme={theme}
+        onCommand={vi.fn()}
+        primaryTab="terminal"
+        onPrimaryTabChange={vi.fn()}
+        bindings={{ version: 1, footer: true, map: { F3: "" } }}
+      />
+    );
+    expect(screen.getByText("F3 —")).toBeTruthy();
   });
 
   it("invokes onPrimaryTabChange when SETTINGS is tapped", () => {
@@ -102,8 +120,6 @@ describe("TerminalHeader primary tabs (#91)", () => {
     render(
       <TerminalHeader
         theme={theme}
-        currentThemeKey="matrix"
-        onThemeChange={vi.fn()}
         primaryTab="terminal"
         onPrimaryTabChange={onPrimaryTabChange}
       />

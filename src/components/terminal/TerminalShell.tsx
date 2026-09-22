@@ -183,6 +183,20 @@ import {
 } from "./explorer";
 import { loadExplorerKeys, type ExplorerKeys } from "./explorerKeys";
 import {
+  defaultBindings,
+  footerLabel,
+  loadBindings,
+  mergeImportedBindings,
+  parseBindArgs,
+  resolveBinding,
+  saveBindings,
+  validateBinding,
+  isDangerousBinding,
+  type BindingsState
+} from "./keybindings";
+import FkeyListener from "./FkeyListener";
+import BindWidget from "./widgets/BindWidget";
+import {
   formatProbeReport,
   probeCoreFunctions,
   probeErc165,
@@ -434,6 +448,19 @@ export default function TerminalShell({
     }
     return loadExplorerKeys(prefs);
   });
+
+  // F-key bindings (#28): device-level so F-keys work logged-out. Only diffs
+  // from the factory defaults are persisted; also copied into wallet prefs.
+  const [bindings, setBindings] = useState<BindingsState>(() =>
+    typeof window !== "undefined"
+      ? loadBindings(window.localStorage)
+      : defaultBindings()
+  );
+  const persistBindings = (next: BindingsState) => {
+    setBindings(next);
+    saveBindings(window.localStorage, next);
+    if (isConnected && address) savePreference("bindings", next);
+  };
 
   // Custom user-registered tokens, flat list per chain so multiple tokens can
   // share a symbol. `id` is the stable uniqueness key.
@@ -2002,6 +2029,14 @@ export default function TerminalShell({
       savePreference("activeRpcProviders", patch.activeRpcProviders);
     }
     setExplorerKeys(loadExplorerKeys(patch.preferencesToPersist));
+    const mergedBindings = mergeImportedBindings(
+      loadBindings(window.localStorage),
+      patch.preferencesToPersist?.bindings
+    );
+    if (mergedBindings !== bindings) {
+      setBindings(mergedBindings);
+      saveBindings(window.localStorage, mergedBindings);
+    }
     if (patch.customTokens) {
       setCustomTokens(patch.customTokens);
       saveCustomTokenToStorage(patch.customTokens);
@@ -2846,6 +2881,99 @@ export default function TerminalShell({
       return { id: generateId(), type: "text", text: dexText };
     },
     theme: (args) => buildTheme(args),
+    bind: (args) => {
+      const parsed = parseBindArgs(args);
+      switch (parsed.op) {
+        case "error":
+          return { id: generateId(), type: "text", text: parsed.message };
+        case "list":
+          return {
+            id: generateId(),
+            type: "bind",
+            title: "F-KEY BINDINGS",
+            component: <BindWidget data={bindings} theme={theme} />
+          } as LogEntry;
+        case "reset":
+          persistBindings(defaultBindings());
+          return {
+            id: generateId(),
+            type: "text",
+            text: "[✓] Restored all factory F-key defaults."
+          };
+        case "footer": {
+          const next = { ...bindings, footer: parsed.value === "toggle" ? !bindings.footer : parsed.value === "on" };
+          persistBindings(next);
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[✓] F-key footer ${next.footer ? "shown" : "hidden"}.`
+          };
+        }
+        case "show": {
+          const r = resolveBinding(bindings, parsed.key);
+          return {
+            id: generateId(),
+            type: "text",
+            text: r.cmd ? `${parsed.key} → ${r.cmd} (${r.origin})` : `${parsed.key} → unbound`
+          };
+        }
+        case "default": {
+          const next = { ...bindings, map: { ...bindings.map } };
+          delete next.map[parsed.key];
+          persistBindings(next);
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[✓] ${parsed.key} restored to factory default.`
+          };
+        }
+        case "clear": {
+          const next = { ...bindings, map: { ...bindings.map, [parsed.key]: "" } };
+          persistBindings(next);
+          return {
+            id: generateId(),
+            type: "text",
+            text: `[✓] ${parsed.key} unbound.`
+          };
+        }
+        case "set": {
+          const validation = validateBinding(parsed.cmd, availableCommands);
+          if (!validation.ok) {
+            return { id: generateId(), type: "text", text: validation.message };
+          }
+          const canonical = validation.canonical ?? parsed.cmd;
+          const applySet = () => {
+            const next = {
+              ...bindings,
+              map: { ...bindings.map, [parsed.key]: canonical }
+            };
+            persistBindings(next);
+            setLogs((prev) => [
+              ...prev,
+              {
+                id: generateId(),
+                type: "text",
+                text: `[✓] ${parsed.key} → ${canonical}`
+              }
+            ]);
+          };
+          if (isDangerousBinding(canonical)) {
+            setPendingConfirm({
+              onYes: applySet,
+              onNo: () => {}
+            });
+            return {
+              id: generateId(),
+              type: "text",
+              warn: true,
+              text: `[!] ${parsed.key} → "${canonical}" is destructive. Type YES (or just press Enter) to bind it.`
+            };
+          }
+          applySet();
+          return null;
+        }
+      }
+    },
     rpc: (args) => {
       if (!activeChainId)
         return {
@@ -3449,6 +3577,12 @@ export default function TerminalShell({
           if (data.preferences.activeRpcProviders)
             setActiveRpcProviders(data.preferences.activeRpcProviders);
           setExplorerKeys(loadExplorerKeys(data.preferences));
+          const mergedBindings = mergeImportedBindings(
+            loadBindings(window.localStorage),
+            data.preferences.bindings
+          );
+          setBindings(mergedBindings);
+          saveBindings(window.localStorage, mergedBindings);
           if (data.preferences.chainId) {
             setActiveChainId(data.preferences.chainId);
             if (data.preferences.dexId) {
@@ -6284,7 +6418,7 @@ export default function TerminalShell({
           (command === "theme" || command === "style") &&
           currentArgIdx === 1
         ) {
-          candidates = [...THEME_ORDER];
+          candidates = [...THEME_ORDER, "next", "prev"];
 
           // 3. Tokens Command
         } else if (command === "tokens" && currentArgIdx === 1) {
@@ -6518,14 +6652,26 @@ export default function TerminalShell({
       {/* TOP HEADER BAR */}
       <TerminalHeader
         theme={theme}
-        currentThemeKey={currentThemeKey}
-        onThemeChange={handleThemeSwitch}
         onCommand={handleCommand}
         mode={terminalMode}
         onModeChange={applyTerminalMode}
         primaryTab={primaryTab}
         onPrimaryTabChange={handlePrimaryTabChange}
         socialBadge={inboxUnread + boardUnread}
+        bindings={bindings}
+      />
+
+      {/* Single global F1–F12 listener (#28) */}
+      <FkeyListener
+        bindings={bindings}
+        availableCommands={availableCommands}
+        onCommand={(cmd) => void handleCommand(cmd)}
+        setPendingConfirm={setPendingConfirm}
+        onLogText={(t, w) =>
+          setLogs((prev) =>
+            [...prev, { id: generateId(), type: "text", warn: !!w, text: t } as LogEntry].slice(-MAX_LOGS)
+          )
+        }
       />
 
       {/* TERMINAL CONTENT CONTAINER */}
@@ -6759,6 +6905,7 @@ export default function TerminalShell({
             chatChannelLabel={chatChipLabel}
             mode={terminalMode}
             onModeChipTap={openModeChoices}
+            fkeyFooter={footerLabel(bindings, currentThemeKey)}
           />
         </div>
       </div>

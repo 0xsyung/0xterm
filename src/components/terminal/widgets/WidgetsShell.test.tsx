@@ -160,6 +160,49 @@ describe("MatrixRain is not mounted (issue #5 motion/rain)", () => {
   });
 });
 
+describe("bind command wiring (issue #28)", () => {
+  it("TerminalShell registers bind:, mounts FkeyListener, and passes fkeyFooter", () => {
+    const shellSrc = readFileSync(
+      resolve(__dirname, "../TerminalShell.tsx"),
+      "utf8"
+    );
+    expect(shellSrc).toMatch(/bind: \(args\) =>/);
+    expect(shellSrc).toContain("<FkeyListener");
+    expect(shellSrc).toContain("bindings={bindings}");
+    expect(shellSrc).toContain("footerLabel(bindings, currentThemeKey)");
+  });
+
+  it("TerminalShell imports the pure keybindings module and widget", () => {
+    const shellSrc = readFileSync(
+      resolve(__dirname, "../TerminalShell.tsx"),
+      "utf8"
+    );
+    expect(shellSrc).toMatch(/from "\.\/keybindings"/);
+    expect(shellSrc).toMatch(/import FkeyListener from "\.\/FkeyListener"/);
+    expect(shellSrc).toMatch(/import BindWidget from "\.\/widgets\/BindWidget"/);
+  });
+
+  it("TerminalHeader dropped its private cycleTheme and F1-F5 listener", () => {
+    const headerSrc = readFileSync(
+      resolve(__dirname, "../TerminalHeader.tsx"),
+      "utf8"
+    );
+    expect(headerSrc).not.toMatch(/cycleTheme/);
+    expect(headerSrc).not.toMatch(/window\.addEventListener\("keydown"/);
+    expect(headerSrc).toContain("bindings");
+  });
+
+  it("TerminalPrompt exposes data-0xterm-prompt and an fkeyFooter slot", () => {
+    const promptSrc = readFileSync(
+      resolve(__dirname, "../TerminalPrompt.tsx"),
+      "utf8"
+    );
+    expect(promptSrc).toContain('data-0xterm-prompt=""');
+    expect(promptSrc).toContain("fkeyFooter");
+    expect(promptSrc).toContain('data-testid="fkey-footer"');
+  });
+});
+
 describe("verify command wiring (issue #105)", () => {
   it("TerminalShell registers a verify command that submits + polls", () => {
     const shellSrc = readFileSync(

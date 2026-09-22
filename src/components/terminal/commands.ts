@@ -224,6 +224,19 @@ export const buildThemeLog = (
     };
   }
 
+  // `theme next` / `theme prev` cycle the theme list, wrapping at both ends (#28).
+  if (args[1] === "next" || args[1] === "prev") {
+    const idx = THEME_ORDER.indexOf(deps.currentThemeKey);
+    const delta = args[1] === "next" ? 1 : -1;
+    const target = THEME_ORDER[(idx + delta + THEME_ORDER.length) % THEME_ORDER.length];
+    deps.handleThemeSwitch(target);
+    return {
+      id: deps.generateId(),
+      type: "text",
+      text: `[✓] Theme switched to ${THEMES[target].name}`
+    };
+  }
+
   if (!isKnownThemeInput(args[1])) {
     return {
       id: deps.generateId(),

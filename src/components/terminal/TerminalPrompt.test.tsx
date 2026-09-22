@@ -101,4 +101,22 @@ describe("TerminalPrompt", () => {
     fireEvent.click(screen.getByRole("button", { name: /Mode INVEST/i }));
     expect(onModeChipTap).toHaveBeenCalledTimes(1);
   });
+
+  it("renders the F-key footer when fkeyFooter is provided", () => {
+    render(<TerminalPrompt {...makeProps({ fkeyFooter: "F1 HELP · F5 SWAP" })} />);
+    const footer = screen.getByTestId("fkey-footer");
+    expect(footer.textContent).toBe("F1 HELP · F5 SWAP");
+    expect(footer.className).toContain(theme.muted);
+  });
+
+  it("hides the F-key footer when fkeyFooter is empty", () => {
+    render(<TerminalPrompt {...makeProps()} />);
+    expect(screen.queryByTestId("fkey-footer")).toBeNull();
+  });
+
+  it("marks the input as the terminal prompt (data-0xterm-prompt)", () => {
+    render(<TerminalPrompt {...makeProps()} />);
+    const input = screen.getByRole("textbox");
+    expect(input.hasAttribute("data-0xterm-prompt")).toBe(true);
+  });
 });

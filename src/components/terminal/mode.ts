@@ -363,8 +363,14 @@ export const HELP_ROWS: HelpRow[] = [
     modes: ["global"]
   },
   {
-    command: "theme <name>",
-    description: "Switch terminal color theme / style",
+    command: "theme <name|next|prev>",
+    description: "Switch terminal color theme / style, or cycle next/prev",
+    modes: ["global"]
+  },
+  {
+    command: "bind [<F1..F12> <command>|default|clear]",
+    description:
+      "List or bind F-key shortcuts — commands only, never JS (F1-F5 also shown in the header)",
     modes: ["global"]
   },
   {

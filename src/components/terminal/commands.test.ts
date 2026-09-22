@@ -219,4 +219,25 @@ describe("buildThemeLog", () => {
     expect(deps.handleThemeSwitch).toHaveBeenCalledWith("amber");
     expect(res.text).toBe("[✓] Theme switched to Amber");
   });
+
+  it("cycles next through the theme order", () => {
+    const deps = themeDeps({ currentThemeKey: "matrix" });
+    const res = buildThemeLog(["theme", "next"], deps);
+    expect(deps.handleThemeSwitch).toHaveBeenCalledWith("amber");
+    expect(res.text).toBe("[✓] Theme switched to Amber");
+  });
+
+  it("cycles prev and wraps around the end", () => {
+    const deps = themeDeps({ currentThemeKey: "void" });
+    const res = buildThemeLog(["theme", "next"], deps);
+    expect(deps.handleThemeSwitch).toHaveBeenCalledWith("matrix");
+    expect(res.text).toBe("[✓] Theme switched to Matrix");
+  });
+
+  it("wraps prev from the first theme to the last", () => {
+    const deps = themeDeps({ currentThemeKey: "matrix" });
+    const res = buildThemeLog(["theme", "prev"], deps);
+    expect(deps.handleThemeSwitch).toHaveBeenCalledWith("void");
+    expect(res.text).toBe("[✓] Theme switched to Void");
+  });
 });
