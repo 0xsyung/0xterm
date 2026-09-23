@@ -16,4 +16,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Coverage gate is enforced by vitest.config.ts thresholds (#6) —
+      # a below-gate run makes test:coverage exit non-zero and fails this job.
       - run: npm run test:coverage

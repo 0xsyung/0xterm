@@ -164,6 +164,13 @@ function coerceArgs(fn: AbiFunction, tokens: string[]): unknown[] {
 
 function coerceOne(type: string, token: string): unknown {
   const v = parseDigValue(token);
+  if (type.endsWith("[]")) {
+    if (!Array.isArray(v)) throw new Error("arr");
+    const inner = type.slice(0, -2);
+    return v.map((item) =>
+      coerceOne(inner, typeof item === "string" ? item : String(item))
+    );
+  }
   if (type === "address") {
     if (typeof v !== "string" || !isAddress(v)) throw new Error("addr");
     return getAddress(v);
@@ -183,13 +190,6 @@ function coerceOne(type: string, token: string): unknown {
   if (type.startsWith("bytes")) {
     if (typeof v === "string" && /^0x[0-9a-fA-F]*$/.test(v)) return v;
     throw new Error("bytes");
-  }
-  if (type.endsWith("[]")) {
-    if (!Array.isArray(v)) throw new Error("arr");
-    const inner = type.slice(0, -2);
-    return v.map((item) =>
-      coerceOne(inner, typeof item === "string" ? item : String(item))
-    );
   }
   return v;
 }

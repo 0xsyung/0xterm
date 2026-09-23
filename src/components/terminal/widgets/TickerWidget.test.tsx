@@ -3,11 +3,23 @@
  * @file TickerWidget.test.tsx
  * @description Render smoke for ticker board chrome (#15)
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { THEMES } from "../constants";
 import TickerWidget from "./TickerWidget";
 import { TICKER_FOOTER } from "../ticker";
+
+vi.mock("../dexscreener", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../dexscreener")>();
+  return {
+    ...actual,
+    quoteDexScreenerPairs: vi.fn(async () => {
+      const m = new Map<string, { priceUsd: number | null; change24h: number | null; volume24h: number | null }>();
+      m.set("0xpairEthUsdc", { priceUsd: 2100, change24h: 1.5, volume24h: 1_000_000 });
+      return m;
+    })
+  };
+});
 
 const theme = THEMES.matrix;
 
@@ -120,5 +132,66 @@ describe("TickerWidget", () => {
     );
     expect(screen.queryByText("VOL 24H")).toBeNull();
     expect(screen.getByText("ETH")).toBeTruthy();
+  });
+
+  it("shows the pinned label when pinned", () => {
+    render(
+      <TickerWidget
+        data={{
+          kind: "ticker",
+          widgetId: "ticker:watchlist",
+          rows: [],
+          stale: true
+        }}
+        theme={theme}
+        pinned
+      />
+    );
+    expect(screen.getByText("pinned")).toBeTruthy();
+  });
+
+  it("shows the next-refresh countdown", () => {
+    render(
+      <TickerWidget
+        data={{ kind: "ticker", widgetId: "ticker:watchlist", rows: [] }}
+        theme={theme}
+      />
+    );
+    expect(screen.getByText(/next/)).toBeTruthy();
+  });
+
+  it("self-refreshes rows when liveRefresh is enabled", async () => {
+    vi.useFakeTimers();
+    try {
+      const onRowsUpdate = vi.fn();
+      render(
+        <TickerWidget
+          data={{
+            kind: "ticker",
+            widgetId: "ticker:watchlist",
+            rows: [
+              {
+                symbol: "ETH",
+                pairAddress: "0xpairEthUsdc",
+                dsChain: "ethereum",
+                priceUsd: 2000,
+                change24h: 1,
+                volume24h: 1e6,
+                updatedAt: 1
+              }
+            ]
+          }}
+          theme={theme}
+          liveRefresh
+          onRowsUpdate={onRowsUpdate}
+        />
+      );
+      // Countdown starts at TICKER_REFRESH_SEC (15) — advance past the first tick.
+      await vi.advanceTimersByTimeAsync(16_000);
+      expect(onRowsUpdate).toHaveBeenCalled();
+      expect(onRowsUpdate.mock.calls[0]?.[0][0]?.priceUsd).toBe(2100);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

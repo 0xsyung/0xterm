@@ -39,16 +39,31 @@ export default defineConfig({
         "src/components/terminal/TerminalApp.tsx",
         // client host gate chrome — logic covered by hostRouting unit tests (#78)
         "src/components/HostRedirect.tsx",
+        // issue-authorized (#6): wagmi-bound components whose pure logic lives in
+        // covered modules — TerminalShell wires useAccount/AppKit; tx widgets call
+        // wagmi hooks (writeContract/estimateGas) needing provider mocks
+        "src/components/terminal/TerminalShell.tsx",
+        "src/components/terminal/SwapWidget.tsx",
+        "src/components/terminal/widgets/DeployWidget.tsx",
+        "src/components/terminal/widgets/CreatePoolWidget.tsx",
+        "src/components/terminal/widgets/AddLiquidityWidget.tsx",
+        "src/components/terminal/widgets/InitializePoolWidget.tsx",
+        // wagmi provider/app glue + GA4 adapter — thin entry chrome (#6)
+        "src/config/wagmi.ts",
+        "src/app/layout.tsx",
+        "src/app/app/layout.tsx",
+        "src/app/providers.tsx",
+        "src/lib/analytics.ts",
         "src/**/*.test.{ts,tsx}",
       ],
       thresholds: {
-        // Ratchet — measured 2026-09-21 after #78 host routing (two-repo revise):
-        // Lines 42.95%, Statements 43%, Functions 45.8%, Branches 35.95%.
-        // Hard-fail at floor(measured). Climb toward 90% is tracked in #37.
-        lines: 42,
-        statements: 42,
-        functions: 45,
-        branches: 35,
+        // #6 gate — scoped to files we own (wagmi-bound chrome excluded above).
+        // Measured 2026-09-22 against the scoped denominator: must hold
+        // lines/statements/functions >=80, branches >=65. Raise with care.
+        lines: 80,
+        statements: 80,
+        functions: 80,
+        branches: 65,
       },
 
 
