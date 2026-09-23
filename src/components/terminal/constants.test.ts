@@ -104,6 +104,23 @@ describe("DEX_REGISTRY[8453] (locks #7)", () => {
   });
 });
 
+describe("DEX_REGISTRY univ2 entries (Wave 1 #32)", () => {
+  const cases: [number, string, string][] = [
+    [8453, "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6", "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24"],
+    [42161, "0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9", "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24"],
+    [137, "0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C", "0xedf6066a2b290C185783862C7F4776A2C8077AD1"],
+    [10, "0x0c3c1c532F1e39EdF36BE9Fe0bE1410313E074Bf", "0x4A7b5Da61326A6379179b40d00F57E5bbDC962c2"]
+  ];
+
+  it.each(cases)("chain %i has univ2 with the correct factory/router", (chainId, factory, router) => {
+    const entry = DEX_REGISTRY[chainId]?.find((d) => d.id === "univ2" && d.type === "V2");
+    expect(entry).toBeDefined();
+    expect(entry?.factory).toBe(factory);
+    expect(entry?.router).toBe(router);
+    expect(entry?.positionManager).toBeUndefined();
+  });
+});
+
 describe("COMMON_TOKENS[8453].USDC (locks #10)", () => {
   const usdc = COMMON_TOKENS[8453]?.USDC;
 

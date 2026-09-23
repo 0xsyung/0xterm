@@ -4386,6 +4386,17 @@ export default function TerminalShell({
             args: [amountOutMin, [addrIn, addrOut], address, deadline]
           });
           txValue = toHex(amountInWei);
+        } else if (toToken.isNative) {
+          // V2 ETH exit: swap into WETH then unwrap to native (path already
+          // native-resolved to WRAPPED_NATIVE above).
+          txData = encodeFunctionData({
+            abi: parseAbi([
+              "function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)"
+            ]),
+            functionName: "swapExactTokensForETH",
+            args: [amountInWei, amountOutMin, [addrIn, addrOut], address, deadline]
+          });
+          approvalAddress = activeDex.router;
         } else {
           txData = encodeFunctionData({
             abi: parseAbi([
