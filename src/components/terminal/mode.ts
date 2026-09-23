@@ -374,6 +374,17 @@ export const HELP_ROWS: HelpRow[] = [
     modes: ["global"]
   },
   {
+    command: "feedback [--no-address] [--email <addr>] [text]",
+    description:
+      "Open a GitHub issue (label: feedback). do not paste seeds, keys, or RPC URLs.",
+    modes: ["global"]
+  },
+  {
+    command: "fb",
+    description: "Alias of feedback",
+    modes: ["global"]
+  },
+  {
     command: "register <address> [symbol] [erc20|erc721]",
     description: "Verify and register a custom ERC20 or ERC721/NFT token",
     modes: ["global"]

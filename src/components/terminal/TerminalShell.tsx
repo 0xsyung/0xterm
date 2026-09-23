@@ -243,6 +243,19 @@ import type {
 } from "./types";
 import PortfolioWidget, { type SnapshotHolding } from "./widgets/PortfolioWidget";
 import { trackEvent } from "../../lib/analytics";
+import { redactSecrets, requireFeedbackConfirm } from "../../lib/redactSecrets";
+import {
+  buildContextBlock,
+  FB_EMAIL,
+  FB_LONG,
+  FB_OPENED,
+  FB_POPUP,
+  FB_USAGE,
+  feedbackTitle,
+  makeFeedbackUrl,
+  parseFeedbackArgs,
+  type MakeFeedbackUrlResult
+} from "../../lib/feedbackUrl";
 import DeployWidget from "./widgets/DeployWidget";
 import DigEditorWidget from "./widgets/DigEditorWidget";
 import DigArtifactWidget from "./widgets/DigArtifactWidget";
@@ -1010,6 +1023,8 @@ export default function TerminalShell({
           })
         );
       }
+    } else if (log.type === "feedback") {
+      base.title = "FEEDBACK";
     } else if (
       log.type === "component" &&
       log.componentData?.kind === "price"
@@ -2415,6 +2430,51 @@ export default function TerminalShell({
     rawInput: string
   ) => Promise<LogEntry | LogEntry[] | null> | LogEntry | LogEntry[] | null;
 
+  // Open the new-issue URL for a one-shot feedback. Handles the clipboard
+  // fallback for overlong bodies and the popup-blocked path. Returns a text log
+  // when a line must be surfaced, or null (nothing further to log).
+  const fireFeedbackUrl = async (
+    res: MakeFeedbackUrlResult
+  ): Promise<LogEntry | null> => {
+    if (res.mode === "clipboard") {
+      try {
+        await navigator.clipboard.writeText(res.clipboardText);
+        setLogs((prev) =>
+          [
+            ...prev,
+            {
+              id: generateId(),
+              type: "text",
+              warn: true,
+              text: FB_LONG
+            } as LogEntry
+          ].slice(-MAX_LOGS)
+        );
+      } catch {
+        return {
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text: "clipboard unavailable — copy the url below."
+        } as LogEntry;
+      }
+    }
+    // `noopener` makes window.open return null even on success, so open
+    // without it and null out `opener` manually to keep the security property.
+    const win = window.open(res.url, "_blank");
+    if (!win) {
+      // Popup blocked — surface the URL as a copy-able text log.
+      return {
+        id: generateId(),
+        type: "text",
+        warn: true,
+        text: `${FB_POPUP}\n${res.url}`
+      } as LogEntry;
+    }
+    win.opener = null;
+    return { id: generateId(), type: "text", text: FB_OPENED } as LogEntry;
+  };
+
   const commands: Record<string, CommandHandler> = {
     clear: () => {
       setLogs([]);
@@ -3003,6 +3063,73 @@ export default function TerminalShell({
           return null;
         }
       }
+    },
+    feedback: async (args) => {
+      const parsed = parseFeedbackArgs(args);
+      if ("error" in parsed) {
+        const msg = parsed.error === "FB_EMAIL" ? FB_EMAIL : FB_USAGE;
+        return { id: generateId(), type: "text", warn: true, text: msg } as LogEntry;
+      }
+
+      const themeName = resolveThemeKey(currentThemeKey);
+      const chainObj = activeChainId
+        ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
+        : undefined;
+      const chainLabel = chainObj
+        ? `${chainObj.name} (${chainObj.id})${chainObj.testnet ? " testnet" : ""}`
+        : null;
+
+      const widgetBase = {
+        signer: address ? shortAddress(address) : null,
+        themeName,
+        chainLabel,
+        noAddress: parsed.noAddress
+      };
+
+      // Bare `feedback` — open the compose widget, do not open GitHub yet.
+      if (!parsed.text) {
+        return {
+          id: generateId(),
+          type: "feedback",
+          title: "FEEDBACK",
+          payload: widgetBase
+        } as LogEntry;
+      }
+
+      const redacted = redactSecrets(parsed.text);
+      const body = redacted.text;
+
+      // One-shot: clean text opens GitHub immediately (with confirm if hits).
+      if (redacted.hits.length > 0 && requireFeedbackConfirm(redacted.hits)) {
+        // Flagged — do NOT auto-open; show the widget with the secret gate up.
+        return {
+          id: generateId(),
+          type: "feedback",
+          title: "FEEDBACK",
+          payload: {
+            ...widgetBase,
+            initialText: parsed.text,
+            initialGate: true
+          }
+        } as LogEntry;
+      }
+
+      const ctx = buildContextBlock({
+        theme: themeName,
+        chainLabel,
+        signer: parsed.noAddress ? null : (address as string | null),
+        noAddress: parsed.noAddress,
+        email: parsed.email,
+        ua: typeof navigator !== "undefined" ? navigator.userAgent : undefined
+      });
+      const res = makeFeedbackUrl({
+        title: feedbackTitle(body),
+        body,
+        context: ctx
+      });
+      const fireResult = await fireFeedbackUrl(res);
+      if (fireResult) return fireResult;
+      return null;
     },
     rpc: (args) => {
       if (!activeChainId)
@@ -6523,6 +6650,7 @@ export default function TerminalShell({
   commands.style = commands.theme;
   commands.msg = commands.chat;
   commands.messages = commands.inbox;
+  commands.fb = commands.feedback;
   commands.compile = async (args, raw) =>
     commands.dig(["dig", "compile", ...args.slice(1)], raw);
   commands.solc = async (args, raw) =>
@@ -6537,14 +6665,23 @@ export default function TerminalShell({
     // #80 — first command dismisses the workspace launcher (re-open via bar).
     if (showWorkspace) setShowWorkspace(false);
 
+    const args0 = trimmed.split(/\s+/).filter(Boolean);
+    const cmd0 = args0[0]?.toLowerCase();
+    // #19 — a seed/key typed after `feedback ` must never persist in the input
+    // log or history. Echo and store the redacted line instead of the raw one.
+    const echoLine =
+      cmd0 === "feedback" || cmd0 === "fb"
+        ? redactSecrets(trimmed).text
+        : trimmed;
+
     const userLog: LogEntry = {
       id: generateId(),
       type: "input",
-      text: `${theme.promptSymbol || ">"} ${trimmed}`
+      text: `${theme.promptSymbol || ">"} ${echoLine}`
     };
 
     setLogs((prev) => [...prev, userLog].slice(-MAX_LOGS));
-    setHistory((prev) => [...prev, trimmed]);
+    setHistory((prev) => [...prev, echoLine]);
     setHistoryIdx(-1);
 
     const args = trimmed.split(/\s+/).filter(Boolean);

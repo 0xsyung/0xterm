@@ -28,6 +28,7 @@ import DigOpcodesWidget from "./widgets/DigOpcodesWidget";
 import DigRunWidget from "./widgets/DigRunWidget";
 import DigDebugWidget from "./widgets/DigDebugWidget";
 import DigConfirmWidget from "./widgets/DigConfirmWidget";
+import FeedbackWidget from "./widgets/FeedbackWidget";
 import type { LogEntry, DexProtocol } from "./types";
 import { DEFAULT_MODE, type TerminalMode } from "./mode";
 
@@ -316,6 +317,24 @@ function renderLog(
   }
   if (log.type === "dig-confirm") {
     return log.component || null;
+  }
+  if (log.type === "feedback") {
+    const p = log.payload || {};
+    return (
+      <FeedbackWidget
+        theme={theme}
+        signer={p.signer ?? null}
+        themeName={p.themeName ?? null}
+        chainLabel={p.chainLabel ?? null}
+        noAddress={!!p.noAddress}
+        initialText={p.initialText}
+        initialGate={!!p.initialGate}
+        initialPopupUrl={p.initialPopupUrl}
+        onLogText={(text, warn) => actions?.onLogText?.(text, warn)}
+        onPin={() => onPin(log)}
+        pinned={isPinned}
+      />
+    );
   }
   if (log.type === "dig-ls") {
     const rows = log.payload?.rows || [];

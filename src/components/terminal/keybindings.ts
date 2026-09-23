@@ -69,7 +69,6 @@ export const FUTURE_COMMANDS = [
   "pf",
   "ipfs",
   "share",
-  "feedback",
   "bind",
   "wallet"
 ];
@@ -88,7 +87,6 @@ export const COMMAND_ISSUE: Record<string, number> = {
   when: 12,
   pf: 13,
   ipfs: 14,
-  feedback: 19,
   bind: 28,
   wallet: 25
 };
