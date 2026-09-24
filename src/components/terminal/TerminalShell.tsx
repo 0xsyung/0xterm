@@ -166,6 +166,21 @@ import {
   resolveWithPreferredDecimals as resolveWithPreferredDecimalsImpl
 } from "./resolveToken";
 import {
+  ARB_EXECUTOR,
+  ARB_ERROR
+} from "./arb/constants";
+import { arbErrorText } from "./arb/errors";
+import { arbScan, type ArbScanResult, type ArbVenue } from "./arb/scan";
+import { arbSim } from "./arb/sim";
+import {
+  arbMinProfit,
+  encodeRunParams,
+  runParamsFromScan,
+  type RunParamsArgs
+} from "./arb/calldata";
+import ScanWidget from "./arb/widgets/ScanWidget";
+import RunConfirmWidget from "./arb/widgets/RunConfirmWidget";
+import {
   applySuggestionToInput,
   buildTokenArgCandidates,
   isTokenArgPosition
@@ -625,6 +640,16 @@ export default function TerminalShell({
 
   const logContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Last successful `arb scan` result, consumed by `arb sim` / `arb run`.
+  const lastArbScan = useRef<{
+    result: ArbScanResult;
+    tokenStart: Address;
+    tokenOther: Address;
+    symbolStart: string;
+    symbolOther: string;
+    chainId: number | null;
+  } | null>(null);
 
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -4450,6 +4475,232 @@ export default function TerminalShell({
       );
 
       return { id: generateId(), type: "component", component: swapWidget, title: `SWAP ${args[1]} ${fromToken.symbol}→${toToken.symbol}` };
+    },
+    arb: async (args) => {
+      // arb [venues | scan <tA> <tB> | sim | run | help]
+      const chainId = activeChainId;
+      const chainObj = chainId
+        ? SUPPORTED_CHAINS.find((c) => c.id === chainId)
+        : undefined;
+      const sub = (args[1] || "status").toLowerCase();
+
+      const fail = (code: keyof typeof ARB_ERROR, param?: string) =>
+        ({
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text: arbErrorText(code, param)
+        }) as LogEntry;
+
+      if (sub === "help") {
+        return {
+          id: generateId(),
+          type: "text",
+          text:
+            "Usage: arb venues | arb scan <tA> <tB> | arb sim | arb run [--rpc public] | arb help\n" +
+            "3-venue atomic arbitrage: flash tokenStart from a third pool (C), sell on A, buy back on B, repay flash+fee, require profit >= minProfit.\n" +
+            "Testnet-only in v1 (sepolia). Mainnet run disabled until the audit gate."
+        };
+      }
+
+      if (!chainObj) return fail("unsupported", "this chain");
+      const chainName = chainObj.name;
+      const executor = ARB_EXECUTOR[chainObj.id] as Address | undefined;
+      const dexes = DEX_REGISTRY[chainObj.id] || [];
+
+      if (sub === "venues") {
+        if (dexes.length < 2)
+          return fail("no_venues", chainName);
+        const lines = dexes
+          .map((d) => `${d.type} ${d.id} · ${d.name} · factory ${d.factory.slice(0, 10)}…`)
+          .join("\n");
+        return {
+          id: generateId(),
+          type: "text",
+          text: `ARB VENUES (${chainName})\n${lines}`
+        };
+      }
+
+      if (sub === "scan") {
+        const tA = args[2];
+        const tB = args[3];
+        if (!tA || !tB) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Usage: arb scan <tokenStart> <tokenOther>"
+          };
+        }
+        const client = getClient(chainObj);
+        const [tokenStart, tokenOther] = await Promise.all([
+          resolveTokenDetails(tA, chainObj),
+          resolveTokenDetails(tB, chainObj)
+        ]);
+        if (tokenStart.address === tokenOther.address) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Tokens must be different."
+          };
+        }
+        const outcome = await arbScan(chainObj, tokenStart.address, tokenOther.address, {
+          client
+        });
+        if (!outcome.ok) return fail("bad_rpc", outcome.reason);
+        const r = outcome.result;
+        // Store the scan for sim/run.
+        lastArbScan.current = {
+          result: r,
+          tokenStart: tokenStart.address,
+          tokenOther: tokenOther.address,
+          symbolStart: tokenStart.symbol,
+          symbolOther: tokenOther.symbol,
+          chainId
+        };
+        const fmt = (x: bigint, d: number) => formatUnits(x, d);
+        const venueLabel = (v: ArbVenue) =>
+          `${v.name}${v.isV3 ? ` (${v.fee})` : " (V2)"}`;
+        const widget = (
+          <ScanWidget
+            venueA={venueLabel(r.venueA)}
+            venueB={venueLabel(r.venueB)}
+            venueC={venueLabel(r.venueC)}
+            sizeLabel={fmt(r.size, tokenStart.decimals)}
+            grossLabel={fmt(r.gross, tokenStart.decimals)}
+            gasLabel={r.gas > 0n ? fmt(r.gas, tokenStart.decimals) : "?"}
+            netLabel={fmt(r.net, tokenStart.decimals)}
+            netNegative={r.net < 0n}
+            theme={theme}
+            onPin={() => {
+              const scanLog: LogEntry = {
+                id: generateId(),
+                type: "arb",
+                title: `ARB ${tA}/${tB}`,
+                componentData: { kind: "arb-scan", chainId, tA, tB }
+              };
+              setLogs((prev) => [...prev, scanLog].slice(-MAX_LOGS));
+            }}
+          />
+        );
+        return {
+          id: generateId(),
+          type: "component",
+          component: widget,
+          title: `ARB ${tA}/${tB}`,
+          componentData: { kind: "arb-scan", chainId, tA, tB }
+        };
+      }
+
+      if (sub === "sim") {
+        const scan = lastArbScan.current;
+        if (!scan || scan.chainId !== chainId)
+          return fail("gone");
+        const { result, tokenStart, tokenOther } = scan;
+        const gasPrice = await getClient(chainObj)
+          .getGasPrice()
+          .catch(() => 0n);
+        const minProfit = arbMinProfit({ gasWei: gasPrice * 320000n, pricePerTokenStart: 1n });
+        const params = runParamsFromScan(result, minProfit, tokenStart, tokenOther);
+        const sim = await arbSim(chainObj, executor!, params, {
+          client: getClient(chainObj)
+        });
+        if (!sim.ok) return fail("gone");
+        return {
+          id: generateId(),
+          type: "text",
+          text: `ARB SIM OK — ${formatUnits(result.gross, 18)} tokenStart gross. minProfit ${formatUnits(minProfit, 18)}. Ready to run.`
+        };
+      }
+
+      if (sub === "run") {
+        const scan = lastArbScan.current;
+        if (!scan || scan.chainId !== chainId)
+          return fail("gone");
+        if (!executor) return fail("no_executor", chainName);
+        // Mainnet gate: only sepolia (11155111) is wired in v1.
+        if (chainId !== 11155111) return fail("mainnet_disabled");
+        if (!isConnected || !address)
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Wallet not connected."
+          };
+        const { result, tokenStart, tokenOther, symbolStart, symbolOther } = scan;
+        const client = getClient(chainObj);
+        const gasPrice = await client.getGasPrice().catch(() => 0n);
+        if (gasPrice <= 0n) return fail("gas_unknown");
+        const gasUnits = 320000n;
+        const minProfit = arbMinProfit({ gasWei: gasPrice * gasUnits, pricePerTokenStart: 1n });
+        const params = runParamsFromScan(result, minProfit, tokenStart, tokenOther);
+        const data = encodeRunParams(params);
+
+        // Dry-run once more right before the confirm widget.
+        const sim = await arbSim(chainObj, executor, params, { client });
+        if (!sim.ok) return fail("gone");
+
+        const flashLabel = `${result.venueC.name}${result.venueC.isV3 ? ` (${result.venueC.fee})` : " (V2)"}`;
+        const venuesLabel = `${result.venueA.name} → ${result.venueB.name} · flash ${flashLabel}`;
+        const runWidget = (
+          <RunConfirmWidget
+            theme={theme}
+            pair={`${symbolStart}/${symbolOther}`}
+            venues={venuesLabel}
+            size={formatUnits(result.size, 18)}
+            minProfit={formatUnits(minProfit, 18)}
+            executor={executor}
+            flashSource={flashLabel}
+            onConfirm={async () => {
+              try {
+                const hash = await sendTransactionAsync({
+                  chainId,
+                  to: executor,
+                  data
+                });
+                const receipt = await client.waitForTransactionReceipt({ hash });
+                setLogs((prev) =>
+                  [
+                    ...prev,
+                    {
+                      id: generateId(),
+                      type: "arb",
+                      title: `ARB RUN ${symbolStart}/${symbolOther}`,
+                      text: `ARB RUN — tx ${receipt.transactionHash.slice(0, 10)}… profit to wallet.`
+                    } as LogEntry
+                  ].slice(-MAX_LOGS)
+                );
+              } catch (e: any) {
+                setLogs((prev) =>
+                  [
+                    ...prev,
+                    {
+                      id: generateId(),
+                      type: "text",
+                      warn: true,
+                      text: `[!] arb.rejected — ${formatViemError(e).replace(/^ERROR:\s*/, "").slice(0, 120)}`
+                    } as LogEntry
+                  ].slice(-MAX_LOGS)
+                );
+              }
+            }}
+            onCancel={() => {
+              setLogs((prev) =>
+                [
+                  ...prev,
+                  { id: generateId(), type: "text", text: "ARB RUN cancelled." } as LogEntry
+                ].slice(-MAX_LOGS)
+              );
+            }}
+          />
+        );
+        return {
+          id: generateId(),
+          type: "component",
+          component: runWidget,
+          title: `ARB RUN ${symbolStart}/${symbolOther}`
+        };
+      }
+
+      return fail("unsupported", chainName);
     },
     balance: async (args) => await buildBalance(args),
     portfolio: async (args) => {
