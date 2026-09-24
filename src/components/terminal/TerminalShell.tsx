@@ -86,7 +86,7 @@ import {
   pricePinKey
 } from "./helpers";
 import { detectTokenType } from "./tokenType";
-import { getNativePriceUsd } from "./pricing";
+import { getNativePriceUsd, getTokenPriceUsd } from "./pricing";
 import {
   DEX_FETCH_FAILED_MSG,
   fetchWithRetry,
@@ -175,6 +175,7 @@ import { arbSim } from "./arb/sim";
 import {
   arbMinProfit,
   encodeRunParams,
+  pricePerTokenStartFromUsd,
   runParamsFromScan,
   type RunParamsArgs
 } from "./arb/calldata";
@@ -648,6 +649,7 @@ export default function TerminalShell({
     tokenOther: Address;
     symbolStart: string;
     symbolOther: string;
+    decimalsStart: number;
     chainId: number | null;
   } | null>(null);
 
@@ -4543,8 +4545,13 @@ export default function TerminalShell({
             text: "Tokens must be different."
           };
         }
+        const [nativeUsd, tokenUsd] = await Promise.all([
+          getTokenPriceUsd(chainObj, chainObj.nativeCurrency.symbol, (WRAPPED_NATIVE[chainObj.id] || NATIVE_TOKEN_ADDRESS) as Address, true, client),
+          getTokenPriceUsd(chainObj, tokenStart.symbol, tokenStart.address, false, client)
+        ]);
         const outcome = await arbScan(chainObj, tokenStart.address, tokenOther.address, {
-          client
+          client,
+          tokenStartPerNative: pricePerTokenStartFromUsd(nativeUsd, tokenUsd, tokenStart.decimals)
         });
         if (!outcome.ok) return fail("bad_rpc", outcome.reason);
         const r = outcome.result;
@@ -4555,6 +4562,7 @@ export default function TerminalShell({
           tokenOther: tokenOther.address,
           symbolStart: tokenStart.symbol,
           symbolOther: tokenOther.symbol,
+          decimalsStart: tokenStart.decimals,
           chainId
         };
         const fmt = (x: bigint, d: number) => formatUnits(x, d);
@@ -4595,11 +4603,17 @@ export default function TerminalShell({
         const scan = lastArbScan.current;
         if (!scan || scan.chainId !== chainId)
           return fail("gone");
-        const { result, tokenStart, tokenOther } = scan;
-        const gasPrice = await getClient(chainObj)
-          .getGasPrice()
-          .catch(() => 0n);
-        const minProfit = arbMinProfit({ gasWei: gasPrice * 320000n, pricePerTokenStart: 1n });
+        const { result, tokenStart, tokenOther, symbolStart, decimalsStart } = scan;
+        const client = getClient(chainObj);
+        const gasPrice = await client.getGasPrice().catch(() => 0n);
+        const [nativeUsd, tokenUsd] = await Promise.all([
+          getTokenPriceUsd(chainObj, chainObj.nativeCurrency.symbol, (WRAPPED_NATIVE[chainObj.id] || NATIVE_TOKEN_ADDRESS) as Address, true, client),
+          getTokenPriceUsd(chainObj, symbolStart, tokenStart, false, client)
+        ]);
+        const minProfit = arbMinProfit({
+          gasWei: gasPrice * 320000n,
+          pricePerTokenStart: pricePerTokenStartFromUsd(nativeUsd, tokenUsd, decimalsStart)
+        });
         const params = runParamsFromScan(result, minProfit, tokenStart, tokenOther);
         const sim = await arbSim(chainObj, executor!, params, {
           client: getClient(chainObj)
@@ -4608,7 +4622,7 @@ export default function TerminalShell({
         return {
           id: generateId(),
           type: "text",
-          text: `ARB SIM OK — ${formatUnits(result.gross, 18)} tokenStart gross. minProfit ${formatUnits(minProfit, 18)}. Ready to run.`
+          text: `ARB SIM OK — ${formatUnits(result.gross, decimalsStart)} tokenStart gross. minProfit ${formatUnits(minProfit, decimalsStart)}. Ready to run.`
         };
       }
 
@@ -4625,12 +4639,19 @@ export default function TerminalShell({
             type: "text",
             text: "Wallet not connected."
           };
-        const { result, tokenStart, tokenOther, symbolStart, symbolOther } = scan;
+        const { result, tokenStart, tokenOther, symbolStart, symbolOther, decimalsStart } = scan;
         const client = getClient(chainObj);
         const gasPrice = await client.getGasPrice().catch(() => 0n);
         if (gasPrice <= 0n) return fail("gas_unknown");
         const gasUnits = 320000n;
-        const minProfit = arbMinProfit({ gasWei: gasPrice * gasUnits, pricePerTokenStart: 1n });
+        const [nativeUsd, tokenUsd] = await Promise.all([
+          getTokenPriceUsd(chainObj, chainObj.nativeCurrency.symbol, (WRAPPED_NATIVE[chainObj.id] || NATIVE_TOKEN_ADDRESS) as Address, true, client),
+          getTokenPriceUsd(chainObj, symbolStart, tokenStart, false, client)
+        ]);
+        const minProfit = arbMinProfit({
+          gasWei: gasPrice * gasUnits,
+          pricePerTokenStart: pricePerTokenStartFromUsd(nativeUsd, tokenUsd, decimalsStart)
+        });
         const params = runParamsFromScan(result, minProfit, tokenStart, tokenOther);
         const data = encodeRunParams(params);
 
@@ -4645,8 +4666,8 @@ export default function TerminalShell({
             theme={theme}
             pair={`${symbolStart}/${symbolOther}`}
             venues={venuesLabel}
-            size={formatUnits(result.size, 18)}
-            minProfit={formatUnits(minProfit, 18)}
+            size={formatUnits(result.size, decimalsStart)}
+            minProfit={formatUnits(minProfit, decimalsStart)}
             executor={executor}
             flashSource={flashLabel}
             onConfirm={async () => {

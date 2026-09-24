@@ -87,6 +87,26 @@ export function encodeRunParams(p: RunParamsArgs): `0x${string}` {
 }
 
 /**
+ * tokenStart base units per 1 native wei, derived from USD prices.
+ * `nativeUsd` = 1 native in USD, `tokenUsd` = 1 tokenStart in USD, `decimals` =
+ * tokenStart decimals. When either price is missing/zero it returns 1n, which
+ * means "assume 1:1 with native wei" (correct for WETH, wrong for USDC — the
+ * old behavior; prices come from getTokenPriceUsd and are normally present).
+ */
+export function pricePerTokenStartFromUsd(
+  nativeUsd: number | null,
+  tokenUsd: number | null,
+  decimals: number
+): bigint {
+  if (!nativeUsd || nativeUsd <= 0 || !tokenUsd || tokenUsd <= 0) return 1n;
+  const nativeToToken = nativeUsd / tokenUsd; // 1 native in tokenStart
+  // (nativeToToken tokenStart/native) × (10^18 wei per native) × (10^-decimals)
+  // rounds to tokenStart base units per 1 native wei.
+  const scaled = (nativeToToken * 1e18) / 10 ** decimals;
+  return BigInt(Math.max(1, Math.round(scaled)));
+}
+
+/**
  * Minimum profit (tokenStart) that makes a run worthwhile after gas.
  * `gasWei` is the estimated gas cost in native; `pricePerTokenStart` is the
  * tokenStart base units per 1 native wei. 2x buffer, never 0 once gas known.
