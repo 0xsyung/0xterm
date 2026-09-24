@@ -170,6 +170,8 @@ import {
   ARB_ERROR
 } from "./arb/constants";
 import { arbErrorText } from "./arb/errors";
+import { encodeCalldata } from "./calldata/encode";
+import { CALDATA_ERROR } from "./calldata/constants";
 import { arbScan, type ArbScanResult, type ArbVenue } from "./arb/scan";
 import { arbSim } from "./arb/sim";
 import {
@@ -181,6 +183,7 @@ import {
 } from "./arb/calldata";
 import ScanWidget from "./arb/widgets/ScanWidget";
 import RunConfirmWidget from "./arb/widgets/RunConfirmWidget";
+import CalldataWidget from "./calldata/widgets/CalldataWidget";
 import {
   applySuggestionToInput,
   buildTokenArgCandidates,
@@ -4722,6 +4725,100 @@ export default function TerminalShell({
       }
 
       return fail("unsupported", chainName);
+    },
+    calldata: async (args) => {
+      // calldata [help | sim] <to> <fnSig> <arg0...>
+      const sub = (args[1] || "").toLowerCase();
+      const calldataFail = (text: string) =>
+        ({
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text
+        }) as LogEntry;
+
+      if (sub === "help" || !args[1]) {
+        return {
+          id: generateId(),
+          type: "text",
+          text:
+            "Usage: calldata <to> <fnSig> <arg0...> | calldata sim <to> <fnSig> <arg0...> | calldata help\n" +
+            "Encode a contract call: calldata 0x… transfer(address,uint256) 0x… 5\n" +
+            "sim = eth_call dry-run on the active chain (read-only)."
+        };
+      }
+
+      const isSim = sub === "sim";
+      const toIdx = isSim ? 2 : 1;
+      const to = args[toIdx];
+      const fnSig = args[toIdx + 1];
+      const argTokens = args.slice(toIdx + 2);
+      if (!to || !fnSig)
+        return calldataFail(
+          isSim ? "Usage: calldata sim <to> <fnSig> <arg0...>" : "Usage: calldata <to> <fnSig> <arg0...>"
+        );
+
+      const encoded = encodeCalldata({ to, fnSig, args: argTokens });
+      if (!encoded.ok) {
+        const msg =
+          encoded.code === "bad_to"
+            ? CALDATA_ERROR.bad_to
+            : encoded.code === "bad_sig"
+              ? CALDATA_ERROR.bad_sig(encoded.reason)
+              : encoded.code === "arity"
+                ? `[!] calldata.arity — ${encoded.reason}`
+                : `[!] calldata.arg — ${encoded.reason}`;
+        return calldataFail(msg);
+      }
+
+      const simCall = async (to: `0x${string}`, data: `0x${string}`) => {
+        const chainObj2 = activeChainId
+          ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
+          : undefined;
+        if (!chainObj2)
+          return { ok: false as const, label: CALDATA_ERROR.no_chain };
+        try {
+          await getClient(chainObj2).call({
+            to,
+            data,
+            account: "0x0000000000000000000000000000000000000000"
+          });
+          return { ok: true as const, label: "[✓] eth_call OK — no revert" };
+        } catch (e: any) {
+          const short = formatViemError(e)
+            .replace(/^ERROR:\s*/, "")
+            .slice(0, 90);
+          return { ok: false as const, label: `[!] revert — ${short}` };
+        }
+      };
+
+      let simLabel: string | undefined;
+      let simOk: boolean | undefined;
+      if (isSim) {
+        const sim = await simCall(encoded.to, encoded.data);
+        simLabel = sim.label;
+        simOk = sim.ok;
+      }
+
+      const widget = (
+        <CalldataWidget
+          theme={theme}
+          to={encoded.to}
+          fnName={encoded.fnName}
+          argsSummary={encoded.argsSummary}
+          data={encoded.data}
+          simLabel={simLabel}
+          simOk={simOk}
+          onSimulate={({ to, data }) => simCall(to, data)}
+        />
+      );
+
+      return {
+        id: generateId(),
+        type: "component",
+        component: widget,
+        title: `CALDATA ${encoded.fnName}`
+      };
     },
     balance: async (args) => await buildBalance(args),
     portfolio: async (args) => {
