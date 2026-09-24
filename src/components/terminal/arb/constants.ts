@@ -12,7 +12,7 @@ import type { Address } from "viem";
  * mainnet `arb run` is refused until the audit gate (arb.mainnet_disabled).
  */
 export const ARB_EXECUTOR: Record<number, Address> = {
-  11155111: "0x0d87eAEAe884339DEFBA431aDFf6075dcEcF6a55",
+  11155111: "0xD18023E5B8Db53ab21D3D7ee93680bb3DAC3f4fb",
 };
 
 export const ARB_ERROR = {
