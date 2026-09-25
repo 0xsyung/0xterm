@@ -143,4 +143,49 @@ describe("FeedbackWidget", () => {
     const { container } = renderWidget();
     expect(container.querySelector("[data-retain-focus]")).toBeTruthy();
   });
+
+  it("toggles the markdown preview of the issue body", async () => {
+    renderWidget();
+    fireEvent.change(screen.getByPlaceholderText(/what broke/i), {
+      target: { value: "swap failed" }
+    });
+    const previewBtn = screen.getByText("preview");
+    fireEvent.click(previewBtn);
+    expect(screen.getByText(/## Context \(auto, from 0xterm\)/)).toBeTruthy();
+    fireEvent.click(previewBtn);
+    expect(screen.queryByText(/## Context \(auto, from 0xterm\)/)).toBeNull();
+  });
+
+  it("cancels and calls onCancel", () => {
+    const onCancel = vi.fn();
+    renderWidget({ onCancel });
+    fireEvent.click(screen.getByText("cancel"));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("dismisses the secret gate with the no button", () => {
+    renderWidget();
+    fireEvent.change(screen.getByPlaceholderText(/what broke/i), {
+      target: { value: `my key is ${"ab".repeat(32)}` }
+    });
+    fireEvent.click(screen.getByText("open github"));
+    expect(screen.getByText(/type YES to open the redacted github form/)).toBeTruthy();
+    fireEvent.click(screen.getByText("no"));
+    expect(screen.queryByText(/type YES to open the redacted github form/)).toBeNull();
+    expect(mockOpen).not.toHaveBeenCalled();
+  });
+
+  it("shows the full body in a block when clipboard access fails", async () => {
+    writeText.mockRejectedValueOnce(new Error("denied"));
+    renderWidget();
+    fireEvent.change(screen.getByPlaceholderText(/what broke/i), {
+      target: { value: "x".repeat(6000) }
+    });
+    fireEvent.click(screen.getByText("open github"));
+    await waitFor(() => expect(screen.getByText(/popup blocked/)).toBeTruthy());
+    const pre = document.querySelector("pre");
+    expect(pre?.textContent).toContain("x".repeat(100));
+    expect(pre?.textContent).toContain("## Context (auto, from 0xterm)");
+    expect(mockOpen).not.toHaveBeenCalled();
+  });
 });
