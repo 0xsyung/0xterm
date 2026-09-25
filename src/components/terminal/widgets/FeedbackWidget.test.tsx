@@ -8,25 +8,16 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { THEMES } from "../constants";
-import FeedbackWidget from "./FeedbackWidget";
+import FeedbackWidget, { type FeedbackDraft } from "./FeedbackWidget";
 
 const theme = THEMES.matrix;
 
-const mockOpen = vi.fn();
-let writeText: ReturnType<typeof vi.fn>;
+type SubmitFn = (draft: FeedbackDraft) => Promise<{ ok: true } | { ok: false; error?: string }>;
+
+let onSubmit: SubmitFn & ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  mockOpen.mockReset();
-  mockOpen.mockReturnValue({} as Window);
-  Object.defineProperty(window, "open", {
-    configurable: true,
-    value: mockOpen
-  });
-  writeText = vi.fn(async () => {});
-  Object.defineProperty(navigator, "clipboard", {
-    configurable: true,
-    value: { writeText }
-  });
+  onSubmit = vi.fn(async () => ({ ok: true }));
 });
 
 afterEach(() => {
@@ -40,120 +31,69 @@ const renderWidget = (props: Record<string, unknown> = {}) =>
       signer="0xABCDEF1234567890ABCDEF1234567890ABCDEF12"
       themeName="matrix"
       chainLabel="Base (8453)"
+      onSubmit={onSubmit}
       onLogText={vi.fn()}
       {...props}
     />
   );
 
 describe("FeedbackWidget", () => {
-  it("opens the GitHub form with redacted body on clean submit", async () => {
+  it("sends the redacted body on clean submit", async () => {
     renderWidget();
     fireEvent.change(screen.getByPlaceholderText(/what broke/i), {
       target: { value: "swap failed on base" }
     });
-    fireEvent.click(screen.getByText("open github"));
-    expect(mockOpen).toHaveBeenCalledTimes(1);
-    const url = mockOpen.mock.calls[0]![0] as string;
-    expect(url).toContain("issues/new");
-    expect(url).toContain("labels=feedback");
-    expect(decodeURIComponent(url)).toContain("swap failed on base");
-    expect(decodeURIComponent(url)).toContain("0xABCD…EF12");
+    fireEvent.click(screen.getByText("send feedback"));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const draft = onSubmit.mock.calls[0]![0] as FeedbackDraft;
+    expect(draft.text).toContain("swap failed on base");
+    expect(draft.includeAddress).toBe(true);
   });
 
-  it("requires YES before opening when a secret is present", async () => {
+  it("requires YES before sending when a secret is present", async () => {
     renderWidget();
     fireEvent.change(screen.getByPlaceholderText(/what broke/i), {
       target: { value: `my key is ${"ab".repeat(32)}` }
     });
-    fireEvent.click(screen.getByText("open github"));
-    // Gate is up; GitHub must NOT have been opened yet.
-    expect(mockOpen).not.toHaveBeenCalled();
-    expect(screen.getByText(/type YES to open the redacted github form/)).toBeTruthy();
-    // The opened body is redacted.
+    fireEvent.click(screen.getByText("send feedback"));
+    // Gate is up; onSubmit must NOT have been called yet.
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText(/type YES to send the redacted message/)).toBeTruthy();
+    // The sent body is redacted.
     fireEvent.click(screen.getByText("YES"));
-    expect(mockOpen).toHaveBeenCalledTimes(1);
-    const url = mockOpen.mock.calls[0]![0] as string;
-    expect(url).not.toContain("ab".repeat(32));
-    expect(decodeURIComponent(url)).toContain("[redacted:privkey]");
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const draft = onSubmit.mock.calls[0]![0] as FeedbackDraft;
+    expect(draft.text).not.toContain("ab".repeat(32));
+    expect(draft.text).toContain("[redacted:privkey]");
   });
 
-  it("shows FB_EMPTY on empty submit", () => {
+  it("shows the empty message on empty submit", () => {
     renderWidget();
-    fireEvent.click(screen.getByText("open github"));
+    fireEvent.click(screen.getByText("send feedback"));
     expect(screen.getByText(/write a few words first/)).toBeTruthy();
-    expect(mockOpen).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it("shows a copy-able URL when the popup is blocked", () => {
-    mockOpen.mockReturnValue(null);
+  it("surfaces a send error from onSubmit", async () => {
+    onSubmit.mockResolvedValueOnce({ ok: false, error: "no network" });
     renderWidget();
     fireEvent.change(screen.getByPlaceholderText(/what broke/i), {
       target: { value: "help" }
     });
-    fireEvent.click(screen.getByText("open github"));
-    expect(mockOpen).toHaveBeenCalledTimes(1);
-    const pre = screen.getByText(/issues\/new/);
-    expect(pre).toBeTruthy();
+    fireEvent.click(screen.getByText("send feedback"));
+    await waitFor(() => expect(screen.getByText(/no network/)).toBeTruthy());
   });
 
-  it("logs FB_OPENED on success", async () => {
-    const onLogText = vi.fn();
-    const win = { opener: {} as Window | null } as Window;
-    mockOpen.mockReturnValue(win);
-    renderWidget({ onLogText });
-    fireEvent.change(screen.getByPlaceholderText(/what broke/i), {
-      target: { value: "typo" }
-    });
-    fireEvent.click(screen.getByText("open github"));
-    await waitFor(() =>
-      expect(onLogText).toHaveBeenCalledWith(expect.stringContaining("opened"))
-    );
-    expect(mockOpen).toHaveBeenCalledWith(expect.stringContaining("issues/new"), "_blank");
-    expect(win.opener).toBeNull();
-  });
-
-  it("logs FB_LONG and copies to clipboard on overlong body", async () => {
-    const onLogText = vi.fn();
-    renderWidget({ onLogText });
-    fireEvent.change(screen.getByPlaceholderText(/what broke/i), {
-      target: { value: "x".repeat(6000) }
-    });
-    fireEvent.click(screen.getByText("open github"));
-    await waitFor(() => expect(writeText).toHaveBeenCalled());
-    await waitFor(() =>
-      expect(onLogText).toHaveBeenCalledWith(
-        "body copied to clipboard; paste it into the github form.",
-        true
-      )
-    );
-  });
-
-  it("starts with the secret gate up when initialGate is set (one-shot flagged)", () => {
-    renderWidget({ initialText: "help", initialGate: true });
-    expect(screen.getByText(/type YES to open the redacted github form/)).toBeTruthy();
-  });
-
-  it("renders read-only when pinned", () => {
-    renderWidget({ pinned: true });
-    expect(screen.queryByText("open github")).toBeNull();
-    expect(screen.getByPlaceholderText(/what broke/i)).toHaveProperty("disabled", true);
-  });
-
-  it("sets data-retain-focus so the shell does not steal prompt focus", () => {
-    const { container } = renderWidget();
-    expect(container.querySelector("[data-retain-focus]")).toBeTruthy();
-  });
-
-  it("toggles the markdown preview of the issue body", async () => {
+  it("dismisses the secret gate with the no button", () => {
     renderWidget();
     fireEvent.change(screen.getByPlaceholderText(/what broke/i), {
-      target: { value: "swap failed" }
+      target: { value: `my key is ${"ab".repeat(32)}` }
     });
-    const previewBtn = screen.getByText("preview");
-    fireEvent.click(previewBtn);
-    expect(screen.getByText(/## Context \(auto, from 0xterm\)/)).toBeTruthy();
-    fireEvent.click(previewBtn);
-    expect(screen.queryByText(/## Context \(auto, from 0xterm\)/)).toBeNull();
+    fireEvent.click(screen.getByText("send feedback"));
+    expect(screen.getByText(/type YES to send the redacted message/)).toBeTruthy();
+    fireEvent.click(screen.getByText("no"));
+    expect(screen.queryByText(/type YES to send the redacted message/)).toBeNull();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("cancels and calls onCancel", () => {
@@ -163,29 +103,53 @@ describe("FeedbackWidget", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("dismisses the secret gate with the no button", () => {
-    renderWidget();
-    fireEvent.change(screen.getByPlaceholderText(/what broke/i), {
-      target: { value: `my key is ${"ab".repeat(32)}` }
-    });
-    fireEvent.click(screen.getByText("open github"));
-    expect(screen.getByText(/type YES to open the redacted github form/)).toBeTruthy();
-    fireEvent.click(screen.getByText("no"));
-    expect(screen.queryByText(/type YES to open the redacted github form/)).toBeNull();
-    expect(mockOpen).not.toHaveBeenCalled();
+  it("starts with the secret gate up when initialGate is set (one-shot flagged)", () => {
+    renderWidget({ initialText: "help", initialGate: true });
+    expect(screen.getByText(/type YES to send the redacted message/)).toBeTruthy();
   });
 
-  it("shows the full body in a block when clipboard access fails", async () => {
-    writeText.mockRejectedValueOnce(new Error("denied"));
+  it("renders read-only when pinned", () => {
+    renderWidget({ pinned: true });
+    expect(screen.queryByText("send feedback")).toBeNull();
+    expect(screen.getByPlaceholderText(/what broke/i)).toHaveProperty("disabled", true);
+  });
+
+  it("sets data-retain-focus so the shell does not steal prompt focus", () => {
+    const { container } = renderWidget();
+    expect(container.querySelector("[data-retain-focus]")).toBeTruthy();
+  });
+
+  it("shows the sending indicator while onSubmit is pending", async () => {
+    let resolveSend!: (v: { ok: true }) => void;
+    onSubmit.mockImplementationOnce(
+      () => new Promise<{ ok: true }>((r) => (resolveSend = r))
+    );
     renderWidget();
     fireEvent.change(screen.getByPlaceholderText(/what broke/i), {
-      target: { value: "x".repeat(6000) }
+      target: { value: "slow feedback" }
     });
-    fireEvent.click(screen.getByText("open github"));
-    await waitFor(() => expect(screen.getByText(/popup blocked/)).toBeTruthy());
-    const pre = document.querySelector("pre");
-    expect(pre?.textContent).toContain("x".repeat(100));
-    expect(pre?.textContent).toContain("## Context (auto, from 0xterm)");
-    expect(mockOpen).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("send feedback"));
+    expect(screen.getByText(/sending…/)).toBeTruthy();
+    resolveSend({ ok: true });
+    await waitFor(() => expect(screen.queryByText(/sending…/)).toBeNull());
+  });
+
+  it("sends email and no-address choices in the draft", async () => {
+    renderWidget({ noAddress: true });
+    fireEvent.change(screen.getByPlaceholderText(/what broke/i), {
+      target: { value: "include my contact" }
+    });
+    fireEvent.change(screen.getByPlaceholderText(/email \(optional\)/), {
+      target: { value: "me@example.com" }
+    });
+    const checkbox = screen.getByRole("checkbox");
+    expect(checkbox).toHaveProperty("checked", false); // noAddress → unchecked
+    fireEvent.click(checkbox);
+    expect(checkbox).toHaveProperty("checked", true);
+    fireEvent.click(screen.getByText("send feedback"));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const draft = onSubmit.mock.calls[0]![0] as FeedbackDraft;
+    expect(draft.email).toBe("me@example.com");
+    expect(draft.includeAddress).toBe(true);
   });
 });

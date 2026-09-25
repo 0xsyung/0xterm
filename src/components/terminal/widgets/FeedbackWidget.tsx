@@ -1,8 +1,8 @@
 /**
  * @file FeedbackWidget.tsx
- * @description Compose widget for the feedback command (#19). v1 opens a
- *   prefilled GitHub new-issue URL — no token, no backend. State is React-only:
- *   drafts are never persisted (they might contain secrets).
+ * @description Compose widget for the feedback command (#19). Sends an
+ *   encrypted chat message to the fixed operator address — no GitHub, no
+ *   backend. State is React-only: drafts are never persisted.
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
@@ -10,17 +10,18 @@ import React, { useState } from "react";
 import type { ThemeConfig } from "../types";
 import PinButton from "./PinButton";
 import { redactSecrets, requireFeedbackConfirm } from "../../../lib/redactSecrets";
-import {
-  buildContextBlock,
-  FB_EMPTY,
-  FB_LONG,
-  FB_OPENED,
-  FB_POPUP,
-  FB_SECRET,
-  feedbackTitle,
-  makeFeedbackUrl,
-  type MakeFeedbackUrlResult
-} from "../../../lib/feedbackUrl";
+
+export type FeedbackDraft = {
+  text: string;
+  email: string | null;
+  includeAddress: boolean;
+};
+
+export type FeedbackSubmitResult = { ok: true } | { ok: false; error?: string };
+
+const FB_EMPTY = "write a few words first.";
+const FB_SECRET =
+  "this looks like a key / seed / token. it will be stripped. type YES to send the redacted message.";
 
 export default function FeedbackWidget({
   theme,
@@ -30,7 +31,7 @@ export default function FeedbackWidget({
   noAddress,
   initialText,
   initialGate,
-  initialPopupUrl,
+  onSubmit,
   onLogText,
   onCancel,
   onPin,
@@ -43,7 +44,7 @@ export default function FeedbackWidget({
   noAddress?: boolean;
   initialText?: string;
   initialGate?: boolean;
-  initialPopupUrl?: string | null;
+  onSubmit: (draft: FeedbackDraft) => Promise<FeedbackSubmitResult> | FeedbackSubmitResult;
   onLogText?: (text: string, warn?: boolean) => void;
   onCancel?: () => void;
   onPin?: () => void;
@@ -52,56 +53,21 @@ export default function FeedbackWidget({
   const [text, setText] = useState(initialText || "");
   const [email, setEmail] = useState("");
   const [includeAddress, setIncludeAddress] = useState(!noAddress);
-  const [showPreview, setShowPreview] = useState(false);
   const [secretGate, setSecretGate] = useState(initialGate || false);
-  const [popupUrl, setPopupUrl] = useState<string | null>(initialPopupUrl || null);
   const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
 
   const redacted = redactSecrets(text);
   const confirmNeeded = requireFeedbackConfirm(redacted.hits);
 
-  const build = (): MakeFeedbackUrlResult => {
-    const ctx = buildContextBlock({
-      theme: themeName,
-      chainLabel,
-      signer: includeAddress && signer ? signer : null,
-      noAddress: !includeAddress,
-      email: email.trim() || null
-    });
-    return makeFeedbackUrl({
-      title: feedbackTitle(redacted.text),
-      body: redacted.text || FB_EMPTY,
-      context: ctx
-    });
-  };
+  const draft = (): FeedbackDraft => ({
+    text: redacted.text,
+    email: email.trim() || null,
+    includeAddress
+  });
 
-  // Clipboard mode writes the full markdown and opens the short form URL.
-  const fire = async (res: MakeFeedbackUrlResult): Promise<void> => {
-    if (res.mode === "clipboard") {
-      try {
-        await navigator.clipboard.writeText(res.clipboardText);
-        onLogText?.(FB_LONG, true);
-      } catch {
-        // Clipboard unavailable — show the full body as a copy-able block.
-        setPopupUrl(res.clipboardText);
-        return;
-      }
-    }
-    // `noopener` makes window.open return null even on success, so open
-    // without it and null out `opener` manually to keep the security property.
-    const win = window.open(res.url, "_blank");
-    if (!win) {
-      // Popup blocked — the popupUrl block below surfaces the message + URL.
-      setPopupUrl(res.url);
-      return;
-    }
-    win.opener = null;
-    onLogText?.(FB_OPENED);
-  };
-
-  const submit = async () => {
+  const send = async () => {
     setError(null);
-    setPopupUrl(null);
     if (!redacted.text.trim()) {
       setError(FB_EMPTY);
       return;
@@ -110,12 +76,22 @@ export default function FeedbackWidget({
       setSecretGate(true);
       return;
     }
-    await fire(build());
+    await fire();
+  };
+
+  const fire = async () => {
+    setSending(true);
+    try {
+      const res = await onSubmit(draft());
+      if (!res.ok) setError(res.error || "send failed");
+    } finally {
+      setSending(false);
+    }
   };
 
   const confirmSend = async () => {
     setSecretGate(false);
-    await fire(build());
+    await fire();
   };
 
   const touch =
@@ -144,9 +120,7 @@ export default function FeedbackWidget({
               className={`px-2 py-0.5 border ${theme.border} ${theme.muted} ${touch}`}
               onClick={() => {
                 setError(null);
-                setPopupUrl(null);
                 setSecretGate(false);
-                setShowPreview(false);
                 onCancel?.();
               }}
             >
@@ -162,10 +136,9 @@ export default function FeedbackWidget({
           onChange={(e) => {
             setText(e.target.value);
             setError(null);
-            setShowPreview(false);
           }}
           rows={4}
-          disabled={pinned}
+          disabled={pinned || sending}
           placeholder="what broke or what you want. do not paste seeds, keys, or RPC URLs."
           className={`w-full p-2 text-[11px] font-mono bg-transparent border ${theme.border} ${theme.text} ${theme.rounded} ${pinned ? "opacity-70" : ""}`}
         />
@@ -175,7 +148,7 @@ export default function FeedbackWidget({
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            disabled={pinned}
+            disabled={pinned || sending}
             placeholder="email (optional)"
             className={`flex-1 min-w-[120px] p-1.5 bg-transparent border ${theme.border} ${theme.muted} ${theme.rounded}`}
           />
@@ -184,7 +157,7 @@ export default function FeedbackWidget({
               type="checkbox"
               checked={includeAddress}
               onChange={(e) => setIncludeAddress(e.target.checked)}
-              disabled={pinned}
+              disabled={pinned || sending}
             />
             <span className={theme.muted}>
               include truncated address + theme + chain
@@ -220,57 +193,21 @@ export default function FeedbackWidget({
           </div>
         )}
 
-        {popupUrl && (
-          <div className="space-y-1">
-            <div className={`text-[10px] ${theme.warn}`}>[!] {FB_POPUP}</div>
-            <pre className={`p-2 border ${theme.border} ${theme.muted} text-[9px] break-all whitespace-pre-wrap`}>
-              {popupUrl}
-            </pre>
-          </div>
-        )}
-
-        {showPreview && (
-          <pre
-            className={`p-2 border ${theme.border} ${theme.muted} text-[9px] break-words whitespace-pre-wrap`}
-          >
-            {previewMarkdown()}
-          </pre>
+        {sending && (
+          <div className={`text-[10px] ${theme.muted}`}>sending…</div>
         )}
 
         {!pinned && (
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              className={`px-3 py-1 border ${theme.border} ${theme.primary} text-[10px] ${touch}`}
-              onClick={() => setShowPreview((v) => !v)}
-            >
-              preview
-            </button>
-            <button
-              type="button"
-              className={`px-3 py-1 border ${theme.border} ${theme.primary} font-bold text-[10px] ${touch}`}
-              onClick={() => void submit()}
-            >
-              open github
-            </button>
-          </div>
+          <button
+            type="button"
+            className={`px-3 py-1 border ${theme.border} ${theme.primary} font-bold text-[10px] ${touch}`}
+            disabled={sending}
+            onClick={() => void send()}
+          >
+            send feedback
+          </button>
         )}
       </div>
     </div>
   );
-
-  // The exact markdown that will go into the GitHub form (clipboard mode shows
-  // the full body; open mode shows body + context).
-  function previewMarkdown(): string {
-    const res = build();
-    if (res.mode === "clipboard") return res.clipboardText ?? "";
-    const ctx = buildContextBlock({
-      theme: themeName,
-      chainLabel,
-      signer: includeAddress && signer ? signer : null,
-      noAddress: !includeAddress,
-      email: email.trim() || null
-    });
-    return `${redacted.text}\n\n${ctx}`;
-  }
 }

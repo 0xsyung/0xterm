@@ -14,8 +14,10 @@ import DigRunWidget from "./widgets/DigRunWidget";
 import DigDebugWidget from "./widgets/DigDebugWidget";
 import TickerWidget from "./widgets/TickerWidget";
 import NewsWidget from "./widgets/NewsWidget";
-import FeedbackWidget from "./widgets/FeedbackWidget";
+import FeedbackWidget, { type FeedbackSubmitResult } from "./widgets/FeedbackWidget";
 import type { PinnedManifest, ThemeConfig } from "./types";
+
+const noopSubmit = async (): Promise<FeedbackSubmitResult> => ({ ok: false });
 
 const REFRESH_INTERVAL = 60;
 
@@ -209,7 +211,7 @@ function renderPinned(p: PinnedManifest, theme: any) {
           noAddress={!!payload.noAddress}
           initialText={payload.initialText}
           initialGate={!!payload.initialGate}
-          initialPopupUrl={payload.initialPopupUrl}
+          onSubmit={noopSubmit}
           pinned
         />
       );

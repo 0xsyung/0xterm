@@ -376,7 +376,7 @@ export const HELP_ROWS: HelpRow[] = [
   {
     command: "feedback [--no-address] [--email <addr>] [text]",
     description:
-      "Open a GitHub issue (label: feedback). do not paste seeds, keys, or RPC URLs.",
+      "Send encrypted feedback to the operator. do not paste seeds, keys, or RPC URLs.",
     modes: ["global"]
   },
   {
