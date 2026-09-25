@@ -12,7 +12,8 @@ import {
   WRAPPED_NATIVE,
   erc20Abi
 } from "./constants";
-import { getTokenPriceUsd } from "./pricing";
+import { getTokenQuoteUsd, getTokenPriceUsd } from "./pricing";
+import { isHiddenHolding, type PortfolioPrefs } from "./portfolioPrefs";
 import type { CustomTokensMap } from "./types";
 import type { TokenResolution } from "./resolveToken";
 import type { PortfolioHolding, SnapshotHolding } from "./widgets/PortfolioWidget";
@@ -60,12 +61,13 @@ export const fetchTokenBalanceData = async (
 
 // Reusable holdings builder for `portfolio` (and pinned-portfolio refresh).
 // Reads native + registered (COMMON_TOKENS + custom) token balances across
-// all chains, pricing via getTokenPriceUsd.
+// all chains, pricing via getTokenQuoteUsd (USD + 24h change, #22).
 export const fetchPortfolioHoldings = async (
   userAddress: Address,
   customTokens: CustomTokensMap,
   filterType: string | undefined,
-  deps: FetchPortfolioDeps
+  deps: FetchPortfolioDeps,
+  account?: "self" | string
 ): Promise<PortfolioHolding[]> => {
   const { getClient, fetchImpl = fetch } = deps;
   const holdings: PortfolioHolding[] = [];
@@ -79,7 +81,7 @@ export const fetchPortfolioHoldings = async (
       nativeBal = 0n;
     }
 
-    const nativePrice = await getTokenPriceUsd(
+    const nativeQuote = await getTokenQuoteUsd(
       chain,
       chain.nativeCurrency.symbol,
       (WRAPPED_NATIVE[chain.id] || NATIVE_TOKEN_ADDRESS) as Address,
@@ -87,6 +89,7 @@ export const fetchPortfolioHoldings = async (
       client,
       fetchImpl
     );
+    const nativePrice = nativeQuote.priceUsd;
     const nativeBalance = formatEther(nativeBal);
     const nativeValue =
       nativePrice !== null ? nativePrice * parseFloat(nativeBalance) : null;
@@ -100,9 +103,10 @@ export const fetchPortfolioHoldings = async (
         balance: nativeBalance,
         priceUsd: nativePrice,
         valueUsd: nativeValue,
-        change24h: null,
+        change24h: nativeQuote.change24h,
         priceSource: nativePrice !== null ? "api" : "—",
-        isTestnet: !!chain.testnet
+        isTestnet: !!chain.testnet,
+        account
       });
     }
 
@@ -136,7 +140,8 @@ export const fetchPortfolioHoldings = async (
         const formatted = formatUnits(bal, decimals);
         if (parseFloat(formatted) === 0) continue;
 
-        const price = await getTokenPriceUsd(chain, symbol, addr, false, client, fetchImpl);
+        const quote = await getTokenQuoteUsd(chain, symbol, addr, false, client, fetchImpl);
+        const price = quote.priceUsd;
         holdings.push({
           chainName: chain.name,
           chainId: chain.id,
@@ -146,9 +151,10 @@ export const fetchPortfolioHoldings = async (
           balance: formatted,
           priceUsd: price,
           valueUsd: price !== null ? price * parseFloat(formatted) : null,
-          change24h: null,
+          change24h: quote.change24h,
           priceSource: price !== null ? "api" : "—",
-          isTestnet: !!chain.testnet
+          isTestnet: !!chain.testnet,
+          account
         });
       } catch {
         // skip tokens that fail to read (e.g. non-ERC20 or wrong chain)
@@ -225,4 +231,51 @@ export const fetchPortfolioSnapshot = async (
   }
 
   return holdings;
+};
+
+export type PortfolioView = {
+  holdings: PortfolioHolding[];
+  /** Self rows hidden by prefs — shown as `{n} hidden` in the widget. */
+  hiddenCount: number;
+};
+
+export type FetchPortfolioViewDeps = FetchPortfolioDeps & {
+  readPrefs: () => PortfolioPrefs;
+};
+
+/**
+ * Multi-account view for `pf` / `portfolio` (#22): fetches self + watch
+ * addresses, tags accounts, and drops prefs-hidden holdings. Watch-address
+ * rows are kept (read-only accounts, no P/L baseline in v1).
+ */
+export const fetchPortfolioView = async (
+  self: Address,
+  customTokens: CustomTokensMap,
+  filterType: string | undefined,
+  deps: FetchPortfolioViewDeps
+): Promise<PortfolioView> => {
+  const prefs = deps.readPrefs();
+  const accounts = [self, ...prefs.watchAddresses];
+  const holdings: PortfolioHolding[] = [];
+  let hiddenCount = 0;
+
+  for (const [i, addr] of accounts.entries()) {
+    const account = i === 0 ? ("self" as const) : addr;
+    const rows = await fetchPortfolioHoldings(
+      addr,
+      customTokens,
+      filterType,
+      deps,
+      account
+    );
+    for (const h of rows) {
+      if (isHiddenHolding(prefs, h)) {
+        if (i === 0) hiddenCount += 1;
+        continue;
+      }
+      holdings.push(h);
+    }
+  }
+
+  return { holdings, hiddenCount };
 };

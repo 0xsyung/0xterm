@@ -128,6 +128,7 @@ const COMMAND_AFFINITY: Record<string, CommandAffinity> = {
   dex: "invest",
   balance: "invest",
   bal: "invest",
+  pf: "invest",
   portfolio: "invest",
   snapshot: "invest",
   pnl: "invest",
@@ -146,6 +147,7 @@ const COMMAND_AFFINITY: Record<string, CommandAffinity> = {
   when: "invest",
   will: "invest",
   arb: "invest",
+  allowances: "invest",
 
   // —— dig (workshop verbs) ——
   dig: "dev",
@@ -171,7 +173,8 @@ const FORENSIC_READ_HELPERS = new Set([
   "price",
   "balance",
   "bal",
-  "portfolio"
+  "portfolio",
+  "pf"
 ]);
 
 /** Invest verbs that stay invest-only (explicit forensic block list + siblings). */
@@ -197,7 +200,8 @@ const FORENSIC_BLOCKED_INVEST = new Set([
   "vault",
   "poly",
   "when",
-  "will"
+  "will",
+  "allowances"
 ]);
 
 export function isTerminalMode(value: unknown): value is TerminalMode {
@@ -564,6 +568,26 @@ export const HELP_ROWS: HelpRow[] = [
     modes: ["invest", "forensic"]
   },
   {
+    command: "pf",
+    description: "Alias of portfolio — same widget, same data model",
+    modes: ["invest", "forensic"]
+  },
+  {
+    command: "pf add <addr> | pf rm <addr> | pf ls",
+    description: "Watch extra addresses (read-only) or list the watch list",
+    modes: ["invest", "forensic"]
+  },
+  {
+    command: "pf hide <sym|0xaddr> | pf unhide <sym|0xaddr>",
+    description: "Hide a token from the table (symbol hides on all chains) or restore it",
+    modes: ["invest", "forensic"]
+  },
+  {
+    command: "pf group <name> <sym…> | pf ungroup <name>",
+    description: "Partition SELF rows under a named header, or remove the group",
+    modes: ["invest", "forensic"]
+  },
+  {
     command: "snapshot [label]",
     description: "Record current portfolio baseline for P/L tracking",
     modes: ["invest"]
@@ -606,6 +630,12 @@ export const HELP_ROWS: HelpRow[] = [
   {
     command: "news more",
     description: "Next page of the current news view",
+    modes: ["invest"]
+  },
+  {
+    command: "allowances [<token> | revoke]",
+    description:
+      "Audit positive token approvals granted to known DEX spenders, then revoke them all in one shot",
     modes: ["invest"]
   },
 

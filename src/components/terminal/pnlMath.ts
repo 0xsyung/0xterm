@@ -8,7 +8,7 @@
 export type PnlHoldingLike = {
   chainId: number;
   symbol: string;
-  type: "native" | "erc20";
+  type: "native" | "erc20" | "vault" | "poly";
   address?: string;
   balance: string;
   priceUsd: number | null;
@@ -32,7 +32,7 @@ export type ComputePnlResult = {
 export const snapKeyForHolding = (h: {
   chainId: number;
   symbol: string;
-  type: "native" | "erc20";
+  type: "native" | "erc20" | "vault" | "poly";
   address?: string;
 }): string => {
   if (h.type === "erc20" && h.address) {

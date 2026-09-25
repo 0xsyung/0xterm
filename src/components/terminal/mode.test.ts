@@ -142,7 +142,9 @@ describe("isCommandAllowed — classification table", () => {
     "initialize",
     "initpool",
     "addliq",
-    "provideliq"
+    "provideliq",
+    "arb",
+    "allowances"
   ];
 
   it("globals work in every mode", () => {
@@ -159,7 +161,7 @@ describe("isCommandAllowed — classification table", () => {
       expect(isCommandAllowed("dev", cmd)).toBe(false);
     }
     // forensic read helpers
-    for (const cmd of ["price", "balance", "bal", "portfolio"]) {
+    for (const cmd of ["price", "balance", "bal", "portfolio", "pf"]) {
       expect(isCommandAllowed("forensic", cmd)).toBe(true);
     }
     for (const cmd of [
@@ -168,6 +170,7 @@ describe("isCommandAllowed — classification table", () => {
       "addliq",
       "initialize",
       "arb",
+      "allowances",
       "plan",
       "getpool",
       "pool",
@@ -278,9 +281,10 @@ describe("autocomplete filter + CHOICES", () => {
 });
 
 describe("helpRowsForMode", () => {
-  it("invest includes swap, excludes dig/is", () => {
+  it("invest includes swap + allowances, excludes dig/is", () => {
     const cmds = helpRowsForMode("invest").map((r) => r.command);
     expect(cmds.some((c) => c.startsWith("swap"))).toBe(true);
+    expect(cmds.some((c) => c.startsWith("allowances"))).toBe(true);
     expect(cmds.some((c) => c === "ticker" || c.startsWith("ticker "))).toBe(true);
     expect(cmds.some((c) => c.startsWith("dig"))).toBe(false);
     expect(cmds.some((c) => c.startsWith("is "))).toBe(false);

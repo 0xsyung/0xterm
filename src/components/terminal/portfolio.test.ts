@@ -10,12 +10,14 @@ import { base } from "viem/chains";
 import {
   fetchPortfolioHoldings,
   fetchPortfolioSnapshot,
+  fetchPortfolioView,
   fetchTokenBalanceData,
   type FetchPortfolioDeps,
   type FetchTokenBalanceDeps
 } from "./portfolio";
 import { NATIVE_TOKEN_ADDRESS, SUPPORTED_CHAINS } from "./constants";
 import type { CustomTokensMap } from "./types";
+import type { PortfolioPrefs } from "./portfolioPrefs";
 
 const USER = "0x1111111111111111111111111111111111111111" as Address;
 const TOKEN = "0x2222222222222222222222222222222222222222" as Address;
@@ -136,6 +138,80 @@ describe("fetchPortfolioHoldings", () => {
     const foo = res.find((h) => h.symbol === "FOO");
     expect(foo!.priceUsd).toBe(5);
     expect(foo!.valueUsd).toBe(5);
+  });
+
+  it("fills change24h from the DexScreener pair (#22)", async () => {
+    const client = mockClient({ readContract: async () => 1_000_000n });
+    const fetchImpl = (vi.fn(async () =>
+      jsonRes([
+        {
+          chainId: "base",
+          pairAddress: "0xfooPair",
+          baseToken: { symbol: "FOO", address: TOKEN },
+          quoteToken: { symbol: "USDC", address: "0xusdc" },
+          priceUsd: "5",
+          liquidity: { usd: 1_000_000 },
+          priceChange: { h24: 2.5 }
+        }
+      ])
+    ) as unknown) as typeof fetch;
+    const d = deps({ getClient: vi.fn(() => client), fetchImpl });
+    const res = await fetchPortfolioHoldings(USER, oneTokenMap(), "erc20", d);
+    const foo = res.find((h) => h.symbol === "FOO");
+    expect(foo!.change24h).toBe(2.5);
+  });
+
+  it("leaves change24h null when the pair lacks a 24h change", async () => {
+    const client = mockClient({ readContract: async () => 1_000_000n });
+    const fetchImpl = (vi.fn(async () =>
+      jsonRes([
+        {
+          chainId: "base",
+          pairAddress: "0xfooPair",
+          baseToken: { symbol: "FOO", address: TOKEN },
+          quoteToken: { symbol: "USDC", address: "0xusdc" },
+          priceUsd: "5",
+          liquidity: { usd: 1_000_000 }
+        }
+      ])
+    ) as unknown) as typeof fetch;
+    const d = deps({ getClient: vi.fn(() => client), fetchImpl });
+    const res = await fetchPortfolioHoldings(USER, oneTokenMap(), "erc20", d);
+    const foo = res.find((h) => h.symbol === "FOO");
+    expect(foo!.change24h).toBeNull();
+  });
+});
+
+describe("fetchPortfolioView", () => {
+  const WATCH = "0x9999999999999999999999999999999999999999" as Address;
+  const viewDeps = (prefs: PortfolioPrefs) => ({
+    getClient: vi.fn(() => mockClient({ readContract: async () => 1_000_000n })),
+    fetchImpl: (vi.fn(async () => jsonRes({ pairs: [] })) as unknown) as typeof fetch,
+    readPrefs: () => prefs
+  });
+
+  it("fetches self + watch addresses with account tags (#22)", async () => {
+    const res = await fetchPortfolioView(
+      USER,
+      oneTokenMap(),
+      "erc20",
+      viewDeps({ watchAddresses: [WATCH], hidden: [], groups: [] })
+    );
+    const selfRows = res.holdings.filter((h) => h.account === "self");
+    const watchRows = res.holdings.filter((h) => h.account === WATCH);
+    expect(selfRows.length).toBeGreaterThan(0);
+    expect(watchRows.length).toBeGreaterThan(0);
+  });
+
+  it("drops prefs-hidden self holdings and reports hiddenCount", async () => {
+    const res = await fetchPortfolioView(
+      USER,
+      oneTokenMap(),
+      "erc20",
+      viewDeps({ watchAddresses: [], hidden: ["FOO"], groups: [] })
+    );
+    expect(res.holdings.filter((h) => h.symbol === "FOO").length).toBe(0);
+    expect(res.hiddenCount).toBeGreaterThan(0);
   });
 });
 

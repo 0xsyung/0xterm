@@ -19,6 +19,7 @@ import {
 import {
   fetchSearchPairs,
   fetchTokensV1,
+  parseChange24h,
   parsePriceUsd,
   pickDexPair
 } from "./dexscreener";
@@ -28,17 +29,38 @@ const token0Abi = parseAbi(["function token0() view returns (address)"]);
 // Native token USD price via DexScreener (cache per chain in-memory).
 const nativePriceCache: Record<number, number | null> = {};
 
+export type TokenQuoteUsd = {
+  priceUsd: number | null;
+  /** 24h % from the same DexScreener pair — null when absent (#22). */
+  change24h: number | null;
+};
+
+const quoteFromPair = (picked: { priceUsd?: string | number | null }): {
+  priceUsd: number | null;
+  change24h: number | null;
+} | null => {
+  const usd = parsePriceUsd(picked as never);
+  if (usd === null || usd <= 0) return null;
+  return {
+    priceUsd: usd,
+    change24h: parseChange24h(picked as never)
+  };
+};
+
 /**
  * Native USD via tokens/v1 on wrapped native (hardened — no search pairs[0]).
  * Falls back to search + pickDexPair when tokens/v1 misses.
  */
-export const getNativePriceUsd = async (
+export const getNativeQuoteUsd = async (
   chain: Chain,
   fetchImpl: typeof fetch = fetch
-): Promise<number | null> => {
-  if (chain.id in nativePriceCache) return nativePriceCache[chain.id];
+): Promise<TokenQuoteUsd> => {
+  if (chain.id in nativePriceCache) {
+    const cached = nativePriceCache[chain.id];
+    return { priceUsd: cached, change24h: null };
+  }
   const slug = DEXSCREENER_CHAIN[chain.id];
-  let price: number | null = null;
+  let quote: TokenQuoteUsd = { priceUsd: null, change24h: null };
   if (slug) {
     const wrapped = WRAPPED_NATIVE[chain.id];
     if (wrapped && wrapped !== NATIVE_TOKEN_ADDRESS) {
@@ -50,15 +72,13 @@ export const getNativePriceUsd = async (
           preferChains: [slug],
           majorGuard: true
         });
-        if (picked) {
-          const usd = parsePriceUsd(picked);
-          if (usd !== null && usd > 0) price = usd;
-        }
+        const q = picked ? quoteFromPair(picked) : null;
+        if (q) quote = q;
       } catch {
         // fall through to search
       }
     }
-    if (price === null) {
+    if (quote.priceUsd === null) {
       try {
         const pairs = await fetchSearchPairs(
           chain.nativeCurrency.symbol,
@@ -73,31 +93,38 @@ export const getNativePriceUsd = async (
           preferChains: [slug],
           majorGuard: true
         });
-        if (picked) {
-          const usd = parsePriceUsd(picked);
-          if (usd !== null && usd > 0) price = usd;
-        }
+        const q = picked ? quoteFromPair(picked) : null;
+        if (q) quote = q;
       } catch {
         // leave null
       }
     }
   }
-  nativePriceCache[chain.id] = price;
-  return price;
+  nativePriceCache[chain.id] = quote.priceUsd;
+  return quote;
 };
 
-export const getTokenPriceUsd = async (
+/** Number-only wrapper kept for the legacy callers. */
+export const getNativePriceUsd = async (
+  chain: Chain,
+  fetchImpl: typeof fetch = fetch
+): Promise<number | null> => {
+  const q = await getNativeQuoteUsd(chain, fetchImpl);
+  return q.priceUsd;
+};
+
+export const getTokenQuoteUsd = async (
   chain: Chain,
   symbol: string,
   address: Address,
   isNative: boolean,
   client: PublicClient,
   fetchImpl: typeof fetch = fetch
-): Promise<number | null> => {
+): Promise<TokenQuoteUsd> => {
   const slug = DEXSCREENER_CHAIN[chain.id];
 
   // Native: tokens/v1 on wrapped + pickDexPair (never pairs[0])
-  if (isNative) return getNativePriceUsd(chain, fetchImpl);
+  if (isNative) return getNativeQuoteUsd(chain, fetchImpl);
 
   // 1) DexScreener tokens/v1 by address + pickDexPair
   if (slug) {
@@ -109,10 +136,8 @@ export const getTokenPriceUsd = async (
         preferChains: [slug],
         majorGuard: true
       });
-      if (picked) {
-        const usd = parsePriceUsd(picked);
-        if (usd !== null && usd > 0) return usd;
-      }
+      const q = picked ? quoteFromPair(picked) : null;
+      if (q) return q;
     } catch {
       // fall through
     }
@@ -139,8 +164,8 @@ export const getTokenPriceUsd = async (
         // Prefer address match when available
         const base = picked.baseToken?.address?.toLowerCase();
         if (!base || base === address.toLowerCase()) {
-          const usd = parsePriceUsd(picked);
-          if (usd !== null && usd > 0) return usd;
+          const q = quoteFromPair(picked);
+          if (q) return q;
         }
       }
     } catch {
@@ -152,10 +177,11 @@ export const getTokenPriceUsd = async (
   // 4) On-chain V2 pool (quote vs wrapped native)
   const dexes = DEX_REGISTRY[chain.id] || [];
   const wrappedNative = WRAPPED_NATIVE[chain.id];
-  if (!wrappedNative || dexes.length === 0) return null;
+  if (!wrappedNative || dexes.length === 0)
+    return { priceUsd: null, change24h: null };
 
-  const nativeUsd = await getNativePriceUsd(chain, fetchImpl);
-  if (nativeUsd === null) return null;
+  const nativeUsd = await getNativeQuoteUsd(chain, fetchImpl);
+  if (nativeUsd.priceUsd === null) return { priceUsd: null, change24h: null };
 
   for (const dex of dexes) {
     if (dex.type === "V3") {
@@ -185,7 +211,7 @@ export const getTokenPriceUsd = async (
           const isToken0 =
             (token0 as string).toLowerCase() === address.toLowerCase();
           const priceInNative = isToken0 ? pRaw : 1 / pRaw;
-          return priceInNative * nativeUsd;
+          return { priceUsd: priceInNative * nativeUsd.priceUsd, change24h: null };
         } catch {
           continue;
         }
@@ -217,11 +243,31 @@ export const getTokenPriceUsd = async (
         const reserveNative = isToken0 ? reserves[1] : reserves[0];
         if (reserveNative === 0n) continue;
         const priceInNative = Number(reserveToken) / Number(reserveNative);
-        return priceInNative * nativeUsd;
+        return { priceUsd: priceInNative * nativeUsd.priceUsd, change24h: null };
       } catch {
         continue;
       }
     }
   }
-  return null;
+  return { priceUsd: null, change24h: null };
+};
+
+/** Number-only wrapper kept for the legacy callers. */
+export const getTokenPriceUsd = async (
+  chain: Chain,
+  symbol: string,
+  address: Address,
+  isNative: boolean,
+  client: PublicClient,
+  fetchImpl: typeof fetch = fetch
+): Promise<number | null> => {
+  const q = await getTokenQuoteUsd(
+    chain,
+    symbol,
+    address,
+    isNative,
+    client,
+    fetchImpl
+  );
+  return q.priceUsd;
 };

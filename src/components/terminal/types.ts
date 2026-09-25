@@ -19,7 +19,7 @@ export type ThemeMode =
 
 export type LogEntry = {
   id: string
-  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'pnl' | 'chat' | 'billboard' | 'share' | 'feed' | 'component' | 'ticker' | 'news' | 'bind' | 'dig-artifact' | 'dig-editor' | 'dig-abi' | 'dig-opcodes' | 'dig-run' | 'dig-debug' | 'dig-confirm' | 'dig-ls' | 'dig-fn' | 'arb' | 'feedback'
+  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'pnl' | 'chat' | 'billboard' | 'share' | 'feed' | 'component' | 'ticker' | 'news' | 'bind' | 'dig-artifact' | 'dig-editor' | 'dig-abi' | 'dig-opcodes' | 'dig-run' | 'dig-debug' | 'dig-confirm' | 'dig-ls' | 'dig-fn' | 'arb' | 'feedback' | 'allowances'
   text?: string
   // Render plain text in the theme's warn color (failures, read errors).
   warn?: boolean
@@ -76,6 +76,8 @@ export type PinnedManifest = {
   widgetId?: string;
   pairOrSymbols?: string;
   refreshSec?: number;
+  /** Portfolio pin: extra watch addresses (#22). */
+  watchAddresses?: string[];
   // transient: the live React element for component-kind pins (price/swap/
   // pool/deploy/export). Not serialized — stripped before persist/export.
   component?: React.ReactNode;

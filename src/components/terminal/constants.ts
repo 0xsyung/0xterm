@@ -450,7 +450,7 @@ export const COMMON_TOKENS: Record<number, Record<string, { address: Address; de
     WETH: { address: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether' },
     USDC: { address: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', decimals: 6, symbol: 'USDC', name: 'USD Coin' },
     'USDC.E': { address: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', decimals: 6, symbol: 'USDC.E', name: 'Bridged USDC' },
-    cbETH: { address: '0x4b4327db1600B8b1440163f667e199ceF35385F5', decimals: 18, symbol: 'cbETH', name: 'Coinbase Wrapped Staked ETH (FX)' }
+    cbETH: { address: '0x4b4327db1600B8b1440163f667e199ceF35385F5', decimals: 18, symbol: 'fxcbETH', name: 'Coinbase Wrapped Staked ETH (FXERC20)' }
   },
 
   // Optimism
@@ -458,7 +458,7 @@ export const COMMON_TOKENS: Record<number, Record<string, { address: Address; de
     ETH: { address: NATIVE_TOKEN_ADDRESS, decimals: 18, symbol: 'ETH', name: 'Optimism Ether' },
     WETH: { address: '0x4200000000000000000000000000000000000006', decimals: 18, symbol: 'WETH', name: 'Wrapped Ether' },
     USDC: { address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', decimals: 6, symbol: 'USDC', name: 'USD Coin' },
-    cbETH: { address: '0xaddE742901a50bB9506b4c2114eE90bFA78aF2A9', decimals: 18, symbol: 'cbETH', name: 'Coinbase Wrapped Staked ETH' }
+    cbETH: { address: '0xaddb6a0412de1ba0f936dcaeb8aaa24578dcf3b2', decimals: 18, symbol: 'cbETH', name: 'Coinbase Wrapped Staked ETH' }
   },
 
   // Ethereum Sepolia

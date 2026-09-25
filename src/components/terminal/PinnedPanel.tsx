@@ -7,6 +7,7 @@
 import React from "react";
 import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
+import AllowancesWidget from "./widgets/AllowancesWidget";
 import PnlWidget from "./widgets/PnlWidget";
 import PriceCard from "./widgets/PriceCard";
 import DigArtifactWidget from "./widgets/DigArtifactWidget";
@@ -130,7 +131,20 @@ function renderPinned(p: PinnedManifest, theme: any) {
     case "balance":
       return <BalanceWidget {...payload} theme={theme} />;
     case "portfolio":
-      return <PortfolioWidget {...payload} theme={theme} />;
+      return (
+        <PortfolioWidget
+          holdings={payload.holdings || []}
+          snapshot={payload.snapshot}
+          snapshotLabel={payload.snapshotLabel}
+          snapshotTime={payload.snapshotTime}
+          groups={payload.groups}
+          hiddenCount={payload.hiddenCount}
+          theme={theme}
+          compact
+        />
+      );
+    case "allowances":
+      return <AllowancesWidget audit={payload.audit} theme={theme} pinned />;
     case "pnl":
       return (
         <PnlWidget

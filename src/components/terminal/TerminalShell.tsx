@@ -132,6 +132,13 @@ import {
   parseNewsCommand,
   type NewsSession
 } from "./news";
+import {
+  allowanceLogText,
+  buildRevokeTxs,
+  fetchAllowanceAudit,
+  type AllowanceRow
+} from "./allowances";
+import AllowanceRevokeWidget from "./widgets/AllowanceRevokeWidget";
 import { getPoolPriceRatio } from "./poolPrice";
 import { fetchBillboard, fetchChatThread } from "./pinLoaders";
 import {
@@ -160,8 +167,24 @@ import {
 import {
   fetchPortfolioHoldings as fetchPortfolioHoldingsImpl,
   fetchPortfolioSnapshot as fetchPortfolioSnapshotImpl,
+  fetchPortfolioView as fetchPortfolioViewImpl,
   fetchTokenBalanceData as fetchTokenBalanceDataImpl
 } from "./portfolio";
+import {
+  PF_USAGE,
+  applyPfAdd,
+  applyPfGroup,
+  applyPfHide,
+  applyPfRm,
+  applyPfUngroup,
+  applyPfUnhide,
+  emptyPortfolioPrefs,
+  parsePfCommand,
+  parseWatchAddressArg,
+  readPortfolioPrefs,
+  writePortfolioPrefs,
+  type PortfolioPrefs
+} from "./portfolioPrefs";
 import {
   resolveTokenDetails as resolveTokenDetailsImpl,
   resolveWithPreferred as resolveWithPreferredImpl,
@@ -668,6 +691,14 @@ export default function TerminalShell({
     chainId: number | null;
   } | null>(null);
 
+  // Last successful `allowances` audit, consumed by `allowances revoke`.
+  const lastAllowanceAudit = useRef<{
+    chainId: number | null;
+    chainName: string;
+    rows: AllowanceRow[];
+    failed: number;
+  } | null>(null);
+
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
   const { sendTransactionAsync } = useSendTransaction();
@@ -996,13 +1027,35 @@ export default function TerminalShell({
       base.title = "PORTFOLIO";
       base.chainId = activeChainId || undefined;
       base.filterType = p.filterType;
+      base.payload = {
+        ...p,
+        holdings: p.holdings,
+        hiddenCount: p.hiddenCount,
+        groups: p.groups,
+        snapshot: p.snapshot,
+        snapshotLabel: p.snapshotLabel,
+        snapshotTime: p.snapshotTime,
+        filterType: p.filterType,
+        watchAddresses: p.watchAddresses
+      };
+      base.watchAddresses = Array.isArray(p.watchAddresses)
+        ? p.watchAddresses
+        : undefined;
       if (address) {
         registerPinRefresh(log.id, async () => {
-          const holdings = await fetchPortfolioHoldings(
-            address as Address,
-            base.filterType
-          );
-          return { holdings };
+          // #22: refresh must reuse filter + watch addresses + hidden/group
+          // prefs — never the active prompt chain or a fresh watch list.
+          const view = await fetchPortfolioView(base.filterType);
+          return {
+            holdings: view.holdings,
+            hiddenCount: view.hiddenCount,
+            groups: readPf().groups,
+            snapshot: p.snapshot,
+            snapshotLabel: p.snapshotLabel,
+            snapshotTime: p.snapshotTime,
+            filterType: base.filterType,
+            watchAddresses: readPf().watchAddresses
+          };
         });
       }
     } else if (log.type === "chat") {
@@ -2016,6 +2069,19 @@ export default function TerminalShell({
 
   const fetchPortfolioSnapshot = (userAddress: Address) =>
     fetchPortfolioSnapshotImpl(userAddress, customTokens, { getClient });
+
+  const readPf = () => readPortfolioPrefs(window.localStorage, address);
+  const writePf = (prefs: PortfolioPrefs) => {
+    if (!address) return;
+    writePortfolioPrefs(window.localStorage, prefs, address);
+  };
+
+  // pf / portfolio view: self + watch addresses, hidden applied (#22).
+  const fetchPortfolioView = (filterType?: string) =>
+    fetchPortfolioViewImpl(address as Address, customTokens, filterType, {
+      getClient,
+      readPrefs: readPf
+    });
 
   const buildBalance = (args: string[]) =>
     buildBalanceLog(
@@ -4979,6 +5045,178 @@ export default function TerminalShell({
 
       return fail("unsupported", chainName);
     },
+    allowances: async (args) => {
+      // allowances [help] [<tokenSymbol>] | allowances revoke
+      const sub = (args[1] || "").toLowerCase();
+
+      if (sub === "help" || (!sub && args[1] === "-h")) {
+        return {
+          id: generateId(),
+          type: "text",
+          text:
+            "Usage: allowances | allowances <tokenSymbol> | allowances revoke | allowances help\n" +
+            "Audit positive ERC20 allowances granted to known DEX spenders on the active chain, then revoke them in one shot.\n" +
+            "No wallet → audit-only still works if a wallet is connected; revoke requires a connected wallet."
+        };
+      }
+
+      if (!isConnected || !address) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected."
+        };
+      }
+
+      if (sub === "revoke") {
+        const prevAudit = lastAllowanceAudit.current;
+        if (!prevAudit || prevAudit.chainId !== activeChainId) {
+          return {
+            id: generateId(),
+            type: "text",
+            warn: true,
+            text: "[!] allowances.no_audit — run 'allowances' first to audit the current chain."
+          };
+        }
+        const rows = prevAudit.rows;
+        if (rows.length === 0) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `No positive allowances on ${prevAudit.chainName}. Nothing to revoke.`
+          };
+        }
+        const txs = buildRevokeTxs(rows);
+        const chainObjRevoke = activeChainId
+          ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
+          : undefined;
+        if (!chainObjRevoke) {
+          return {
+            id: generateId(),
+            type: "text",
+            warn: true,
+            text: "[!] allowances.unsupported — unknown chain."
+          };
+        }
+        const revokeWidget = (
+          <AllowanceRevokeWidget
+            theme={theme}
+            chainName={chainObjRevoke.name}
+            txs={txs}
+            onCancel={() => {
+              setLogs((prev) =>
+                [
+                  ...prev,
+                  { id: generateId(), type: "text", text: "Revoke cancelled." } as LogEntry
+                ].slice(-MAX_LOGS)
+              );
+            }}
+            onConfirm={async () => {
+              const client = getClient(chainObjRevoke);
+              const failed: string[] = [];
+              let ok = 0;
+              for (const tx of txs) {
+                try {
+                  const hash = await writeContractAsync({
+                    chainId: chainObjRevoke.id,
+                    address: tx.tokenAddress,
+                    abi: erc20Abi,
+                    functionName: "approve",
+                    args: [tx.spenderAddress, 0n]
+                  });
+                  await client.waitForTransactionReceipt({ hash });
+                  ok++;
+                } catch (e: any) {
+                  failed.push(
+                    `${tx.tokenSymbol}·${tx.spenderLabel}: ${formatViemError(e)
+                      .replace(/^ERROR:\s*/, "")
+                      .slice(0, 120)}`
+                  );
+                }
+              }
+              // Re-audit to prove the now-empty state (same wallet/chain).
+              const reAudit = await fetchAllowanceAudit(
+                address as Address,
+                chainObjRevoke,
+                customTokens,
+                { getClient }
+              );
+              lastAllowanceAudit.current = {
+                chainId: chainObjRevoke.id,
+                chainName: reAudit.chainName,
+                rows: reAudit.rows,
+                failed: reAudit.failed
+              };
+              const lines = [`[✓] REVOKED ${ok}/${txs.length} approvals on ${reAudit.chainName}.`];
+              if (failed.length > 0)
+                lines.push(
+                  `[!] failed: ${failed.join(" | ")}`
+                );
+              if (reAudit.rows.length > 0)
+                lines.push(
+                  `[!] remaining: ${reAudit.rows.length} positive approval(s) — see re-audit above.`
+                );
+              setLogs((prev) =>
+                [
+                  ...prev,
+                  { id: generateId(), type: "text", text: lines.join("\n") } as LogEntry
+                ].slice(-MAX_LOGS)
+              );
+              setLogs((prev) =>
+                [
+                  ...prev,
+                  {
+                    id: generateId(),
+                    type: "text",
+                    text: allowanceLogText(reAudit)
+                  } as LogEntry
+                ].slice(-MAX_LOGS)
+              );
+            }}
+          />
+        );
+        return {
+          id: generateId(),
+          type: "component",
+          component: revokeWidget,
+          title: `REVOKE ${txs.length} approvals`
+        };
+      }
+
+      const filterSymbol = sub && sub !== "help" ? sub : undefined;
+      const chainObj = activeChainId
+        ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
+        : undefined;
+      if (!chainObj) {
+        return {
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text: "[!] allowances.unsupported — unknown chain."
+        };
+      }
+      const audit = await fetchAllowanceAudit(
+        address as Address,
+        chainObj,
+        customTokens,
+        { getClient },
+        filterSymbol
+      );
+      lastAllowanceAudit.current = {
+        chainId: chainObj.id,
+        chainName: audit.chainName,
+        rows: audit.rows,
+        failed: audit.failed
+      };
+      // Render the audit as a pinnable widget. Revoke is a follow-up command
+      // (`allowances revoke`), not part of this log — keep it simple.
+      return {
+        id: generateId(),
+        type: "allowances",
+        payload: { audit },
+        title: `ALLOWANCES (${audit.chainName})`
+      };
+    },
     calldata: async (args) => {
       // calldata [help | sim] <to> <fnSig> <arg0...>
       const sub = (args[1] || "").toLowerCase();
@@ -5082,15 +5320,111 @@ export default function TerminalShell({
           text: "Wallet not connected."
         };
 
-      const filterType = args[1]?.toLowerCase();
-      if (filterType && filterType !== "native" && filterType !== "erc20") {
+      const parsed = parsePfCommand(args);
+      if (parsed.op === "usage") {
+        return { id: generateId(), type: "text", text: PF_USAGE };
+      }
+      const prefs = readPf();
+
+      // Subcommands are per-verb (portfolio add works too, #22).
+      if (parsed.op === "add" || parsed.op === "rm") {
+        let target: Address | null = parseWatchAddressArg(parsed.raw);
+        if (!target && /\.eth$/i.test(parsed.raw.trim())) {
+          try {
+            const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+            if (chain) {
+              const resolved = await getClient(chain).getEnsAddress({
+                name: parsed.raw.trim()
+              });
+              if (resolved) target = resolved;
+            }
+          } catch {
+            target = null;
+          }
+        }
+        if (!target) {
+          return {
+            id: generateId(),
+            type: "text",
+            warn: true,
+            text: "Not an address or resolvable name."
+          };
+        }
+        const mut =
+          parsed.op === "add"
+            ? applyPfAdd(prefs, target, address as Address)
+            : applyPfRm(prefs, target);
+        if (mut.ok) writePf(mut.prefs);
         return {
           id: generateId(),
           type: "text",
-          text: "Invalid filter. Use 'portfolio', 'portfolio native', or 'portfolio erc20'."
+          warn: !mut.ok,
+          text: mut.text
+        };
+      }
+      if (parsed.op === "ls") {
+        const lines = [
+          "PORTFOLIO WATCH",
+          `  self  ${address as string}`,
+          ...(prefs.watchAddresses.length === 0
+            ? ["  (no watch addresses — pf add <address|ens>)"]
+            : prefs.watchAddresses.map((w) => `  watch ${w}`)),
+          ...(prefs.hidden.length === 0
+            ? []
+            : ["", `  hidden: ${prefs.hidden.join(", ")}`]),
+          ...(prefs.groups.length === 0
+            ? []
+            : [
+                "",
+                ...prefs.groups.map(
+                  (g) => `  group ${g.name}: ${g.keys.join(" ")}`
+                )
+              ])
+        ];
+        return { id: generateId(), type: "text", text: lines.join("\n") };
+      }
+      if (parsed.op === "hide") {
+        const mut = applyPfHide(prefs, parsed.raw, activeChainId);
+        if (mut.ok) writePf(mut.prefs);
+        return {
+          id: generateId(),
+          type: "text",
+          warn: !mut.ok,
+          text: mut.text
+        };
+      }
+      if (parsed.op === "unhide") {
+        const mut = applyPfUnhide(prefs, parsed.raw);
+        if (mut.ok) writePf(mut.prefs);
+        return {
+          id: generateId(),
+          type: "text",
+          warn: !mut.ok,
+          text: mut.text
+        };
+      }
+      if (parsed.op === "group") {
+        const mut = applyPfGroup(prefs, parsed.name, parsed.symbols);
+        if (mut.ok) writePf(mut.prefs);
+        return {
+          id: generateId(),
+          type: "text",
+          warn: !mut.ok,
+          text: mut.text
+        };
+      }
+      if (parsed.op === "ungroup") {
+        const mut = applyPfUngroup(prefs, parsed.name);
+        if (mut.ok) writePf(mut.prefs);
+        return {
+          id: generateId(),
+          type: "text",
+          warn: !mut.ok,
+          text: mut.text
         };
       }
 
+      const filterType = parsed.op === "portfolio" ? parsed.filter : undefined;
       const snapshot =
         (typeof window !== "undefined"
           ? JSON.parse(
@@ -5100,10 +5434,7 @@ export default function TerminalShell({
             ).portfolioSnapshot
           : null) || null;
 
-      const holdings = await fetchPortfolioHoldings(
-        address as Address,
-        filterType
-      );
+      const view = await fetchPortfolioView(filterType);
 
       // Build snapshot-holding map for the widget (from saved snapshot prices)
       const snapMap: Record<string, SnapshotHolding> = {};
@@ -5118,11 +5449,14 @@ export default function TerminalShell({
         id: generateId(),
         type: "portfolio",
         payload: {
-          holdings,
+          holdings: view.holdings,
+          hiddenCount: view.hiddenCount,
+          groups: prefs.groups,
           snapshot: snapMap,
           snapshotLabel: snapshot?.label,
           snapshotTime: snapshot?.timestamp,
-          filterType
+          filterType,
+          watchAddresses: prefs.watchAddresses
         }
       };
     },
@@ -6768,6 +7102,7 @@ export default function TerminalShell({
   commands.channels = commands.channel;
 
   commands.provideliq = commands.addliq;
+  commands.pf = commands.portfolio; // #22 — alias, same data model
   commands.bal = commands.balance;
   commands.liquidity = commands.pool;
   commands.reg = commands.register;

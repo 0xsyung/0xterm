@@ -196,3 +196,55 @@ describe("getTokenPriceUsd", () => {
     expect(res).toBeNull();
   });
 });
+
+describe("getTokenQuoteUsd", () => {
+  it("returns price + change24h from the same DexScreener pair (#22)", async () => {
+    const { getTokenQuoteUsd } = await import("./pricing");
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/tokens/v1/")) {
+        return jsonRes([
+          usdPair({
+            priceUsd: "0.9999",
+            baseToken: { symbol: "USDC", address: USDC },
+            quoteToken: { symbol: "USDT", address: "0xusdt" },
+            priceChange: { h24: 0.1 }
+          })
+        ]);
+      }
+      return jsonRes({ pairs: [] });
+    });
+    const res = await getTokenQuoteUsd(base, "USDC", USDC, false, mockClient(), fetchMock as unknown as typeof fetch);
+    expect(res.priceUsd).toBe(0.9999);
+    expect(res.change24h).toBe(0.1);
+  });
+
+  it("returns null change24h for on-chain fallback quotes", async () => {
+    const { getTokenQuoteUsd } = await import("./pricing");
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/tokens/v1/")) return jsonRes([]);
+      if (String(url).includes("/search")) {
+        return jsonRes({
+          pairs: [
+            usdPair({
+              priceUsd: "0.5",
+              baseToken: { symbol: "WETH", address: WETH },
+              quoteToken: { symbol: "USDC", address: USDC }
+            })
+          ]
+        });
+      }
+      return jsonRes({ pairs: [] });
+    });
+    const client = mockClient({
+      readContract: async (args: any) => {
+        if (args.functionName === "getPool") return "0xpool";
+        if (args.functionName === "token0") return USDC;
+        if (args.functionName === "slot0") return [2n ** 96n, 0, 0, 0, 0, 0, 0, 0];
+        throw new Error("unexpected");
+      }
+    });
+    const res = await getTokenQuoteUsd(base, "USDC", USDC, false, client, fetchMock as unknown as typeof fetch);
+    expect(res.priceUsd).toBe(0.5);
+    expect(res.change24h).toBeNull();
+  });
+});

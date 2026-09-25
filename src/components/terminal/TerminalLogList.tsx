@@ -12,6 +12,7 @@ import InitializePoolWidget from "./widgets/InitializePoolWidget";
 import AddLiquidityWidget from "./widgets/AddLiquidityWidget";
 import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
+import AllowancesWidget from "./widgets/AllowancesWidget";
 import PnlWidget from "./widgets/PnlWidget";
 import TickerWidget from "./widgets/TickerWidget";
 import NewsWidget from "./widgets/NewsWidget";
@@ -170,7 +171,28 @@ function renderLog(
   if (log.type === "balance")
     return <BalanceWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
   if (log.type === "portfolio")
-    return <PortfolioWidget {...log.payload} theme={theme} onPin={() => onPin(log)} pinned={isPinned} />;
+    return (
+      <PortfolioWidget
+        holdings={log.payload?.holdings || []}
+        snapshot={log.payload?.snapshot}
+        snapshotLabel={log.payload?.snapshotLabel}
+        snapshotTime={log.payload?.snapshotTime}
+        groups={log.payload?.groups}
+        hiddenCount={log.payload?.hiddenCount}
+        theme={theme}
+        onPin={() => onPin(log)}
+        pinned={isPinned}
+      />
+    );
+  if (log.type === "allowances")
+    return (
+      <AllowancesWidget
+        audit={log.payload?.audit}
+        theme={theme}
+        onPin={() => onPin(log)}
+        pinned={isPinned}
+      />
+    );
   if (log.type === "pnl")
     return (
       <PnlWidget
