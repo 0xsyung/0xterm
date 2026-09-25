@@ -78,7 +78,9 @@ import {
   BILLBOARD_CONTRACT,
   billboardAbi,
   SHARE_CONTRACT,
-  shareAbi
+  shareAbi,
+  VAULT_REGISTRY,
+  erc4626Abi
 } from "./constants";
 import { formatViemError } from "../../lib/viemError";
 import {
@@ -139,6 +141,9 @@ import {
   type AllowanceRow
 } from "./allowances";
 import AllowanceRevokeWidget from "./widgets/AllowanceRevokeWidget";
+import VaultApproveWidget from "./widgets/VaultApproveWidget";
+import VaultDepositWidget from "./widgets/VaultDepositWidget";
+import VaultWidget from "./widgets/VaultWidget";
 import { getPoolPriceRatio } from "./poolPrice";
 import { fetchBillboard, fetchChatThread } from "./pinLoaders";
 import {
@@ -190,6 +195,19 @@ import {
   resolveWithPreferred as resolveWithPreferredImpl,
   resolveWithPreferredDecimals as resolveWithPreferredDecimalsImpl
 } from "./resolveToken";
+import {
+  VAULT_USAGE,
+  amountWeiFor,
+  encodeVaultTx,
+  fetchMorphoApyBps,
+  fetchVaultAsset,
+  fetchVaultShow,
+  lookupVault,
+  previewForVerb,
+  vaultAmountForMax,
+  type VaultShowData,
+  type VaultVerb
+} from "./vault";
 import {
   ARB_EXECUTOR,
   ARB_ERROR
@@ -5215,6 +5233,286 @@ export default function TerminalShell({
         type: "allowances",
         payload: { audit },
         title: `ALLOWANCES (${audit.chainName})`
+      };
+    },
+    vault: async (args) => {
+      // vault list | vault show <addr|id|name> | vault deposit/mint/withdraw/
+      // redeem <vault> <amount|max> | vault approve <vault> <amount|0> | help
+      const sub = (args[1] || "").toLowerCase();
+      const vaultFail = (text: string) =>
+        ({
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text
+        }) as LogEntry;
+
+      if (sub === "help" || sub === "-h" || !sub) {
+        return {
+          id: generateId(),
+          type: "text",
+          text:
+            VAULT_USAGE +
+            "\n" +
+            "ERC-4626 vaults: deposit/mint exact in, withdraw/redeem exact out.\n" +
+            "Preview = min-out (rounding favors the vault; convertTo* ignores fees).\n" +
+            "Share-inflation: an empty/thinly-shared vault can be donation-attacked so the next depositor rounds to 0 shares. Review the implementation before confirming; unknown addresses are unverified."
+        };
+      }
+
+      if (!isConnected || !address) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Wallet not connected."
+        };
+      }
+      if (!activeChainId) {
+        return {
+          id: generateId(),
+          type: "text",
+          text: "Select network first."
+        };
+      }
+      const chainObj = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+      if (!chainObj) {
+        return vaultFail("[!] vault.unsupported — unknown chain.");
+      }
+      const client = getClient(chainObj);
+
+      if (sub === "list") {
+        const entries = VAULT_REGISTRY[activeChainId] || [];
+        if (entries.length === 0) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: `No curated vaults on ${chainObj.name}. Pass a 4626 address to 'vault show'.`
+          };
+        }
+        // asset() is read on-chain per entry (assetHint is never the source of
+        // truth); failures degrade to "—" so a bad entry can't block the list.
+        const rows = await Promise.all(
+          entries.map(async (e) => {
+            const asset = await fetchVaultAsset(client, e.address);
+            return {
+              id: e.id,
+              name: e.name,
+              protocol: e.protocol,
+              address: e.address,
+              assetSymbol: asset ? asset.symbol : "—"
+            };
+          })
+        );
+        const listId = generateId();
+        const listLog: LogEntry = {
+          id: listId,
+          type: "vault",
+          title: `VAULT REGISTRY (${chainObj.name})`,
+          payload: {
+            mode: "list",
+            chainId: chainObj.id,
+            listRows: rows
+          }
+        };
+        const listWidget = (
+          <VaultWidget
+            mode="list"
+            chain={chainObj}
+            listRows={rows}
+            theme={theme}
+            onPin={() => onPin(listLog)}
+          />
+        );
+        return { ...listLog, component: listWidget };
+      }
+
+      const vaultArg = args[2];
+      if (sub === "show" && !vaultArg) {
+        return vaultFail("Usage: vault show <addr|id|name>");
+      }
+      if (sub === "show") {
+        const lookup = lookupVault(activeChainId, vaultArg);
+        if (!lookup.ok) {
+          return vaultFail("Usage: vault show <addr|id|name> — not found.");
+        }
+        const show = await fetchVaultShow(client, chainObj, lookup.entry.address, address as Address, {
+          apy: fetchMorphoApyBps
+        });
+        const showId = generateId();
+        const showLog: LogEntry = {
+          id: showId,
+          type: "vault",
+          title: `VAULT ${show.vault.slice(0, 6)}…${show.vault.slice(-4)}`,
+          payload: {
+            mode: "show",
+            vault: show.vault,
+            chainId: chainObj.id,
+            known: lookup.known,
+            entryName: lookup.known ? lookup.entry.name : undefined,
+            show
+          }
+        };
+        const showWidget = (
+          <VaultWidget
+            mode="show"
+            chain={chainObj}
+            show={show}
+            known={lookup.known}
+            entryName={lookup.known ? lookup.entry.name : undefined}
+            theme={theme}
+            onPin={() => onPin(showLog)}
+          />
+        );
+        return { ...showLog, component: showWidget };
+      }
+
+      // Mutative verbs: deposit/mint/withdraw/redeem/approve
+      const VERBS = ["deposit", "mint", "withdraw", "redeem"] as const;
+      const verb = VERBS.find((v) => v === sub);
+      const amountArg = args[3];
+      if ((verb || sub === "approve") && !vaultArg) {
+        return vaultFail(
+          `Usage: vault ${sub} <vault> <amount|max>` +
+            (sub === "approve" ? " | vault approve <vault> 0" : "")
+        );
+      }
+      if (sub === "approve") {
+        const lookup = lookupVault(activeChainId, vaultArg);
+        if (!lookup.ok) return vaultFail("Usage: vault approve <vault> <amount|0> — not found.");
+        const asset = await fetchVaultAsset(client, lookup.entry.address);
+        if (!asset)
+          return vaultFail("[!] vault.not_4626 — asset() reverted. Not a usable ERC-4626.");
+        const approveRaw = args[3];
+        if (!approveRaw) return vaultFail("Usage: vault approve <vault> <amount|0>");
+        const approveWei = amountWeiFor(approveRaw === "0" ? "0" : approveRaw, asset.decimals);
+        if (approveWei === null)
+          return vaultFail(`[!] vault.bad_amount — "${approveRaw}" is not a number.`);
+        const approveWidget = (
+          <VaultApproveWidget
+            theme={theme}
+            targetChain={chainObj}
+            vault={lookup.entry.address}
+            vaultName={lookup.entry.name}
+            asset={asset}
+            amountWei={approveWei}
+            isRevoke={approveWei === 0n}
+          />
+        );
+        return {
+          id: generateId(),
+          type: "vault",
+          title: `VAULT APPROVE ${asset.symbol}`,
+          payload: { action: "approve", vault: lookup.entry.address, asset: asset.symbol }
+        };
+      }
+      if (verb && !amountArg) {
+        return vaultFail(`Usage: vault ${verb} <vault> <amount|max>`);
+      }
+
+      // Narrow `verb` past the guard for the mutative path (deposit/mint/
+      // withdraw/redeem). `approve` returns above.
+      const verbN = verb as VaultVerb;
+
+      const lookup = lookupVault(activeChainId, vaultArg);
+      if (!lookup.ok)
+        return vaultFail(`Usage: vault ${sub} <vault> <amount|max> — not found.`);
+      const asset = await fetchVaultAsset(client, lookup.entry.address);
+      if (!asset)
+        return vaultFail("[!] vault.not_4626 — asset() reverted. Not a usable ERC-4626.");
+
+      // Share-inflation guard: refuse deposit/mint on zero-supply vaults.
+      if (verbN === "deposit" || verbN === "mint") {
+        const supply = (await client.readContract({
+          address: lookup.entry.address,
+          abi: erc4626Abi,
+          functionName: "totalSupply"
+        })) as bigint;
+        if (supply === 0n) {
+          return vaultFail("[!] vault.empty_supply — totalSupply == 0. Refusing deposit (share-inflation risk).");
+        }
+      }
+
+      const isMax = (amountArg || "").toLowerCase() === "max";
+      const show = await fetchVaultShow(client, chainObj, lookup.entry.address, address as Address, {
+        apy: fetchMorphoApyBps
+      });
+      const decimalsForVerb = verbN === "deposit" || verbN === "withdraw" ? asset.decimals : 18;
+      let amountWei: bigint;
+      if (isMax) {
+        const maxVal = vaultAmountForMax(verbN, show);
+        if (maxVal === null)
+          return vaultFail(`[!] vault.max — max${verbN[0].toUpperCase()}${verbN.slice(1)} unavailable.`);
+        if (maxVal === 0n)
+          return vaultFail(`[!] vault.paused — deposits/withdrawals disabled (max* = 0).`);
+        amountWei = maxVal;
+      } else {
+        const parsed = amountWeiFor(amountArg || "", decimalsForVerb);
+        if (parsed === null)
+          return vaultFail(`[!] vault.bad_amount — "${amountArg}" is not a number.`);
+        amountWei = parsed;
+      }
+
+      const preview = await previewForVerb(client, verbN, lookup.entry.address, amountWei);
+      if (preview === null)
+        return vaultFail("[!] vault.not_4626 — preview reverted. Not a usable ERC-4626.");
+
+      const { to, data, value } = encodeVaultTx(verbN, lookup.entry.address, amountWei, address as Address);
+
+      // eth_call dry-run of the verb before the confirm widget (mirrors arb
+      // run). deposit/mint need allowance(asset, vault) ≥ amount; without it the
+      // vault's transferFrom reverts and would block first-time users from ever
+      // reaching the widget's approve step — so skip the dry-run there (the
+      // widget gates on approve and re-sims at send).
+      const simOutcome = await (async () => {
+        if (verbN === "deposit" || verbN === "mint") {
+          const allowance = (await client.readContract({
+            address: asset.address,
+            abi: erc20Abi,
+            functionName: "allowance",
+            args: [address as Address, lookup.entry.address]
+          })) as bigint;
+          if (allowance < amountWei) return null; // widget will approve first
+        }
+        try {
+          await client.call({
+            to,
+            data,
+            value: BigInt(value || "0x0"),
+            account: address as Address
+          });
+          return null;
+        } catch (e: unknown) {
+          return e;
+        }
+      })();
+      if (simOutcome) {
+        const msg = (simOutcome as { shortMessage?: unknown; message?: unknown });
+        const reason = String(msg.shortMessage || msg.message || simOutcome);
+        return vaultFail(`[!] vault sim failed — ${reason}. Run 'vault show' to re-check the vault.`);
+      }
+
+      const widget = (
+        <VaultDepositWidget
+          theme={theme}
+          targetChain={chainObj}
+          userAddress={address as Address}
+          vault={lookup.entry.address}
+          vaultName={lookup.entry.name}
+          verb={verbN}
+          asset={asset}
+          amountWei={amountWei}
+          amountHuman={isMax ? `max (${formatUnits(amountWei, decimalsForVerb)})` : amountArg || ""}
+          previewWei={preview}
+          known={lookup.known}
+          maxDriftBps={50}
+        />
+      );
+
+      return {
+        id: generateId(),
+        type: "component",
+        title: `VAULT ${verbN.toUpperCase()} ${asset.symbol}`,
+        component: widget
       };
     },
     calldata: async (args) => {

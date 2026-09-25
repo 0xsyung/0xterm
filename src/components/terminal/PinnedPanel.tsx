@@ -8,6 +8,7 @@ import React from "react";
 import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
 import AllowancesWidget from "./widgets/AllowancesWidget";
+import VaultWidget from "./widgets/VaultWidget";
 import PnlWidget from "./widgets/PnlWidget";
 import PriceCard from "./widgets/PriceCard";
 import DigArtifactWidget from "./widgets/DigArtifactWidget";
@@ -16,6 +17,7 @@ import DigDebugWidget from "./widgets/DigDebugWidget";
 import TickerWidget from "./widgets/TickerWidget";
 import NewsWidget from "./widgets/NewsWidget";
 import FeedbackWidget, { type FeedbackSubmitResult } from "./widgets/FeedbackWidget";
+import { SUPPORTED_CHAINS } from "./constants";
 import type { PinnedManifest, ThemeConfig } from "./types";
 
 const noopSubmit = async (): Promise<FeedbackSubmitResult> => ({ ok: false });
@@ -145,6 +147,22 @@ function renderPinned(p: PinnedManifest, theme: any) {
       );
     case "allowances":
       return <AllowancesWidget audit={payload.audit} theme={theme} pinned />;
+    case "vault":
+      return (
+        <VaultWidget
+          mode={payload.mode}
+          chain={
+            SUPPORTED_CHAINS.find((c) => c.id === payload.chainId) ||
+            SUPPORTED_CHAINS[0]
+          }
+          show={payload.show}
+          known={payload.known}
+          entryName={payload.entryName}
+          listRows={payload.listRows}
+          theme={theme}
+          pinned
+        />
+      );
     case "pnl":
       return (
         <PnlWidget

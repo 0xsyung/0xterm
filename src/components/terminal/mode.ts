@@ -638,6 +638,26 @@ export const HELP_ROWS: HelpRow[] = [
       "Audit positive token approvals granted to known DEX spenders, then revoke them all in one shot",
     modes: ["invest"]
   },
+  {
+    command: "vault list",
+    description: "Known ERC-4626 vaults on this chain (registry)",
+    modes: ["invest"]
+  },
+  {
+    command: "vault show <addr|name>",
+    description: "asset(), TVL, your shares, deposit/redeem preview",
+    modes: ["invest"]
+  },
+  {
+    command: "vault deposit/withdraw <vault> <amt|max>",
+    description: "Approve + 4626 deposit/redeem (wallet confirms each step)",
+    modes: ["invest"]
+  },
+  {
+    command: "vault approve <vault> <amt|0>",
+    description: "Exact underlying allowance (0 revokes)",
+    modes: ["invest"]
+  },
 
   // dig (workshop — mode id dev)
   {

@@ -13,6 +13,7 @@ import AddLiquidityWidget from "./widgets/AddLiquidityWidget";
 import BalanceWidget from "./widgets/BalanceWidget";
 import PortfolioWidget from "./widgets/PortfolioWidget";
 import AllowancesWidget from "./widgets/AllowancesWidget";
+import VaultWidget from "./widgets/VaultWidget";
 import PnlWidget from "./widgets/PnlWidget";
 import TickerWidget from "./widgets/TickerWidget";
 import NewsWidget from "./widgets/NewsWidget";
@@ -188,6 +189,20 @@ function renderLog(
     return (
       <AllowancesWidget
         audit={log.payload?.audit}
+        theme={theme}
+        onPin={() => onPin(log)}
+        pinned={isPinned}
+      />
+    );
+  if (log.type === "vault")
+    return (
+      <VaultWidget
+        mode={log.payload?.mode}
+        chain={SUPPORTED_CHAINS.find((c) => c.id === log.payload?.chainId) || SUPPORTED_CHAINS[0]}
+        show={log.payload?.show}
+        known={log.payload?.known}
+        entryName={log.payload?.entryName}
+        listRows={log.payload?.listRows}
         theme={theme}
         onPin={() => onPin(log)}
         pinned={isPinned}

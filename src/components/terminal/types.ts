@@ -19,7 +19,7 @@ export type ThemeMode =
 
 export type LogEntry = {
   id: string
-  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'pnl' | 'chat' | 'billboard' | 'share' | 'feed' | 'component' | 'ticker' | 'news' | 'bind' | 'dig-artifact' | 'dig-editor' | 'dig-abi' | 'dig-opcodes' | 'dig-run' | 'dig-debug' | 'dig-confirm' | 'dig-ls' | 'dig-fn' | 'arb' | 'feedback' | 'allowances'
+  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'pnl' | 'chat' | 'billboard' | 'share' | 'feed' | 'component' | 'ticker' | 'news' | 'bind' | 'dig-artifact' | 'dig-editor' | 'dig-abi' | 'dig-opcodes' | 'dig-run' | 'dig-debug' | 'dig-confirm' | 'dig-ls' | 'dig-fn' | 'arb' | 'feedback' | 'allowances' | 'vault'
   text?: string
   // Render plain text in the theme's warn color (failures, read errors).
   warn?: boolean
@@ -40,6 +40,17 @@ export type DexProtocol = {
   factory: Address
   positionManager?: Address
   type: 'V2' | 'V3'
+}
+
+// Curated ERC-4626 allow-list for `vault list` (#21). Not a complete vault
+// directory — users may still pass a raw address to `vault show`. `asset()` is
+// always read on-chain; `assetHint` only speeds list rendering before the read.
+export type VaultEntry = {
+  id: string
+  name: string
+  address: Address
+  protocol: 'morpho' | 'yearn' | 'erc4626'
+  assetHint?: Address
 }
 
 // User-registered token. Stored as a flat list per chain so multiple tokens can
