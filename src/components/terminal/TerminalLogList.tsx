@@ -28,8 +28,14 @@ import DigOpcodesWidget from "./widgets/DigOpcodesWidget";
 import DigRunWidget from "./widgets/DigRunWidget";
 import DigDebugWidget from "./widgets/DigDebugWidget";
 import DigConfirmWidget from "./widgets/DigConfirmWidget";
+import FeedbackWidget, {
+  type FeedbackDraft,
+  type FeedbackSubmitResult
+} from "./widgets/FeedbackWidget";
 import type { LogEntry, DexProtocol } from "./types";
 import { DEFAULT_MODE, type TerminalMode } from "./mode";
+
+const noopSubmit = async (): Promise<FeedbackSubmitResult> => ({ ok: false });
 
 export default function TerminalLogList({
   logs,
@@ -44,7 +50,8 @@ export default function TerminalLogList({
   hasActiveChannel = false,
   narrow = false,
   onFocusPrompt,
-  onPnlRefresh
+  onPnlRefresh,
+  onSubmitFeedback
 }: {
   logs: LogEntry[];
   theme: any;
@@ -59,6 +66,9 @@ export default function TerminalLogList({
   narrow?: boolean;
   onFocusPrompt?: () => void;
   onPnlRefresh?: (log: LogEntry) => Promise<void>;
+  onSubmitFeedback?: (
+    draft: FeedbackDraft
+  ) => Promise<FeedbackSubmitResult> | FeedbackSubmitResult;
 }) {
   const explorerUrl =
     SUPPORTED_CHAINS.find((c) => c.id === activeChainId)?.blockExplorers
@@ -84,7 +94,8 @@ export default function TerminalLogList({
                 explorerUrl,
                 narrow,
                 onFocusPrompt,
-                onPnlRefresh
+                onPnlRefresh,
+                onSubmitFeedback
               }
             )}
           </div>
@@ -110,6 +121,9 @@ function renderLog(
     narrow?: boolean;
     onFocusPrompt?: () => void;
     onPnlRefresh?: (log: LogEntry) => Promise<void>;
+    onSubmitFeedback?: (
+      draft: FeedbackDraft
+    ) => Promise<FeedbackSubmitResult> | FeedbackSubmitResult;
   }
 ) {
   if (log.type === "input") {
@@ -316,6 +330,25 @@ function renderLog(
   }
   if (log.type === "dig-confirm") {
     return log.component || null;
+  }
+  if (log.type === "feedback") {
+    const p = log.payload || {};
+    return (
+      <FeedbackWidget
+        theme={theme}
+        signer={p.signer ?? null}
+        themeName={p.themeName ?? null}
+        chainLabel={p.chainLabel ?? null}
+        noAddress={!!p.noAddress}
+        initialText={p.initialText}
+        initialGate={!!p.initialGate}
+        onSubmit={actions?.onSubmitFeedback || noopSubmit}
+        onLogText={(text, warn) => actions?.onLogText?.(text, warn)}
+        onCancel={() => actions?.onLogText?.("feedback cancelled.", true)}
+        onPin={() => onPin(log)}
+        pinned={isPinned}
+      />
+    );
   }
   if (log.type === "dig-ls") {
     const rows = log.payload?.rows || [];

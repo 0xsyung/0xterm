@@ -14,7 +14,10 @@ import DigRunWidget from "./widgets/DigRunWidget";
 import DigDebugWidget from "./widgets/DigDebugWidget";
 import TickerWidget from "./widgets/TickerWidget";
 import NewsWidget from "./widgets/NewsWidget";
+import FeedbackWidget, { type FeedbackSubmitResult } from "./widgets/FeedbackWidget";
 import type { PinnedManifest, ThemeConfig } from "./types";
+
+const noopSubmit = async (): Promise<FeedbackSubmitResult> => ({ ok: false });
 
 const REFRESH_INTERVAL = 60;
 
@@ -197,6 +200,20 @@ function renderPinned(p: PinnedManifest, theme: any) {
         <DigDebugWidget panel={payload.panel} theme={theme} compact pinned />
       ) : (
         <div className={`${theme.text}/50`}>debug unavailable</div>
+      );
+    case "feedback":
+      return (
+        <FeedbackWidget
+          theme={theme}
+          signer={payload.signer ?? null}
+          themeName={payload.themeName ?? null}
+          chainLabel={payload.chainLabel ?? null}
+          noAddress={!!payload.noAddress}
+          initialText={payload.initialText}
+          initialGate={!!payload.initialGate}
+          onSubmit={noopSubmit}
+          pinned
+        />
       );
     default:
       return <div className={`${theme.text}/90 whitespace-pre-wrap`}>{payload.text}</div>;

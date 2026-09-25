@@ -511,6 +511,13 @@ export const CHAT_PRESETS: Record<number, ChatPreset> = {
   },
 }
 
+// Feedback (#19) is an encrypted chat message to a fixed operator address on
+// a fixed channel — never a GitHub issue, so no backend/token and no public
+// write. Only Sepolia has a wired channel today.
+export const FEEDBACK_CHAIN_ID = 11155111
+export const FEEDBACK_ADDRESS: Address =
+  '0x333c3d8F66bD0f83022138Ed81Fc74308bF380F3'
+
 /** Shared Chat logic per chain (ChatFactory.implementation). Fill after DeployChatFactory. */
 export const CHAT_IMPLEMENTATION: Record<number, Address> = {
   11155111: "0xAbf5351054f1B1F555843A53bf925e8442b4AAaC",

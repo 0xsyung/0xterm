@@ -19,7 +19,7 @@ export type ThemeMode =
 
 export type LogEntry = {
   id: string
-  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'pnl' | 'chat' | 'billboard' | 'share' | 'feed' | 'component' | 'ticker' | 'news' | 'bind' | 'dig-artifact' | 'dig-editor' | 'dig-abi' | 'dig-opcodes' | 'dig-run' | 'dig-debug' | 'dig-confirm' | 'dig-ls' | 'dig-fn' | 'arb'
+  type: 'input' | 'text' | 'help' | 'dexes' | 'networks' | 'createpool' | 'initialize' | 'getpool' | 'addliq' | 'swap' | 'balance' | 'pool' | 'portfolio' | 'pnl' | 'chat' | 'billboard' | 'share' | 'feed' | 'component' | 'ticker' | 'news' | 'bind' | 'dig-artifact' | 'dig-editor' | 'dig-abi' | 'dig-opcodes' | 'dig-run' | 'dig-debug' | 'dig-confirm' | 'dig-ls' | 'dig-fn' | 'arb' | 'feedback'
   text?: string
   // Render plain text in the theme's warn color (failures, read errors).
   warn?: boolean

@@ -66,6 +66,8 @@ import {
   resolveChain,
   IMPLEMENTATION_ADDRESSES,
   DEXSCREENER_CHAIN,
+  FEEDBACK_ADDRESS,
+  FEEDBACK_CHAIN_ID,
   CHAT_PRESETS,
   CHAT_FACTORY,
   CHAT_IMPLEMENTATION,
@@ -243,6 +245,16 @@ import type {
 } from "./types";
 import PortfolioWidget, { type SnapshotHolding } from "./widgets/PortfolioWidget";
 import { trackEvent } from "../../lib/analytics";
+import { redactSecrets, requireFeedbackConfirm } from "../../lib/redactSecrets";
+import {
+  FB_EMAIL,
+  FB_USAGE,
+  parseFeedbackArgs
+} from "../../lib/feedback";
+import type {
+  FeedbackDraft,
+  FeedbackSubmitResult
+} from "./widgets/FeedbackWidget";
 import DeployWidget from "./widgets/DeployWidget";
 import DigEditorWidget from "./widgets/DigEditorWidget";
 import DigArtifactWidget from "./widgets/DigArtifactWidget";
@@ -1010,6 +1022,8 @@ export default function TerminalShell({
           })
         );
       }
+    } else if (log.type === "feedback") {
+      base.title = "FEEDBACK";
     } else if (
       log.type === "component" &&
       log.componentData?.kind === "price"
@@ -1436,6 +1450,147 @@ export default function TerminalShell({
     if (chainId == null) return { error: "[!] Set a network first (network <name|id>)." };
     if (ch.chainId !== chainId) return { error: wrongChainMsg(ch) };
     return { contract: ch.address };
+  };
+
+  /** Feedback (#19) always sends on the fixed Sepolia channel, regardless of
+   *  the user's active channel — so the operator's inbox is a single place. */
+  const requireFeedbackChannelOnChain = (
+    chainId: number | null | undefined
+  ): { contract: string } | { error: string } => {
+    if (chainId == null) return { error: "[!] Set a network first (network <name|id>)." };
+    if (chainId !== FEEDBACK_CHAIN_ID)
+      return { error: `[!] Feedback sends on Sepolia. Type network Sepolia first.` };
+    const preset = CHAT_PRESETS[FEEDBACK_CHAIN_ID];
+    if (!preset?.address)
+      return { error: "[!] No feedback channel on Sepolia yet." };
+    return { contract: preset.address };
+  };
+
+  /** Encrypt and send a feedback message to the fixed operator address on the
+   *  fixed Sepolia channel. Mirrors the `chat` send path (key registration
+   *  with proof-of-possession, peer-key lookup, AES encrypt, sendMessage tx). */
+  const sendFeedbackChat = async (message: string): Promise<LogEntry[]> => {
+    if (!isConnected || !address)
+      return [
+        {
+          id: generateId(),
+          type: "text",
+          text: "[!] Connect a wallet to send feedback."
+        }
+      ];
+    const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+    if (!chain)
+      return [
+        {
+          id: generateId(),
+          type: "text",
+          text: "[!] Set a network first (network <name|id>)."
+        }
+      ];
+    const req = requireFeedbackChannelOnChain(chain.id);
+    if ("error" in req)
+      return [{ id: generateId(), type: "text", text: req.error }];
+    const contract = req.contract;
+
+    try {
+      const myPair = await getChatKeyPair();
+      const client = getClient(chain);
+      const recipient = FEEDBACK_ADDRESS;
+
+      // register my own key so the operator can reply via address lookup —
+      // only once; subsequent feedbacks skip the write (key unchanged).
+      const myRegistered = (await client.readContract({
+        address: contract as Address,
+        abi: chatAbi,
+        functionName: "getPublicKey",
+        args: [address as Address]
+      })) as `0x${string}`;
+      if (!myRegistered || myRegistered === "0x" || myRegistered === "0x0") {
+        const popDigest = keccak256(
+          encodePacked(
+            ["uint256", "address", "bytes"],
+            [BigInt(chain.id), getAddress(address) as Address, bytesToHex(myPair.publicKey)]
+          )
+        );
+        const popSig = await signMessageAsync({ message: { raw: popDigest } });
+        const { v, r, s } = splitSignature(popSig);
+        await writeContractAsync({
+          address: contract as Address,
+          abi: chatAbi,
+          functionName: "setPublicKey",
+          args: [bytesToHex(myPair.publicKey), v, r, s]
+        });
+      }
+
+      const peerKey = (await client.readContract({
+        address: contract as Address,
+        abi: chatAbi,
+        functionName: "getPublicKey",
+        args: [recipient]
+      })) as `0x${string}`;
+      if (!peerKey || peerKey === "0x" || peerKey === "0x0")
+        return [
+          {
+            id: generateId(),
+            type: "text",
+            text: `[!] ${recipient} hasn't registered a chat key yet. Ask them to send their first chat message, then retry.`
+          }
+        ];
+
+      const aesKey = await deriveAesKey(myPair.privateKey, hexToBytes(peerKey), myPair.publicKey);
+      const { iv, ciphertext } = await encryptMessage(aesKey, message);
+
+      const prevPeerKey = rememberPeerKey(recipient, peerKey);
+      const keyChanged = !!prevPeerKey && prevPeerKey.toLowerCase() !== peerKey.toLowerCase();
+      const fee = await client.readContract({
+        address: contract as Address,
+        abi: chatAbi,
+        functionName: "fee"
+      });
+
+      const hash = await writeContractAsync({
+        address: contract as Address,
+        abi: chatAbi,
+        functionName: "sendMessage",
+        args: [
+          recipient,
+          bytesToHex(iv),
+          bytesToHex(myPair.publicKey),
+          bytesToHex(ciphertext)
+        ],
+        value: fee as bigint
+      });
+
+      const replies: LogEntry[] = [
+        {
+          id: generateId(),
+          type: "text",
+          text: `[✓] Feedback sent to ${recipient} (fee ${fee})`
+        },
+        {
+          id: generateId(),
+          type: "text",
+          text: `   tx: ${hash}`
+        }
+      ];
+      if (keyChanged) {
+        replies.unshift({
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text: `⚠ ${recipient}'s chat key changed since your last contact (KEY ${chatKeyFingerprint(hexToBytes(peerKey))}). Verify this is the same person before sharing anything sensitive.`
+        });
+      }
+      return replies;
+    } catch (err: any) {
+      return [
+        {
+          id: generateId(),
+          type: "text",
+          text: `[!] feedback failed: ${err.message || err}`
+        }
+      ];
+    }
   };
 
   // ENS resolves on the ACTIVE chain. Mainnet uses viem's canonical v1
@@ -2415,6 +2570,45 @@ export default function TerminalShell({
     rawInput: string
   ) => Promise<LogEntry | LogEntry[] | null> | LogEntry | LogEntry[] | null;
 
+  // Compose a feedback body from a widget draft: redacted text + optional
+  // email/context (mirrors the one-shot command's envelope).
+  const feedbackBodyFromDraft = (draft: FeedbackDraft): string => {
+    const lines = [draft.text];
+    if (draft.includeAddress) {
+      lines.push("", "---", `from: ${address ? shortAddress(address) : "—"}`);
+    }
+    const chainObj = activeChainId
+      ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
+      : undefined;
+    if (chainObj) lines.push(`chain: ${chainObj.name} (${chainObj.id})`);
+    lines.push(`theme: ${resolveThemeKey(currentThemeKey)}`);
+    if (draft.email) lines.push(`contact: ${draft.email}`);
+    return lines.join("\n");
+  };
+
+  // Send a feedback message via the fixed Sepolia chat channel. Returns the
+  // send result; on failure surfaces a text log.
+  const submitFeedback = async (
+    draft: FeedbackDraft
+  ): Promise<FeedbackSubmitResult> => {
+    if (!isConnected || !address) {
+      setLogs((prev) =>
+        [
+          ...prev,
+          {
+            id: generateId(),
+            type: "text",
+            text: "[!] Connect a wallet to send feedback."
+          } as LogEntry
+        ].slice(-MAX_LOGS)
+      );
+      return { ok: false };
+    }
+    const replies = await sendFeedbackChat(feedbackBodyFromDraft(draft));
+    setLogs((prev) => [...prev, ...replies].slice(-MAX_LOGS));
+    return { ok: true };
+  };
+
   const commands: Record<string, CommandHandler> = {
     clear: () => {
       setLogs([]);
@@ -3003,6 +3197,65 @@ export default function TerminalShell({
           return null;
         }
       }
+    },
+    feedback: async (args) => {
+      const parsed = parseFeedbackArgs(args);
+      if ("error" in parsed) {
+        const msg = parsed.error === "FB_EMAIL" ? FB_EMAIL : FB_USAGE;
+        return { id: generateId(), type: "text", warn: true, text: msg } as LogEntry;
+      }
+
+      const themeName = resolveThemeKey(currentThemeKey);
+      const chainObj = activeChainId
+        ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
+        : undefined;
+      const chainLabel = chainObj
+        ? `${chainObj.name} (${chainObj.id})${chainObj.testnet ? " testnet" : ""}`
+        : null;
+
+      const widgetBase = {
+        signer: address ? shortAddress(address) : null,
+        themeName,
+        chainLabel,
+        noAddress: parsed.noAddress
+      };
+
+      // Bare `feedback` — open the compose widget; sending happens via the
+      // shell's submitFeedback (chat-send to the fixed address).
+      if (!parsed.text) {
+        return {
+          id: generateId(),
+          type: "feedback",
+          title: "FEEDBACK",
+          payload: widgetBase
+        } as LogEntry;
+      }
+
+      const redacted = redactSecrets(parsed.text);
+
+      // One-shot: send immediately; flagged text goes through the widget's
+      // secret gate first.
+      if (redacted.hits.length > 0 && requireFeedbackConfirm(redacted.hits)) {
+        return {
+          id: generateId(),
+          type: "feedback",
+          title: "FEEDBACK",
+          payload: {
+            ...widgetBase,
+            initialText: parsed.text,
+            initialGate: true
+          }
+        } as LogEntry;
+      }
+
+      const replies = await sendFeedbackChat(
+        feedbackBodyFromDraft({
+          text: redacted.text,
+          email: parsed.email,
+          includeAddress: !parsed.noAddress
+        })
+      );
+      return replies.length === 1 ? replies[0] : replies;
     },
     rpc: (args) => {
       if (!activeChainId)
@@ -6523,6 +6776,7 @@ export default function TerminalShell({
   commands.style = commands.theme;
   commands.msg = commands.chat;
   commands.messages = commands.inbox;
+  commands.fb = commands.feedback;
   commands.compile = async (args, raw) =>
     commands.dig(["dig", "compile", ...args.slice(1)], raw);
   commands.solc = async (args, raw) =>
@@ -6537,14 +6791,23 @@ export default function TerminalShell({
     // #80 — first command dismisses the workspace launcher (re-open via bar).
     if (showWorkspace) setShowWorkspace(false);
 
+    const args0 = trimmed.split(/\s+/).filter(Boolean);
+    const cmd0 = args0[0]?.toLowerCase();
+    // #19 — a seed/key typed after `feedback ` must never persist in the input
+    // log or history. Echo and store the redacted line instead of the raw one.
+    const echoLine =
+      cmd0 === "feedback" || cmd0 === "fb"
+        ? redactSecrets(trimmed).text
+        : trimmed;
+
     const userLog: LogEntry = {
       id: generateId(),
       type: "input",
-      text: `${theme.promptSymbol || ">"} ${trimmed}`
+      text: `${theme.promptSymbol || ">"} ${echoLine}`
     };
 
     setLogs((prev) => [...prev, userLog].slice(-MAX_LOGS));
-    setHistory((prev) => [...prev, trimmed]);
+    setHistory((prev) => [...prev, echoLine]);
     setHistoryIdx(-1);
 
     const args = trimmed.split(/\s+/).filter(Boolean);
@@ -7238,6 +7501,7 @@ export default function TerminalShell({
                     );
                   }}
                   onPnlRefresh={onPnlRefreshLog}
+                  onSubmitFeedback={submitFeedback}
                 />
               </div>
             </div>
