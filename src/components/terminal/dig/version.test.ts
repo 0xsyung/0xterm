@@ -4,10 +4,15 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  defaultSolcLong,
+  defaultSolcPath,
   defaultSolcVersion,
+  formatVersionList,
   isPinnedSolcVersion,
   normalizeSolcVersion,
   pickSolcVersion,
+  resolveSolcLongVersion,
+  solcFilenameFor,
   solcUrlsFor
 } from "./version";
 import { DIG_DEFAULT_SOLC_VERSION } from "./constants";
@@ -40,5 +45,24 @@ describe("dig version pick", () => {
     expect(urls[0]).toContain("soljson-v0.8.37+commit.f401782d.js");
     expect(urls[1]).toContain("jsdelivr");
     expect(solcUrlsFor("9.9.9")).toEqual([]);
+  });
+
+  it("resolves long versions and filenames", () => {
+    expect(resolveSolcLongVersion("0.8.37")).toBe("0.8.37+commit.f401782d");
+    expect(resolveSolcLongVersion("9.9.9")).toBeNull();
+    expect(solcFilenameFor("0.8.28")).toBe("soljson-v0.8.28+commit.7893614a.js");
+    expect(solcFilenameFor("9.9.9")).toBeNull();
+  });
+
+  it("exposes defaults", () => {
+    expect(defaultSolcPath()).toBeTruthy();
+    expect(defaultSolcLong()).toContain("0.8.37");
+  });
+
+  it("formats the version list with active marker", () => {
+    const out = formatVersionList("0.8.37");
+    expect(out).toContain("Active: 0.8.37");
+    expect(out).toContain("* 0.8.37");
+    expect(out).toContain("0.8.28");
   });
 });

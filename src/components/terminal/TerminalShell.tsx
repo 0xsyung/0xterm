@@ -86,7 +86,7 @@ import {
   pricePinKey
 } from "./helpers";
 import { detectTokenType } from "./tokenType";
-import { getNativePriceUsd } from "./pricing";
+import { getNativePriceUsd, getTokenPriceUsd } from "./pricing";
 import {
   DEX_FETCH_FAILED_MSG,
   fetchWithRetry,
@@ -165,6 +165,25 @@ import {
   resolveWithPreferred as resolveWithPreferredImpl,
   resolveWithPreferredDecimals as resolveWithPreferredDecimalsImpl
 } from "./resolveToken";
+import {
+  ARB_EXECUTOR,
+  ARB_ERROR
+} from "./arb/constants";
+import { arbErrorText } from "./arb/errors";
+import { encodeCalldata } from "./calldata/encode";
+import { CALDATA_ERROR } from "./calldata/constants";
+import { arbScan, type ArbScanResult, type ArbVenue } from "./arb/scan";
+import { arbSim } from "./arb/sim";
+import {
+  arbMinProfit,
+  encodeRunParams,
+  pricePerTokenStartFromUsd,
+  runParamsFromScan,
+  type RunParamsArgs
+} from "./arb/calldata";
+import ScanWidget from "./arb/widgets/ScanWidget";
+import RunConfirmWidget from "./arb/widgets/RunConfirmWidget";
+import CalldataWidget from "./calldata/widgets/CalldataWidget";
 import {
   applySuggestionToInput,
   buildTokenArgCandidates,
@@ -625,6 +644,17 @@ export default function TerminalShell({
 
   const logContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Last successful `arb scan` result, consumed by `arb sim` / `arb run`.
+  const lastArbScan = useRef<{
+    result: ArbScanResult;
+    tokenStart: Address;
+    tokenOther: Address;
+    symbolStart: string;
+    symbolOther: string;
+    decimalsStart: number;
+    chainId: number | null;
+  } | null>(null);
 
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -4386,6 +4416,17 @@ export default function TerminalShell({
             args: [amountOutMin, [addrIn, addrOut], address, deadline]
           });
           txValue = toHex(amountInWei);
+        } else if (toToken.isNative) {
+          // V2 ETH exit: swap into WETH then unwrap to native (path already
+          // native-resolved to WRAPPED_NATIVE above).
+          txData = encodeFunctionData({
+            abi: parseAbi([
+              "function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)"
+            ]),
+            functionName: "swapExactTokensForETH",
+            args: [amountInWei, amountOutMin, [addrIn, addrOut], address, deadline]
+          });
+          approvalAddress = activeDex.router;
         } else {
           txData = encodeFunctionData({
             abi: parseAbi([
@@ -4439,6 +4480,345 @@ export default function TerminalShell({
       );
 
       return { id: generateId(), type: "component", component: swapWidget, title: `SWAP ${args[1]} ${fromToken.symbol}→${toToken.symbol}` };
+    },
+    arb: async (args) => {
+      // arb [venues | scan <tA> <tB> | sim | run | help]
+      const chainId = activeChainId;
+      const chainObj = chainId
+        ? SUPPORTED_CHAINS.find((c) => c.id === chainId)
+        : undefined;
+      const sub = (args[1] || "status").toLowerCase();
+
+      const fail = (code: keyof typeof ARB_ERROR, param?: string) =>
+        ({
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text: arbErrorText(code, param)
+        }) as LogEntry;
+
+      if (sub === "help") {
+        return {
+          id: generateId(),
+          type: "text",
+          text:
+            "Usage: arb venues | arb scan <tA> <tB> | arb sim | arb run [--rpc public] | arb help\n" +
+            "3-venue atomic arbitrage: flash tokenStart from a third pool (C), sell on A, buy back on B, repay flash+fee, require profit >= minProfit.\n" +
+            "Testnet-only in v1 (sepolia). Mainnet run disabled until the audit gate."
+        };
+      }
+
+      if (!chainObj) return fail("unsupported", "this chain");
+      const chainName = chainObj.name;
+      const executor = ARB_EXECUTOR[chainObj.id] as Address | undefined;
+      const dexes = DEX_REGISTRY[chainObj.id] || [];
+
+      if (sub === "venues") {
+        if (dexes.length < 2)
+          return fail("no_venues", chainName);
+        const lines = dexes
+          .map((d) => `${d.type} ${d.id} · ${d.name} · factory ${d.factory.slice(0, 10)}…`)
+          .join("\n");
+        return {
+          id: generateId(),
+          type: "text",
+          text: `ARB VENUES (${chainName})\n${lines}`
+        };
+      }
+
+      if (sub === "scan") {
+        const tA = args[2];
+        const tB = args[3];
+        if (!tA || !tB) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Usage: arb scan <tokenStart> <tokenOther>"
+          };
+        }
+        const client = getClient(chainObj);
+        const [tokenStart, tokenOther] = await Promise.all([
+          resolveTokenDetails(tA, chainObj),
+          resolveTokenDetails(tB, chainObj)
+        ]);
+        if (tokenStart.address === tokenOther.address) {
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Tokens must be different."
+          };
+        }
+        const [nativeUsd, tokenUsd] = await Promise.all([
+          getTokenPriceUsd(chainObj, chainObj.nativeCurrency.symbol, (WRAPPED_NATIVE[chainObj.id] || NATIVE_TOKEN_ADDRESS) as Address, true, client),
+          getTokenPriceUsd(chainObj, tokenStart.symbol, tokenStart.address, false, client)
+        ]);
+        const outcome = await arbScan(chainObj, tokenStart.address, tokenOther.address, {
+          client,
+          tokenStartPerNative: pricePerTokenStartFromUsd(nativeUsd, tokenUsd, tokenStart.decimals)
+        });
+        if (!outcome.ok) return fail("bad_rpc", outcome.reason);
+        const r = outcome.result;
+        // Store the scan for sim/run.
+        lastArbScan.current = {
+          result: r,
+          tokenStart: tokenStart.address,
+          tokenOther: tokenOther.address,
+          symbolStart: tokenStart.symbol,
+          symbolOther: tokenOther.symbol,
+          decimalsStart: tokenStart.decimals,
+          chainId
+        };
+        const fmt = (x: bigint, d: number) => formatUnits(x, d);
+        const venueLabel = (v: ArbVenue) =>
+          `${v.name}${v.isV3 ? ` (${v.fee})` : " (V2)"}`;
+        const widget = (
+          <ScanWidget
+            venueA={venueLabel(r.venueA)}
+            venueB={venueLabel(r.venueB)}
+            venueC={venueLabel(r.venueC)}
+            sizeLabel={fmt(r.size, tokenStart.decimals)}
+            grossLabel={fmt(r.gross, tokenStart.decimals)}
+            gasLabel={r.gas > 0n ? fmt(r.gas, tokenStart.decimals) : "?"}
+            netLabel={fmt(r.net, tokenStart.decimals)}
+            netNegative={r.net < 0n}
+            theme={theme}
+            onPin={() => {
+              const scanLog: LogEntry = {
+                id: generateId(),
+                type: "arb",
+                title: `ARB ${tA}/${tB}`,
+                componentData: { kind: "arb-scan", chainId, tA, tB }
+              };
+              setLogs((prev) => [...prev, scanLog].slice(-MAX_LOGS));
+            }}
+          />
+        );
+        return {
+          id: generateId(),
+          type: "component",
+          component: widget,
+          title: `ARB ${tA}/${tB}`,
+          componentData: { kind: "arb-scan", chainId, tA, tB }
+        };
+      }
+
+      if (sub === "sim") {
+        const scan = lastArbScan.current;
+        if (!scan || scan.chainId !== chainId)
+          return fail("gone");
+        const { result, tokenStart, tokenOther, symbolStart, decimalsStart } = scan;
+        const client = getClient(chainObj);
+        const gasPrice = await client.getGasPrice().catch(() => 0n);
+        const [nativeUsd, tokenUsd] = await Promise.all([
+          getTokenPriceUsd(chainObj, chainObj.nativeCurrency.symbol, (WRAPPED_NATIVE[chainObj.id] || NATIVE_TOKEN_ADDRESS) as Address, true, client),
+          getTokenPriceUsd(chainObj, symbolStart, tokenStart, false, client)
+        ]);
+        const minProfit = arbMinProfit({
+          gasWei: gasPrice * 320000n,
+          pricePerTokenStart: pricePerTokenStartFromUsd(nativeUsd, tokenUsd, decimalsStart)
+        });
+        const params = runParamsFromScan(result, minProfit, tokenStart, tokenOther);
+        const sim = await arbSim(chainObj, executor!, params, {
+          client: getClient(chainObj)
+        });
+        if (!sim.ok) return fail("gone");
+        return {
+          id: generateId(),
+          type: "text",
+          text: `ARB SIM OK — ${formatUnits(result.gross, decimalsStart)} tokenStart gross. minProfit ${formatUnits(minProfit, decimalsStart)}. Ready to run.`
+        };
+      }
+
+      if (sub === "run") {
+        const scan = lastArbScan.current;
+        if (!scan || scan.chainId !== chainId)
+          return fail("gone");
+        if (!executor) return fail("no_executor", chainName);
+        // Mainnet gate: only sepolia (11155111) is wired in v1.
+        if (chainId !== 11155111) return fail("mainnet_disabled");
+        if (!isConnected || !address)
+          return {
+            id: generateId(),
+            type: "text",
+            text: "Wallet not connected."
+          };
+        const { result, tokenStart, tokenOther, symbolStart, symbolOther, decimalsStart } = scan;
+        const client = getClient(chainObj);
+        const gasPrice = await client.getGasPrice().catch(() => 0n);
+        if (gasPrice <= 0n) return fail("gas_unknown");
+        const gasUnits = 320000n;
+        const [nativeUsd, tokenUsd] = await Promise.all([
+          getTokenPriceUsd(chainObj, chainObj.nativeCurrency.symbol, (WRAPPED_NATIVE[chainObj.id] || NATIVE_TOKEN_ADDRESS) as Address, true, client),
+          getTokenPriceUsd(chainObj, symbolStart, tokenStart, false, client)
+        ]);
+        const minProfit = arbMinProfit({
+          gasWei: gasPrice * gasUnits,
+          pricePerTokenStart: pricePerTokenStartFromUsd(nativeUsd, tokenUsd, decimalsStart)
+        });
+        const params = runParamsFromScan(result, minProfit, tokenStart, tokenOther);
+        const data = encodeRunParams(params);
+
+        // Dry-run once more right before the confirm widget.
+        const sim = await arbSim(chainObj, executor, params, { client });
+        if (!sim.ok) return fail("gone");
+
+        const flashLabel = `${result.venueC.name}${result.venueC.isV3 ? ` (${result.venueC.fee})` : " (V2)"}`;
+        const venuesLabel = `${result.venueA.name} → ${result.venueB.name} · flash ${flashLabel}`;
+        const runWidget = (
+          <RunConfirmWidget
+            theme={theme}
+            pair={`${symbolStart}/${symbolOther}`}
+            venues={venuesLabel}
+            size={formatUnits(result.size, decimalsStart)}
+            minProfit={formatUnits(minProfit, decimalsStart)}
+            executor={executor}
+            flashSource={flashLabel}
+            onConfirm={async () => {
+              try {
+                const hash = await sendTransactionAsync({
+                  chainId,
+                  to: executor,
+                  data
+                });
+                const receipt = await client.waitForTransactionReceipt({ hash });
+                setLogs((prev) =>
+                  [
+                    ...prev,
+                    {
+                      id: generateId(),
+                      type: "arb",
+                      title: `ARB RUN ${symbolStart}/${symbolOther}`,
+                      text: `ARB RUN — tx ${receipt.transactionHash.slice(0, 10)}… profit to wallet.`
+                    } as LogEntry
+                  ].slice(-MAX_LOGS)
+                );
+              } catch (e: any) {
+                setLogs((prev) =>
+                  [
+                    ...prev,
+                    {
+                      id: generateId(),
+                      type: "text",
+                      warn: true,
+                      text: `[!] arb.rejected — ${formatViemError(e).replace(/^ERROR:\s*/, "").slice(0, 120)}`
+                    } as LogEntry
+                  ].slice(-MAX_LOGS)
+                );
+              }
+            }}
+            onCancel={() => {
+              setLogs((prev) =>
+                [
+                  ...prev,
+                  { id: generateId(), type: "text", text: "ARB RUN cancelled." } as LogEntry
+                ].slice(-MAX_LOGS)
+              );
+            }}
+          />
+        );
+        return {
+          id: generateId(),
+          type: "component",
+          component: runWidget,
+          title: `ARB RUN ${symbolStart}/${symbolOther}`
+        };
+      }
+
+      return fail("unsupported", chainName);
+    },
+    calldata: async (args) => {
+      // calldata [help | sim] <to> <fnSig> <arg0...>
+      const sub = (args[1] || "").toLowerCase();
+      const calldataFail = (text: string) =>
+        ({
+          id: generateId(),
+          type: "text",
+          warn: true,
+          text
+        }) as LogEntry;
+
+      if (sub === "help" || !args[1]) {
+        return {
+          id: generateId(),
+          type: "text",
+          text:
+            "Usage: calldata <to> <fnSig> <arg0...> | calldata sim <to> <fnSig> <arg0...> | calldata help\n" +
+            "Encode a contract call: calldata 0x… transfer(address,uint256) 0x… 5\n" +
+            "sim = eth_call dry-run on the active chain (read-only)."
+        };
+      }
+
+      const isSim = sub === "sim";
+      const toIdx = isSim ? 2 : 1;
+      const to = args[toIdx];
+      const fnSig = args[toIdx + 1];
+      const argTokens = args.slice(toIdx + 2);
+      if (!to || !fnSig)
+        return calldataFail(
+          isSim ? "Usage: calldata sim <to> <fnSig> <arg0...>" : "Usage: calldata <to> <fnSig> <arg0...>"
+        );
+
+      const encoded = encodeCalldata({ to, fnSig, args: argTokens });
+      if (!encoded.ok) {
+        const msg =
+          encoded.code === "bad_to"
+            ? CALDATA_ERROR.bad_to
+            : encoded.code === "bad_sig"
+              ? CALDATA_ERROR.bad_sig(encoded.reason)
+              : encoded.code === "arity"
+                ? `[!] calldata.arity — ${encoded.reason}`
+                : `[!] calldata.arg — ${encoded.reason}`;
+        return calldataFail(msg);
+      }
+
+      const simCall = async (to: `0x${string}`, data: `0x${string}`) => {
+        const chainObj2 = activeChainId
+          ? SUPPORTED_CHAINS.find((c) => c.id === activeChainId)
+          : undefined;
+        if (!chainObj2)
+          return { ok: false as const, label: CALDATA_ERROR.no_chain };
+        try {
+          await getClient(chainObj2).call({
+            to,
+            data,
+            account: "0x0000000000000000000000000000000000000000"
+          });
+          return { ok: true as const, label: "[✓] eth_call OK — no revert" };
+        } catch (e: any) {
+          const short = formatViemError(e)
+            .replace(/^ERROR:\s*/, "")
+            .slice(0, 90);
+          return { ok: false as const, label: `[!] revert — ${short}` };
+        }
+      };
+
+      let simLabel: string | undefined;
+      let simOk: boolean | undefined;
+      if (isSim) {
+        const sim = await simCall(encoded.to, encoded.data);
+        simLabel = sim.label;
+        simOk = sim.ok;
+      }
+
+      const widget = (
+        <CalldataWidget
+          theme={theme}
+          to={encoded.to}
+          fnName={encoded.fnName}
+          argsSummary={encoded.argsSummary}
+          data={encoded.data}
+          simLabel={simLabel}
+          simOk={simOk}
+          onSimulate={({ to, data }) => simCall(to, data)}
+        />
+      );
+
+      return {
+        id: generateId(),
+        type: "component",
+        component: widget,
+        title: `CALDATA ${encoded.fnName}`
+      };
     },
     balance: async (args) => await buildBalance(args),
     portfolio: async (args) => {

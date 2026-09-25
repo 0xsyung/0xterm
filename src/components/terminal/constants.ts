@@ -291,18 +291,21 @@ export const DEX_REGISTRY: Record<number, DexProtocol[]> = {
   ],
   42161: [
     { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },
+    { id: 'univ2', name: 'Uniswap V2', router: '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24', factory: '0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9', type: 'V2' },
   ],
   421614: [
     { id: 'univ3', name: 'Uniswap V3 (Sepolia)', router: '0x101F443B4d1b059569D643917553c771E1b9663E', factory: '0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e', positionManager: '0x6b2937Bde17889EDCf8fbD8dE31C3C2a70Bc4d65', type: 'V3' },
   ],
   8453: [
     { id: 'univ3', name: 'Uniswap V3', router: '0x2626664c2603336E57B271c5C0b26F421741e481', factory: '0x33128a8fC17869897dcE68Ed026d694621f6FDfD', positionManager: '0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1', type: 'V3' },
+    { id: 'univ2', name: 'Uniswap V2', router: '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24', factory: '0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6', type: 'V2' },
   ],
   84532: [
     { id: 'univ3', name: 'Uniswap V3 (Sepolia)', router: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4', factory: '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24', positionManager: '0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2', type: 'V3' },
   ],
   137: [
     { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },
+    { id: 'univ2', name: 'Uniswap V2', router: '0xedf6066a2b290C185783862C7F4776A2C8077AD1', factory: '0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C', type: 'V2' },
   ],
   // 80002 (Polygon Amoy): no official Uniswap V3 — 0xterm deploys its own
   // fork via 0xterm-contracts/script-univ3/DeployUniswapV3Fork.s.sol. Until it is
@@ -314,6 +317,7 @@ export const DEX_REGISTRY: Record<number, DexProtocol[]> = {
   // ],
   10: [
     { id: 'univ3', name: 'Uniswap V3', router: '0xE592427A0AEce92De3Edee1F18E0157C05861564', factory: '0x1F98431c8aD98523631AE4a59f267346ea31F984', positionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88', type: 'V3' },
+    { id: 'univ2', name: 'Uniswap V2', router: '0x4A7b5Da61326A6379179b40d00F57E5bbDC962c2', factory: '0x0c3c1c532F1e39EdF36BE9Fe0bE1410313E074Bf', type: 'V2' },
   ],
   11155420: [
     { id: 'univ3', name: 'Uniswap V3 (Sepolia)', router: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4', factory: '0x8CE191193D15ea94e11d327b4c7ad8bbE520f6aF', positionManager: '0xdA75cEf1C93078e8b736FCA5D5a30adb97C8957d', type: 'V3' },
