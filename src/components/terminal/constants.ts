@@ -17,7 +17,7 @@ import {
   optimismSepolia
 } from 'viem/chains'
 import { namehash, parseAbi, type Address, type Chain } from 'viem'
-import type { DexProtocol, ThemeConfig, ThemeMode } from './types'
+import type { DexProtocol, ThemeConfig, ThemeMode, VaultEntry } from './types'
 
 export const THEMES: Record<ThemeMode, ThemeConfig> = {
   matrix: {
@@ -672,3 +672,57 @@ export const IMPLEMENTATION_ADDRESSES: Record<number, { erc20: Address; erc721: 
     erc721: "0x075eb9dc52177aa3492e1d26f0fde3d729625d2f" // Standard Base Sepolia Mock NFT
   }
 };
+
+// ERC-4626 curated vault allow-list (#21). v1 is Ethereum Morpho only (addresses
+// verified via official Morpho API 2026-09-02); every other chain is empty —
+// `vault list` on those chains prints the empty-chain message instead of a fake
+// list. `asset()` is always read on-chain at show/deposit time.
+export const VAULT_REGISTRY: Record<number, VaultEntry[]> = {
+  1: [
+    {
+      id: "morpho-steak-usdc",
+      name: "Steakhouse USDC",
+      address: "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
+      protocol: "morpho",
+      assetHint: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" // USDC
+    },
+    {
+      id: "morpho-gt-usdc-prime",
+      name: "Gauntlet USDC Prime",
+      address: "0xdd0f28e19C1780eb6396170735D45153D261490d",
+      protocol: "morpho",
+      assetHint: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" // USDC
+    },
+    {
+      id: "morpho-gt-weth",
+      name: "Gauntlet WETH Prime",
+      address: "0x2371e134e3455e0593363cBF89d3b6cf53740618",
+      protocol: "morpho",
+      assetHint: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" // WETH
+    }
+  ]
+};
+
+// EIP-4626 — the eight mutative/preview fns v1 needs, plus the standard view
+// surface (asset, totals, convertTo*, max*). Rounding favors the vault, so the
+// preview matching the chosen verb is the min-out — never convertTo*.
+export const erc4626Abi = parseAbi([
+  'function asset() view returns (address)',
+  'function totalAssets() view returns (uint256)',
+  'function totalSupply() view returns (uint256)',
+  'function balanceOf(address owner) view returns (uint256)',
+  'function convertToShares(uint256 assets) view returns (uint256)',
+  'function convertToAssets(uint256 shares) view returns (uint256)',
+  'function previewDeposit(uint256 assets) view returns (uint256)',
+  'function previewMint(uint256 shares) view returns (uint256)',
+  'function previewWithdraw(uint256 assets) view returns (uint256)',
+  'function previewRedeem(uint256 shares) view returns (uint256)',
+  'function maxDeposit(address) view returns (uint256)',
+  'function maxMint(address) view returns (uint256)',
+  'function maxWithdraw(address) view returns (uint256)',
+  'function maxRedeem(address) view returns (uint256)',
+  'function deposit(uint256 assets, address receiver) returns (uint256 shares)',
+  'function mint(uint256 shares, address receiver) returns (uint256 assets)',
+  'function withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)',
+  'function redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)'
+])
