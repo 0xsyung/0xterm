@@ -370,6 +370,11 @@ import PricePanel, {
   type PriceRunResult
 } from "./widgets/PricePanel";
 import type { PriceCardData } from "./widgets/PriceCard";
+import SwapPanel, {
+  buildSwapCli,
+  type SwapRunArgs,
+  type SwapRunResult
+} from "./widgets/SwapPanel";
 import {
   applyPostCountPoll,
   applyThreadPoll,
@@ -682,7 +687,7 @@ export default function TerminalShell({
   // Workspace launcher (#80): tile strip collapses on first command; a slim
   // re-open bar returns it. Console never shows the strip.
   const [showWorkspace, setShowWorkspace] = useState(true);
-  // Tool panel overlay for workspace modes (#117) — PRICE first.
+  // Tool panel overlay for workspace modes (#117/#119) — PRICE / SWAP.
   const [openPanel, setOpenPanel] = useState<WorkspacePanelId | null>(null);
 
   // Pending interactive confirmation (e.g. register an unverified contract).
@@ -8113,6 +8118,29 @@ export default function TerminalShell({
                         componentData: data
                       };
                       onPin(log);
+                    }}
+                  />
+                </div>
+              ) : openPanel === "swap" ? (
+                <div className="flex-1 min-h-0 min-w-0 overflow-y-auto pb-2">
+                  <SwapPanel
+                    theme={theme}
+                    commonTokens={Object.keys(COMMON_TOKENS[activeChainId || 0] || {})}
+                    onClose={() => setOpenPanel(null)}
+                    onRun={async (args: SwapRunArgs): Promise<SwapRunResult> => {
+                      const line = buildSwapCli(args);
+                      const result = await commands.swap(line.split(/\s+/), line);
+                      if (!result) {
+                        return { ok: false, error: "No result from swap." };
+                      }
+                      const entry = Array.isArray(result) ? result[0] : result;
+                      if (entry?.type === "component" && entry.component) {
+                        return { ok: true, component: entry.component };
+                      }
+                      if (entry?.type === "text" && typeof entry.text === "string") {
+                        return { ok: false, error: entry.text };
+                      }
+                      return { ok: false, error: "Swap failed." };
                     }}
                   />
                 </div>
