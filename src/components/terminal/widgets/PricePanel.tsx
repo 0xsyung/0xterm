@@ -36,12 +36,17 @@ export type PriceRunResult =
   | { ok: true; data: PriceCardData }
   | { ok: false; error: string };
 
-/** Build the equivalent CLI line for preview / dispatch. */
+/**
+ * Build the equivalent CLI line for preview / dispatch.
+ * Fee tier is only appended when QUOTE is present — otherwise the CLI
+ * parses the fee number as tokenB (`price ETH 3000 pool`).
+ */
 export function buildPriceCli(args: PriceRunArgs): string {
   const parts = ["price", args.base.trim()];
-  if (args.quote.trim()) parts.push(args.quote.trim());
+  const quote = args.quote.trim();
+  if (quote) parts.push(quote);
   if (args.source === "pool") {
-    parts.push(String(args.feeTier));
+    if (quote) parts.push(String(args.feeTier));
     parts.push("pool");
   } else {
     parts.push("api");
@@ -87,7 +92,11 @@ export default function PricePanel({
     return fromCommon.length > 0 ? fromCommon : [...QUICK_QUOTE];
   }, [commonTokens]);
 
-  const canRun = base.trim().length > 0 && !running;
+  // POOL needs a quote so fee is never mistaken for tokenB (#118 Alex QA).
+  const canRun =
+    base.trim().length > 0 &&
+    (source !== "pool" || quote.trim().length > 0) &&
+    !running;
   const preview = buildPriceCli({
     base: base.trim() || "…",
     quote: quote.trim(),
@@ -108,6 +117,10 @@ export default function PricePanel({
 
   const run = async () => {
     if (!base.trim()) return;
+    if (source === "pool" && !quote.trim()) {
+      setError("QUOTE required for POOL (fee must not be parsed as quote).");
+      return;
+    }
     setError(null);
     setRunning(true);
     try {

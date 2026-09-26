@@ -24,6 +24,16 @@ describe("buildPriceCli", () => {
       buildPriceCli({ base: "ETH", quote: "USDC", source: "pool", feeTier: 500 })
     ).toBe("price ETH USDC 500 pool");
   });
+
+  it("omits fee when POOL has no quote (fee must not become tokenB)", () => {
+    // Regression #118: was `price ETH 3000 pool` → CLI parses 3000 as quote.
+    expect(
+      buildPriceCli({ base: "ETH", quote: "", source: "pool", feeTier: 3000 })
+    ).toBe("price ETH pool");
+    expect(
+      buildPriceCli({ base: "ETH", quote: "  ", source: "pool", feeTier: 3000 })
+    ).toBe("price ETH pool");
+  });
 });
 
 describe("PricePanel", () => {
@@ -47,6 +57,23 @@ describe("PricePanel", () => {
     ).toBe(true);
     fireEvent.change(screen.getByTestId("price-base"), {
       target: { value: "ETH" }
+    });
+    expect(
+      (screen.getByTestId("price-run") as HTMLButtonElement).disabled
+    ).toBe(false);
+  });
+
+  it("disables RUN on POOL until QUOTE is set", () => {
+    render(<PricePanel theme={theme} onClose={vi.fn()} onRun={vi.fn()} />);
+    fireEvent.change(screen.getByTestId("price-base"), {
+      target: { value: "ETH" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "POOL" }));
+    expect(
+      (screen.getByTestId("price-run") as HTMLButtonElement).disabled
+    ).toBe(true);
+    fireEvent.change(screen.getByTestId("price-quote"), {
+      target: { value: "USDC" }
     });
     expect(
       (screen.getByTestId("price-run") as HTMLButtonElement).disabled

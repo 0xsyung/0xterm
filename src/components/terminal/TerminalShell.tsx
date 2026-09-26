@@ -7952,6 +7952,7 @@ export default function TerminalShell({
       <FkeyListener
         bindings={bindings}
         availableCommands={availableCommands}
+        enabled={primaryTab === "terminal" && terminalMode === "console"}
         onCommand={(cmd) => void handleCommand(cmd)}
         setPendingConfirm={setPendingConfirm}
         onLogText={(t, w) =>
