@@ -363,6 +363,13 @@ import {
 } from "./mode";
 import type { BillboardPost } from "./widgets/BillboardWidget";
 import { WorkspaceStrip } from "./workspaces";
+import type { WorkspacePanelId } from "./workspaces/WorkspaceTile";
+import PricePanel, {
+  buildPriceCli,
+  type PriceRunArgs,
+  type PriceRunResult
+} from "./widgets/PricePanel";
+import type { PriceCardData } from "./widgets/PriceCard";
 import {
   applyPostCountPoll,
   applyThreadPoll,
@@ -675,6 +682,8 @@ export default function TerminalShell({
   // Workspace launcher (#80): tile strip collapses on first command; a slim
   // re-open bar returns it. Console never shows the strip.
   const [showWorkspace, setShowWorkspace] = useState(true);
+  // Tool panel overlay for workspace modes (#117) — PRICE first.
+  const [openPanel, setOpenPanel] = useState<WorkspacePanelId | null>(null);
 
   // Pending interactive confirmation (e.g. register an unverified contract).
   // When set, the next Enter routes the typed input through this resolver.
@@ -2249,7 +2258,7 @@ export default function TerminalShell({
     const ro = new ResizeObserver(apply);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [primaryTab, narrow]);
+  }, [primaryTab, terminalMode, narrow]);
 
   const handlePrimaryTabChange = (tab: PrimaryTab) => {
     setPrimaryTab(tab);
@@ -2620,6 +2629,8 @@ export default function TerminalShell({
     savePreference("mode", next);
     // #80 — entering a workspace mode re-opens its launcher.
     if (next !== "console") setShowWorkspace(true);
+    // #117 — mode switch closes any open tool panel.
+    setOpenPanel(null);
     // Clear CHOICES / pending token picks belonging to the old mode
     if (pendingTokenPick) {
       pendingTokenPick.resolve(null);
@@ -7961,6 +7972,8 @@ export default function TerminalShell({
           ) {
             return;
           }
+          // #117 — no prompt outside CONSOLE; skip steal-focus.
+          if (primaryTab !== "terminal" || terminalMode !== "console") return;
           inputRef.current?.focus();
         }}
       >
@@ -8067,7 +8080,42 @@ export default function TerminalShell({
           /* Log + pin: band-driven — stack (phone/short-landscape) vs two-column (tablet/desktop). Never overlay. */
           <>
             {terminalMode !== "console" &&
-              (showWorkspace ? (
+              (openPanel === "price" ? (
+                <div className="flex-1 min-h-0 min-w-0 overflow-y-auto pb-2">
+                  <PricePanel
+                    theme={theme}
+                    commonTokens={Object.keys(COMMON_TOKENS[activeChainId || 0] || {})}
+                    onClose={() => setOpenPanel(null)}
+                    onRun={async (args: PriceRunArgs): Promise<PriceRunResult> => {
+                      const line = buildPriceCli(args);
+                      const result = await commands.price(line.split(/\s+/), line);
+                      if (!result) {
+                        return { ok: false, error: "No result from price." };
+                      }
+                      const entry = Array.isArray(result) ? result[0] : result;
+                      if (entry?.componentData?.kind === "price") {
+                        return {
+                          ok: true,
+                          data: entry.componentData as PriceCardData
+                        };
+                      }
+                      if (entry?.type === "text" && typeof entry.text === "string") {
+                        return { ok: false, error: entry.text };
+                      }
+                      return { ok: false, error: "Price lookup failed." };
+                    }}
+                    onPin={(data) => {
+                      const log: LogEntry = {
+                        id: generateId(),
+                        type: "component",
+                        title: `PRICE ${data.symbolA || data.tokenSymbol || "?"}/${data.symbolB || data.quoteSymbol || "?"}`,
+                        componentData: data
+                      };
+                      onPin(log);
+                    }}
+                  />
+                </div>
+              ) : showWorkspace ? (
                 <div className="shrink-0 flex items-start gap-2 pb-2">
                   <span
                     className={`uppercase text-[10px] tracking-widest pt-1 ${theme.muted}`}
@@ -8080,6 +8128,10 @@ export default function TerminalShell({
                       mode={terminalMode}
                       onCommand={(cmd) => {
                         void handleCommand(cmd);
+                      }}
+                      onOpenPanel={(panel) => {
+                        setOpenPanel(panel);
+                        setShowWorkspace(true);
                       }}
                     />
                   </div>
@@ -8095,6 +8147,8 @@ export default function TerminalShell({
                   </button>
                 </div>
               ))}
+            {/* #117 — prompt + log are CONSOLE-only; workspace modes keep tiles/panels (+ pins). */}
+            {terminalMode === "console" ? (
             <div className={pinGridClass(band, pinned.length > 0)}>
             <div
               ref={logContainerRef}
@@ -8150,10 +8204,27 @@ export default function TerminalShell({
               stacked={band === "stack"}
             />
           </div>
+            ) : (
+              pinned.length > 0 && (
+                <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">
+                  <PinnedPanel
+                    pinned={pinned}
+                    theme={theme}
+                    refreshing={refreshingId}
+                    countdowns={countdowns}
+                    onRefresh={onRefreshPinned}
+                    onMinimize={onMinimize}
+                    onUnpin={onUnpin}
+                    stacked={band === "stack"}
+                  />
+                </div>
+              )
+            )}
           </>
         )}
 
-        {/* TWO-LINE PROMPT LAYOUT */}
+        {/* TWO-LINE PROMPT LAYOUT — CONSOLE-only (#117) */}
+        {primaryTab === "terminal" && terminalMode === "console" && (
         <div ref={promptWrapRef}>
           <TerminalPrompt
             theme={theme}
@@ -8185,6 +8256,7 @@ export default function TerminalShell({
             fkeyFooter={footerLabel(bindings, currentThemeKey)}
           />
         </div>
+        )}
       </div>
 
       {/* Floating messenger (#82) — shell root, all tabs/modes. */}
