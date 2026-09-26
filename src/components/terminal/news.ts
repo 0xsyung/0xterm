@@ -6,11 +6,13 @@
  */
 import {
   NEWS_ALLOWLIST,
+  NEWS_ALLOWLIST_BY_ID,
   NEWS_ALLOWLIST_BY_URL,
   NEWS_FOOTER_BASE,
   NEWS_FOOTER_RSS2JSON,
   RSS2JSON_ENDPOINT,
   type NewsAllowItem,
+  type NewsCategory,
   type NewsSourceId
 } from "./newsAllowlist";
 import { formatLocalHm, formatLocalHms } from "./localTime";
@@ -20,6 +22,7 @@ export {
   NEWS_FOOTER_BASE,
   NEWS_FOOTER_RSS2JSON,
   type NewsAllowItem,
+  type NewsCategory,
   type NewsSourceId
 } from "./newsAllowlist";
 
@@ -360,6 +363,212 @@ export const formatNewsAsOf = (ms: number): string => {
 };
 
 export const sourceLabel = (id: NewsSourceId): string => id.toUpperCase();
+
+/** Editorial taxonomy pills for NewsReader (#83). */
+export const NEWS_READER_CATEGORIES = [
+  "All",
+  "News",
+  "Insights",
+  "Reports"
+] as const;
+
+export type NewsReaderCategoryFilter = (typeof NEWS_READER_CATEGORIES)[number];
+
+/** Fallback source→category when allowlist omits `category`. */
+const CATEGORY_FALLBACK: Record<NewsSourceId, NewsCategory> = {
+  cointelegraph: "News",
+  coindesk: "News",
+  decrypt: "Insights",
+  defiant: "Reports"
+};
+
+const THUMB_MONOGRAM: Record<NewsSourceId, string> = {
+  cointelegraph: "CT",
+  decrypt: "DC",
+  coindesk: "CD",
+  defiant: "DF"
+};
+
+/** Fixed hue offsets (degrees) per source — stable across themes. */
+const THUMB_HUE_OFFSET: Record<NewsSourceId, number> = {
+  cointelegraph: 0,
+  decrypt: 48,
+  coindesk: 200,
+  defiant: 280
+};
+
+export const categoryOf = (sourceId: NewsSourceId | string): NewsCategory => {
+  const id = sourceId as NewsSourceId;
+  const fromList = NEWS_ALLOWLIST_BY_ID.get(id)?.category;
+  if (fromList) return fromList;
+  return CATEGORY_FALLBACK[id] ?? "News";
+};
+
+/**
+ * Title-only read-time estimate (minutes). Deterministic; clamped 1–5.
+ * `max(1, min(5, round(title.length / 90)))`
+ */
+export const estimateReadTime = (item: { title: string }): number => {
+  const len = String(item?.title ?? "").length;
+  return Math.max(1, Math.min(5, Math.round(len / 90)));
+};
+
+/**
+ * Editorial date for NewsReader — browser-local, e.g. `Sep 14, 2026 · 9:35 AM`.
+ * Null / invalid → `—`. Does not change widget TIME helpers.
+ */
+export const formatNewsEditorialDate = (
+  publishedAt: number | null
+): string => {
+  if (publishedAt === null || !Number.isFinite(publishedAt)) return "—";
+  try {
+    const d = new Date(publishedAt);
+    const datePart = d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+    const timePart = d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    });
+    return `${datePart} · ${timePart}`;
+  } catch {
+    return "—";
+  }
+};
+
+const parseHexRgb = (hex: string): [number, number, number] | null => {
+  const h = hex.replace("#", "").trim();
+  if (h.length === 3) {
+    const r = parseInt(h[0] + h[0], 16);
+    const g = parseInt(h[1] + h[1], 16);
+    const b = parseInt(h[2] + h[2], 16);
+    if ([r, g, b].every(Number.isFinite)) return [r, g, b];
+    return null;
+  }
+  if (h.length !== 6) return null;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  if (![r, g, b].every(Number.isFinite)) return null;
+  return [r, g, b];
+};
+
+const rgbToHsl = (
+  r: number,
+  g: number,
+  b: number
+): [number, number, number] => {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        break;
+      case g:
+        h = ((b - r) / d + 2) / 6;
+        break;
+      default:
+        h = ((r - g) / d + 4) / 6;
+        break;
+    }
+  }
+  return [h * 360, s * 100, l * 100];
+};
+
+const hslToRgb = (
+  h: number,
+  s: number,
+  l: number
+): [number, number, number] => {
+  h = ((h % 360) + 360) % 360;
+  s = Math.max(0, Math.min(100, s)) / 100;
+  l = Math.max(0, Math.min(100, l)) / 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let rp = 0;
+  let gp = 0;
+  let bp = 0;
+  if (h < 60) [rp, gp, bp] = [c, x, 0];
+  else if (h < 120) [rp, gp, bp] = [x, c, 0];
+  else if (h < 180) [rp, gp, bp] = [0, c, x];
+  else if (h < 240) [rp, gp, bp] = [0, x, c];
+  else if (h < 300) [rp, gp, bp] = [x, 0, c];
+  else [rp, gp, bp] = [c, 0, x];
+  return [
+    Math.round((rp + m) * 255),
+    Math.round((gp + m) * 255),
+    Math.round((bp + m) * 255)
+  ];
+};
+
+const toHex = (r: number, g: number, b: number): string =>
+  `#${[r, g, b]
+    .map((n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, "0"))
+    .join("")}`;
+
+export type NewsThumbStyle = {
+  monogram: string;
+  /** Solid fill color (hex). */
+  fill: string;
+  /** Diagonal depth overlay. */
+  gradient: string;
+  /** CSS background combining fill + gradient. */
+  background: string;
+  /** Inline color for monogram (contrasts light/dark skins). */
+  monogramColor: string;
+};
+
+/**
+ * Deterministic placeholder thumb styles — no remote images (#83).
+ * Fill = theme.phosphor hue-shifted per source; monogram CT/DC/CD/DF.
+ */
+export const newsThumbStyle = (
+  sourceId: NewsSourceId | string,
+  theme: { phosphor: string; name?: string }
+): NewsThumbStyle => {
+  const id = (sourceId in THUMB_MONOGRAM
+    ? sourceId
+    : "cointelegraph") as NewsSourceId;
+  const monogram = THUMB_MONOGRAM[id];
+  const offset = THUMB_HUE_OFFSET[id] ?? 0;
+  const rgb = parseHexRgb(theme.phosphor) || [0, 255, 102];
+  const [h, s, l] = rgbToHsl(rgb[0], rgb[1], rgb[2]);
+  // Keep readable on light (teletype) skins via deeper luminance floor.
+  const lightSkin = /teletype/i.test(theme.name || "");
+  const fillL = lightSkin
+    ? Math.min(42, Math.max(28, l))
+    : Math.min(28, Math.max(12, l * 0.45));
+  const [fr, fg, fb] = hslToRgb(h + offset, Math.max(40, s), fillL);
+  const fill = toHex(fr, fg, fb);
+  const gradient = lightSkin
+    ? `linear-gradient(135deg, transparent 0%, ${fill}33 45%, #00000014 100%)`
+    : `linear-gradient(135deg, transparent 0%, ${theme.phosphor}26 40%, #00000099 100%)`;
+  const background = `${gradient}, ${fill}`;
+  const monogramColor = lightSkin ? "#0a0a0a" : "#ffffff";
+  return { monogram, fill, gradient, background, monogramColor };
+};
+
+export const filterByCategory = (
+  items: NewsItem[],
+  category: NewsReaderCategoryFilter
+): NewsItem[] => {
+  if (category === "All") return items;
+  return items.filter((it) => categoryOf(it.sourceId) === category);
+};
+
 
 // —— rate-limited fetch cache (in-memory, per allowlist URL) ——
 type CacheEntry = {

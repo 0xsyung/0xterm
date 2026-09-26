@@ -16,7 +16,7 @@ import AllowancesWidget from "./widgets/AllowancesWidget";
 import VaultWidget from "./widgets/VaultWidget";
 import PnlWidget from "./widgets/PnlWidget";
 import TickerWidget from "./widgets/TickerWidget";
-import NewsWidget from "./widgets/NewsWidget";
+import NewsReader from "./widgets/NewsReader";
 import ChatWidget from "./widgets/ChatWidget";
 import BillboardWidget from "./widgets/BillboardWidget";
 import ShareCard from "./widgets/ShareCard";
@@ -255,7 +255,7 @@ function renderLog(
     );
   if (log.type === "news")
     return (
-      <NewsWidget
+      <NewsReader
         data={{
           kind: "news",
           widgetId: log.payload?.widgetId || `news:${log.payload?.tag || "all"}`,
@@ -267,7 +267,6 @@ function renderLog(
           loading: !!log.payload?.loading
         }}
         theme={theme}
-        narrow={!!actions?.narrow}
         onPin={() => onPin(log)}
         pinned={isPinned}
         autoFocus={!!log.payload?.autoFocus}

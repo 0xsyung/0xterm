@@ -24,6 +24,11 @@ import {
   parseRss,
   parseRss2Json,
   sanitizeHeadline,
+  categoryOf,
+  estimateReadTime,
+  filterByCategory,
+  formatNewsEditorialDate,
+  newsThumbStyle,
   type NewsItem
 } from "./news";
 import { formatLocalHm, formatLocalHms } from "./localTime";
@@ -360,5 +365,100 @@ describe("parseNewsDate / formatNewsTime (#90)", () => {
     );
     expect(items).toHaveLength(1);
     expect(items[0].publishedAt).toBe(Date.parse("2026-09-19T20:24:00.000Z"));
+  });
+});
+
+
+describe("categoryOf / filterByCategory (#83)", () => {
+  it("maps allowlisted sources to News / Insights / Reports", () => {
+    expect(categoryOf("cointelegraph")).toBe("News");
+    expect(categoryOf("coindesk")).toBe("News");
+    expect(categoryOf("decrypt")).toBe("Insights");
+    expect(categoryOf("defiant")).toBe("Reports");
+  });
+
+  it("filterByCategory intersects the set", () => {
+    const items: NewsItem[] = [
+      {
+        id: "1",
+        sourceId: "cointelegraph",
+        title: "A",
+        url: "https://cointelegraph.com/a",
+        publishedAt: 1
+      },
+      {
+        id: "2",
+        sourceId: "decrypt",
+        title: "B",
+        url: "https://decrypt.co/b",
+        publishedAt: 2
+      },
+      {
+        id: "3",
+        sourceId: "defiant",
+        title: "C",
+        url: "https://thedefiant.io/c",
+        publishedAt: 3
+      }
+    ];
+    expect(filterByCategory(items, "All")).toHaveLength(3);
+    expect(filterByCategory(items, "News").map((i) => i.id)).toEqual(["1"]);
+    expect(filterByCategory(items, "Insights").map((i) => i.id)).toEqual(["2"]);
+    expect(filterByCategory(items, "Reports").map((i) => i.id)).toEqual(["3"]);
+  });
+});
+
+describe("estimateReadTime (#83)", () => {
+  it("clamps 1–5 from title length / 90", () => {
+    expect(estimateReadTime({ title: "" })).toBe(1);
+    expect(estimateReadTime({ title: "x".repeat(90) })).toBe(1);
+    expect(estimateReadTime({ title: "x".repeat(135) })).toBe(2); // round(1.5)=2
+    expect(estimateReadTime({ title: "x".repeat(450) })).toBe(5);
+    expect(estimateReadTime({ title: "x".repeat(900) })).toBe(5);
+  });
+});
+
+describe("formatNewsEditorialDate (#83)", () => {
+  it("returns em-dash for null/invalid", () => {
+    expect(formatNewsEditorialDate(null)).toBe("—");
+    expect(formatNewsEditorialDate(Number.NaN)).toBe("—");
+  });
+
+  it("formats browser-local short month · time", () => {
+    const ms = Date.parse("2026-09-14T13:35:00.000Z");
+    const out = formatNewsEditorialDate(ms);
+    expect(out).toMatch(/Sep 14, 2026 · /);
+    expect(out).toMatch(/\d{1,2}:\d{2}\s?(AM|PM)/i);
+    // Widget helpers unchanged
+    expect(formatNewsTime(ms)).toBe(formatLocalHm(ms));
+  });
+});
+
+describe("newsThumbStyle (#83)", () => {
+  const theme = { phosphor: "#00ff66", name: "Matrix" };
+
+  it("returns deterministic monogram + fill per source", () => {
+    expect(newsThumbStyle("cointelegraph", theme).monogram).toBe("CT");
+    expect(newsThumbStyle("decrypt", theme).monogram).toBe("DC");
+    expect(newsThumbStyle("coindesk", theme).monogram).toBe("CD");
+    expect(newsThumbStyle("defiant", theme).monogram).toBe("DF");
+    const a = newsThumbStyle("cointelegraph", theme);
+    const b = newsThumbStyle("cointelegraph", theme);
+    expect(a.fill).toBe(b.fill);
+    expect(a.background).toBe(b.background);
+    expect(a.fill).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(a.background).toContain("linear-gradient");
+  });
+
+  it("differs by source; stays readable on teletype", () => {
+    const ct = newsThumbStyle("cointelegraph", theme).fill;
+    const dc = newsThumbStyle("decrypt", theme).fill;
+    expect(ct).not.toBe(dc);
+    const light = newsThumbStyle("coindesk", {
+      phosphor: "#0d5c2e",
+      name: "Teletype"
+    });
+    expect(light.monogram).toBe("CD");
+    expect(light.monogramColor).toBe("#0a0a0a");
   });
 });
