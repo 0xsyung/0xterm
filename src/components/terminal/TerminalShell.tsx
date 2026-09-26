@@ -4061,7 +4061,7 @@ export default function TerminalShell({
         return {
           id: generateId(),
           type: "text",
-          text: `[!] API Blocked: DexScreener does not track testnets like ${targetChain.name}. Omit 'api' to fetch the price directly from the on-chain pool contract.`
+          text: `[!] API Blocked: DexScreener does not track testnets like ${targetChain.name}. No DexScreener quote — try on-chain pool.`
         };
       }
 
@@ -4269,7 +4269,7 @@ export default function TerminalShell({
             type: "text",
             text: `No ${targetChain ? targetChain.name : ""} price data found for "${queryA}"${
               queryB ? ` against ${queryB}` : ""
-            }. Try 'price <tokenA> <tokenB>' or omit 'api' to read the pool on-chain.`
+            }. No DexScreener quote — try on-chain pool.`
           };
         }
 
@@ -7951,6 +7951,15 @@ export default function TerminalShell({
         onPrimaryTabChange={handlePrimaryTabChange}
         socialBadge={inboxUnread + boardUnread}
         bindings={bindings}
+        activeChainId={activeChainId}
+        onChainSwitch={(chainId) => {
+          handleChainSwitch(chainId);
+          if (isConnected) {
+            void switchChainAsync({ chainId }).catch(() => {
+              /* wallet rejected — terminal selection still updated (same as network cmd) */
+            });
+          }
+        }}
       />
 
       {/* Single global F1–F12 listener (#28) */}
@@ -8091,6 +8100,13 @@ export default function TerminalShell({
                   <PricePanel
                     theme={theme}
                     commonTokens={Object.keys(COMMON_TOKENS[activeChainId || 0] || {})}
+                    activeChainId={activeChainId}
+                    activeDexId={activeDexId}
+                    dexes={DEX_REGISTRY[activeChainId || 0] || []}
+                    onDexChange={(dexId) => {
+                      setActiveDexId(dexId);
+                      savePreference("dexId", dexId);
+                    }}
                     onClose={() => setOpenPanel(null)}
                     onRun={async (args: PriceRunArgs): Promise<PriceRunResult> => {
                       const line = buildPriceCli(args);

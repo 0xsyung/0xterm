@@ -1,24 +1,25 @@
 /**
  * @file PricePanel.tsx
- * @description INVEST Price tool panel — base/quote/source/fee → PriceCard (#117)
+ * @description INVEST Price tool panel — base/quote/SOURCE ON-CHAIN|API + DEX/fee → PriceCard (#117/#121)
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ThemeConfig } from "../types";
+import type { DexProtocol, ThemeConfig } from "../types";
 import PriceCard, { type PriceCardData } from "./PriceCard";
 import PinButton from "./PinButton";
 
+/** Internal CLI source token — UI label is ON-CHAIN for "pool". */
 export type PriceSource = "pool" | "api";
 
 export const PRICE_FEE_TIERS = [100, 500, 3000, 10000] as const;
 export const DEFAULT_PRICE_FEE = 3000;
 
 /**
- * Panel default SOURCE = API (safer zero-config on mainnets; no chain/DEX
- * required). CLI `price` still defaults to pool — documented in PR #117.
+ * Fallback when no chain/DEX — API is zero-config. Prefer
+ * `resolveDefaultPriceSource` when activeChainId + DEX are known (#121).
  */
 export const DEFAULT_PRICE_SOURCE: PriceSource = "api";
 
@@ -30,23 +31,40 @@ export type PriceRunArgs = {
   quote: string;
   source: PriceSource;
   feeTier: number;
+  /** When V2, CLI omits fee tier (not used by getPair). */
+  dexType?: "V2" | "V3";
 };
 
 export type PriceRunResult =
   | { ok: true; data: PriceCardData }
   | { ok: false; error: string };
 
+/** Default SOURCE: ON-CHAIN when chain set and DEX available; else API (#121). */
+export function resolveDefaultPriceSource(opts: {
+  activeChainId?: number | null;
+  activeDexId?: string | null;
+  dexCount?: number;
+}): PriceSource {
+  if (
+    opts.activeChainId != null &&
+    ((opts.dexCount ?? 0) >= 1 || !!opts.activeDexId)
+  ) {
+    return "pool";
+  }
+  return "api";
+}
+
 /**
  * Build the equivalent CLI line for preview / dispatch.
- * Fee tier is only appended when QUOTE is present — otherwise the CLI
- * parses the fee number as tokenB (`price ETH 3000 pool`).
+ * Fee tier is only appended when QUOTE is present and DEX is not V2 —
+ * otherwise the CLI parses the fee number as tokenB (`price ETH 3000 pool`).
  */
 export function buildPriceCli(args: PriceRunArgs): string {
   const parts = ["price", args.base.trim()];
   const quote = args.quote.trim();
   if (quote) parts.push(quote);
   if (args.source === "pool") {
-    if (quote) parts.push(String(args.feeTier));
+    if (quote && args.dexType !== "V2") parts.push(String(args.feeTier));
     parts.push("pool");
   } else {
     parts.push("api");
@@ -54,10 +72,22 @@ export function buildPriceCli(args: PriceRunArgs): string {
   return parts.join(" ");
 }
 
+/** Strip CLI-only "omit api" advice from panel error surfaces (#121). */
+export function sanitizePricePanelError(msg: string): string {
+  if (/omit\s+['"]?api['"]?/i.test(msg)) {
+    return "No DexScreener quote — try on-chain pool.";
+  }
+  return msg;
+}
+
 export default function PricePanel({
   theme,
   commonTokens,
-  defaultSource = DEFAULT_PRICE_SOURCE,
+  defaultSource,
+  activeChainId = null,
+  activeDexId = null,
+  dexes,
+  onDexChange,
   onClose,
   onRun,
   onPin,
@@ -66,19 +96,59 @@ export default function PricePanel({
   theme: ThemeConfig;
   /** Symbol list from COMMON_TOKENS for the active chain (fallback = builtins). */
   commonTokens?: string[];
+  /** Explicit override; when omitted, resolve from chain/DEX (#121). */
   defaultSource?: PriceSource;
+  activeChainId?: number | null;
+  activeDexId?: string | null;
+  /** DEX_REGISTRY[activeChainId] entries. */
+  dexes?: DexProtocol[];
+  /** Sync global activeDexId when user picks a DEX. */
+  onDexChange?: (dexId: string) => void;
   onClose: () => void;
   onRun: (args: PriceRunArgs) => Promise<PriceRunResult>;
   onPin?: (data: PriceCardData) => void;
   pinned?: boolean;
 }) {
+  const dexList = dexes ?? [];
+
   const [base, setBase] = useState("");
   const [quote, setQuote] = useState("");
-  const [source, setSource] = useState<PriceSource>(defaultSource);
+  const [source, setSource] = useState<PriceSource>(() =>
+    defaultSource !== undefined
+      ? defaultSource
+      : resolveDefaultPriceSource({
+          activeChainId,
+          activeDexId,
+          dexCount: dexList.length
+        })
+  );
   const [feeTier, setFeeTier] = useState<number>(DEFAULT_PRICE_FEE);
+  const [selectedDexId, setSelectedDexId] = useState<string | null>(() => {
+    if (activeDexId && dexList.some((d) => d.id === activeDexId)) {
+      return activeDexId;
+    }
+    return dexList[0]?.id ?? null;
+  });
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PriceCardData | null>(null);
+
+  // Keep selected DEX aligned when NETWORK / activeDexId changes.
+  const dexIdsKey = dexList.map((d) => d.id).join(",");
+  useEffect(() => {
+    const list = dexes ?? [];
+    const next =
+      activeDexId && list.some((d) => d.id === activeDexId)
+        ? activeDexId
+        : list[0]?.id ?? null;
+    setSelectedDexId(next);
+    // dexIdsKey stands in for dexes identity without array-ref churn
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChainId, activeDexId, dexIdsKey]);
+
+  const selectedDex = dexList.find((d) => d.id === selectedDexId);
+  const showFee = source === "pool" && selectedDex?.type === "V3";
+  const emptyDex = source === "pool" && dexList.length === 0;
 
   const baseQuick = useMemo(() => {
     const avail = new Set((commonTokens || []).map((s) => s.toUpperCase()));
@@ -92,16 +162,19 @@ export default function PricePanel({
     return fromCommon.length > 0 ? fromCommon : [...QUICK_QUOTE];
   }, [commonTokens]);
 
-  // POOL needs a quote so fee is never mistaken for tokenB (#118 Alex QA).
+  // ON-CHAIN: BASE + QUOTE + DEX (+ fee shown only for V3). API: BASE only.
   const canRun =
     base.trim().length > 0 &&
-    (source !== "pool" || quote.trim().length > 0) &&
+    (source !== "pool" ||
+      (quote.trim().length > 0 && !!selectedDexId && dexList.length > 0)) &&
     !running;
+
   const preview = buildPriceCli({
     base: base.trim() || "…",
     quote: quote.trim(),
     source,
-    feeTier
+    feeTier,
+    dexType: selectedDex?.type
   });
 
   useEffect(() => {
@@ -115,11 +188,29 @@ export default function PricePanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const pickDex = (id: string) => {
+    setSelectedDexId(id);
+    onDexChange?.(id);
+  };
+
+  const useOnChain = () => {
+    setSource("pool");
+    setError(null);
+  };
+
   const run = async () => {
     if (!base.trim()) return;
-    if (source === "pool" && !quote.trim()) {
-      setError("QUOTE required for POOL (fee must not be parsed as quote).");
-      return;
+    if (source === "pool") {
+      if (!quote.trim()) {
+        setError("QUOTE required for ON-CHAIN (fee must not be parsed as quote).");
+        return;
+      }
+      if (!selectedDexId || dexList.length === 0) {
+        setError("No DEX on this network — change NETWORK.");
+        return;
+      }
+      // Ensure global activeDexId matches selection before dispatch.
+      if (selectedDexId !== activeDexId) onDexChange?.(selectedDexId);
     }
     setError(null);
     setRunning(true);
@@ -128,17 +219,22 @@ export default function PricePanel({
         base: base.trim(),
         quote: quote.trim(),
         source,
-        feeTier
+        feeTier,
+        dexType: selectedDex?.type
       });
       if (res.ok) {
         setResult(res.data);
       } else {
         setResult(null);
-        setError(res.error);
+        setError(sanitizePricePanelError(res.error));
       }
     } catch (err: unknown) {
       setResult(null);
-      setError(err instanceof Error ? err.message : String(err));
+      setError(
+        sanitizePricePanelError(
+          err instanceof Error ? err.message : String(err)
+        )
+      );
     } finally {
       setRunning(false);
     }
@@ -152,6 +248,8 @@ export default function PricePanel({
         ? "border-transparent font-bold"
         : `${theme.border} ${theme.muted} bg-transparent`
     }`;
+
+  const sourceLabel = (s: PriceSource) => (s === "pool" ? "ON-CHAIN" : "API");
 
   return (
     <div
@@ -254,7 +352,10 @@ export default function PricePanel({
               <button
                 key={s}
                 type="button"
-                onClick={() => setSource(s)}
+                onClick={() => {
+                  setSource(s);
+                  if (s === "pool") setError(null);
+                }}
                 className={pill(active)}
                 style={
                   active
@@ -263,7 +364,7 @@ export default function PricePanel({
                 }
                 aria-pressed={active}
               >
-                {s.toUpperCase()}
+                {sourceLabel(s)}
               </button>
             );
           })}
@@ -271,6 +372,44 @@ export default function PricePanel({
       </div>
 
       {source === "pool" && (
+        <div className="flex flex-col gap-1" data-testid="price-dex">
+          <span className={`uppercase text-[9px] ${theme.muted}`}>DEX</span>
+          {emptyDex ? (
+            <div
+              className={`text-[10px] ${theme.warn || theme.muted}`}
+              data-testid="price-dex-empty"
+              role="status"
+            >
+              No DEX on this network — change NETWORK.
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {dexList.map((d) => {
+                const active = selectedDexId === d.id;
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => pickDex(d.id)}
+                    className={pill(active)}
+                    style={
+                      active
+                        ? { background: theme.phosphor, color: "#000000" }
+                        : undefined
+                    }
+                    aria-pressed={active}
+                    data-testid={`price-dex-option-${d.id}`}
+                  >
+                    {d.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showFee && (
         <div className="flex flex-col gap-1" data-testid="price-fee">
           <span className={`uppercase text-[9px] ${theme.muted}`}>
             FEE TIER
@@ -318,6 +457,17 @@ export default function PricePanel({
         >
           {error}
         </div>
+      )}
+      {error && source === "api" && (
+        <button
+          type="button"
+          onClick={useOnChain}
+          className={`w-full uppercase tracking-widest text-[10px] font-bold border cursor-pointer ${theme.border} ${touch}`}
+          style={{ background: theme.phosphor, color: "#000000" }}
+          data-testid="price-use-on-chain"
+        >
+          USE ON-CHAIN
+        </button>
       )}
 
       {result && (

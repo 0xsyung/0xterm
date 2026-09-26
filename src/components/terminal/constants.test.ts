@@ -12,8 +12,11 @@ import {
   THEME_ALIASES,
   THEME_ORDER,
   isKnownThemeInput,
+  chainShortName,
   resolveChain,
-  resolveThemeKey
+  resolveThemeKey,
+  HEADER_H,
+  HEADER_PAD
 } from "./constants";
 
 describe("resolveThemeKey", () => {
@@ -148,5 +151,19 @@ describe("resolveChain", () => {
     expect(resolveChain("nope")).toBeUndefined();
     expect(resolveChain("")).toBeUndefined();
     expect(resolveChain(undefined)).toBeUndefined();
+  });
+});
+
+
+describe("chainShortName + HEADER metrics (#121)", () => {
+  it("maps known chains to short labels", () => {
+    expect(chainShortName({ id: 1, name: "Ethereum" })).toBe("ETH");
+    expect(chainShortName({ id: 8453, name: "Base" })).toBe("BASE");
+    expect(chainShortName({ id: 11155111, name: "Sepolia" })).toBe("SEPOLIA");
+  });
+
+  it("HEADER_H/PAD use 48px desktop soft target", () => {
+    expect(HEADER_H).toContain("48px");
+    expect(HEADER_PAD).toContain("48px");
   });
 });

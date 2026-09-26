@@ -1,14 +1,14 @@
 /**
  * @file TerminalHeader.tsx
- * @description Terminal header — logo + single nav strip + CONSOLE-only F-row (#117)
+ * @description Terminal header — logo + NETWORK + single nav strip + CONSOLE-only F-row (#117/#121)
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ThemeConfig } from "./types";
-import { HEADER_H } from "./constants";
+import { HEADER_H, SUPPORTED_CHAINS, chainShortName } from "./constants";
 import { MODE_LABEL, MODE_ORDER } from "./mode";
 import type { TerminalMode } from "./mode";
 import type { PrimaryTab } from "./socialUnread";
@@ -49,7 +49,7 @@ function NavStrip({
 
   return (
     <div
-      className="flex items-center gap-1 shrink-0 min-w-0 max-md:overflow-x-auto max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden"
+      className="flex items-center gap-1 shrink-0 min-w-0 max-md:basis-full max-md:overflow-x-auto max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden"
       role="tablist"
       aria-label="Surface"
       data-testid="nav-strip"
@@ -136,6 +136,104 @@ function NavStrip({
   );
 }
 
+/** Header NETWORK control — not a mode chip (#121). */
+function NetworkControl({
+  theme,
+  activeChainId,
+  onChainSwitch
+}: {
+  theme: ThemeConfig;
+  activeChainId?: number | null;
+  onChainSwitch?: (chainId: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const chain = SUPPORTED_CHAINS.find((c) => c.id === activeChainId);
+  const label = chain ? chainShortName(chain) : "NETWORK";
+  const touch =
+    "pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] [@media(hover:none)]:min-h-[44px]";
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative shrink-0" ref={rootRef}>
+      <button
+        type="button"
+        data-testid="header-network"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Network"
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center justify-center gap-1 px-2.5 uppercase tracking-widest text-[10px] cursor-pointer border ${touch} ${
+          chain
+            ? `${theme.border} ${theme.primary} bg-transparent`
+            : `${theme.border} ${theme.muted} bg-transparent`
+        }`}
+      >
+        <span className="truncate max-w-[7rem]">{label}</span>
+        {chain && (
+          <span className={`${theme.muted} font-normal normal-case tracking-normal`}>
+            {chain.id}
+          </span>
+        )}
+        <span aria-hidden>▾</span>
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Networks"
+          className={`absolute left-0 top-full mt-1 z-50 min-w-[10rem] max-h-[60vh] overflow-y-auto border ${theme.border} ${theme.cardBg} shadow-lg`}
+          data-testid="header-network-menu"
+        >
+          {SUPPORTED_CHAINS.map((c) => {
+            const active = c.id === activeChainId;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                role="option"
+                aria-selected={active}
+                data-testid={`header-network-option-${c.id}`}
+                onClick={() => {
+                  onChainSwitch?.(c.id);
+                  setOpen(false);
+                }}
+                className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-left uppercase tracking-widest text-[10px] cursor-pointer border-0 ${touch} ${
+                  active ? "font-bold" : `${theme.muted} bg-transparent`
+                }`}
+                style={
+                  active
+                    ? { background: theme.phosphor, color: FILL_FG }
+                    : undefined
+                }
+              >
+                <span>{chainShortName(c)}</span>
+                <span className={active ? "" : theme.muted}>{c.id}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TerminalHeader({
   theme,
   onCommand,
@@ -144,7 +242,9 @@ export default function TerminalHeader({
   primaryTab = "terminal",
   onPrimaryTabChange,
   socialBadge = 0,
-  bindings
+  bindings,
+  activeChainId = null,
+  onChainSwitch
 }: {
   theme: ThemeConfig;
   onCommand?: (cmd: string) => void;
@@ -155,6 +255,10 @@ export default function TerminalHeader({
   socialBadge?: number;
   /** Live bindings keymap — the header F-row mirrors it (#28). */
   bindings?: BindingsState;
+  /** Active chain for NETWORK chrome (#121). */
+  activeChainId?: number | null;
+  /** Same path as handleChainSwitch / network cmd (#121). */
+  onChainSwitch?: (chainId: number) => void;
 }) {
   const [clock, setClock] = useState(() => formatClock(new Date()));
 
@@ -194,25 +298,35 @@ export default function TerminalHeader({
       style={{ borderBottom: `2px solid ${theme.phosphor}` }}
     >
       <div className="flex items-center gap-3 flex-wrap min-w-0 max-md:w-full uppercase text-[10px] tracking-widest">
-        {/* Brand cluster: logo mandatory; wordmark optional (hides max-md). */}
+        {/* Row 1 cluster: logo + wordmark + clock + NETWORK (#121). */}
         <div
-          className="flex items-center gap-2 shrink-0"
-          data-testid="brand-cluster"
+          className="flex items-center gap-3 shrink-0 min-w-0"
+          data-testid="brand-clock-network"
         >
-          <img
-            src="/logo.svg"
-            alt="0xTERM"
-            width={20}
-            height={20}
-            className="w-5 h-5 pointer-coarse:w-6 pointer-coarse:h-6 shrink-0"
-            draggable={false}
-            data-testid="header-logo"
+          <div
+            className="flex items-center gap-2 shrink-0"
+            data-testid="brand-cluster"
+          >
+            <img
+              src="/logo.svg"
+              alt="0xTERM"
+              width={32}
+              height={32}
+              className="w-8 h-8 max-md:w-7 max-md:h-7 pointer-coarse:w-7 pointer-coarse:h-7 shrink-0"
+              draggable={false}
+              data-testid="header-logo"
+            />
+            <span className={`font-bold max-md:hidden ${theme.primary}`}>
+              0xTERM
+            </span>
+          </div>
+          <span className="tabular-nums">{clock}</span>
+          <NetworkControl
+            theme={theme}
+            activeChainId={activeChainId}
+            onChainSwitch={onChainSwitch}
           />
-          <span className={`font-bold max-md:hidden ${theme.primary}`}>
-            0xTERM
-          </span>
         </div>
-        <span className="tabular-nums">{clock}</span>
         {(onModeChange || onPrimaryTabChange) && (
           <NavStrip
             theme={theme}
