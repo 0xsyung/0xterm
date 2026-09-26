@@ -204,11 +204,28 @@ export const THEME_ALIASES: Record<string, ThemeMode> = {
 
 // Single canonical header metrics — the Bloomberg terminal bar. Themes never
 // change layout, so there is exactly one header height/pad for every skin.
-// Narrow (#117): brand + single nav strip (+ optional CONSOLE F-row) → ~112px
-// soft floor (was 152px dual-strip under #91).
-export const HEADER_PAD = 'max-md:pt-[calc(112px_+_env(safe-area-inset-top))] md:pt-[calc(32px_+_env(safe-area-inset-top))]'
+// #121: desktop bar ~48px so 32px logo + 2px phosphor border clear with pad;
+// narrow soft floor ~120px for brand+clock+NETWORK row1 + scroll modes row2.
+export const HEADER_PAD = 'max-md:pt-[calc(120px_+_env(safe-area-inset-top))] md:pt-[calc(48px_+_env(safe-area-inset-top))]'
 
-export const HEADER_H = 'max-md:h-auto max-md:min-h-[calc(112px_+_env(safe-area-inset-top))] md:h-[calc(32px_+_env(safe-area-inset-top))]'
+export const HEADER_H = 'max-md:h-auto max-md:min-h-[calc(120px_+_env(safe-area-inset-top))] md:h-[calc(48px_+_env(safe-area-inset-top))]'
+
+/** Short label for header NETWORK chrome (#121). */
+export function chainShortName(chain: { id: number; name: string }): string {
+  const SHORT: Record<number, string> = {
+    1: 'ETH',
+    11155111: 'SEPOLIA',
+    42161: 'ARB',
+    421614: 'ARB SEP',
+    8453: 'BASE',
+    84532: 'BASE SEP',
+    137: 'POLYGON',
+    80002: 'AMOY',
+    10: 'OP',
+    11155420: 'OP SEP'
+  }
+  return SHORT[chain.id] || chain.name.toUpperCase().slice(0, 10)
+}
 
 export function resolveThemeKey(raw?: string | null): ThemeMode {
   if (!raw) return 'matrix'

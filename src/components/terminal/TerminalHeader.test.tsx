@@ -1,19 +1,19 @@
 // @vitest-environment jsdom
 /**
  * @file TerminalHeader.test.tsx
- * @description Header logo + single nav strip + CONSOLE-only F-row (#117)
+ * @description Header logo + NETWORK + single nav strip + CONSOLE-only F-row (#117/#121)
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { THEMES } from "./constants";
+import { HEADER_H, HEADER_PAD, THEMES } from "./constants";
 import TerminalHeader from "./TerminalHeader";
 
 const theme = THEMES.matrix;
 
-describe("TerminalHeader chrome (#117)", () => {
-  it("renders logo image and optional wordmark (not text-only brand)", () => {
+describe("TerminalHeader chrome (#117/#121)", () => {
+  it("renders 32px logo (28 on narrow/coarse) and optional wordmark", () => {
     render(
       <TerminalHeader
         theme={theme}
@@ -25,11 +25,82 @@ describe("TerminalHeader chrome (#117)", () => {
     );
     const logo = screen.getByTestId("header-logo");
     expect(logo.getAttribute("src")).toBe("/logo.svg");
-    expect(logo.getAttribute("width")).toBe("20");
-    expect(logo.getAttribute("height")).toBe("20");
+    expect(logo.getAttribute("width")).toBe("32");
+    expect(logo.getAttribute("height")).toBe("32");
     expect(logo.getAttribute("alt")).toBe("0xTERM");
+    expect(logo.className).toMatch(/w-8/);
+    expect(logo.className).toMatch(/h-8/);
+    expect(logo.className).toMatch(/max-md:w-7/);
+    expect(logo.className).toMatch(/pointer-coarse:w-7/);
     const brand = screen.getByTestId("brand-cluster");
     expect(brand.textContent).toMatch(/0xTERM/);
+  });
+
+  it("HEADER_H / HEADER_PAD clear 32px mark on md (≥48px + safe)", () => {
+    expect(HEADER_H).toMatch(/md:h-\[calc\(48px_/);
+    expect(HEADER_PAD).toMatch(/md:pt-\[calc\(48px_/);
+  });
+
+  it("renders NETWORK control after clock; options = SUPPORTED_CHAINS", () => {
+    const onChainSwitch = vi.fn();
+    render(
+      <TerminalHeader
+        theme={theme}
+        mode="invest"
+        onModeChange={vi.fn()}
+        primaryTab="terminal"
+        onPrimaryTabChange={vi.fn()}
+        activeChainId={8453}
+        onChainSwitch={onChainSwitch}
+      />
+    );
+    const trigger = screen.getByTestId("header-network");
+    expect(trigger.textContent).toMatch(/BASE/);
+    fireEvent.click(trigger);
+    expect(screen.getByTestId("header-network-option-1")).toBeTruthy();
+    expect(screen.getByTestId("header-network-option-8453")).toBeTruthy();
+    expect(screen.getByTestId("header-network-option-11155111")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("header-network-option-1"));
+    expect(onChainSwitch).toHaveBeenCalledWith(1);
+  });
+
+  it("shows muted NETWORK placeholder when chain unset", () => {
+    render(
+      <TerminalHeader
+        theme={theme}
+        mode="invest"
+        onModeChange={vi.fn()}
+        primaryTab="terminal"
+        onPrimaryTabChange={vi.fn()}
+        activeChainId={null}
+      />
+    );
+    expect(screen.getByTestId("header-network").textContent).toMatch(/NETWORK/);
+  });
+
+  it("NETWORK is visible on SOCIAL / SETTINGS (not a mode chip)", () => {
+    const { rerender } = render(
+      <TerminalHeader
+        theme={theme}
+        mode="invest"
+        onModeChange={vi.fn()}
+        primaryTab="social"
+        onPrimaryTabChange={vi.fn()}
+        activeChainId={1}
+      />
+    );
+    expect(screen.getByTestId("header-network")).toBeTruthy();
+    rerender(
+      <TerminalHeader
+        theme={theme}
+        mode="console"
+        onModeChange={vi.fn()}
+        primaryTab="settings"
+        onPrimaryTabChange={vi.fn()}
+        activeChainId={1}
+      />
+    );
+    expect(screen.getByTestId("header-network")).toBeTruthy();
   });
 
   it("renders a single nav strip with modes + SOCIAL + SETTINGS and no TERMINAL peer", () => {
@@ -140,6 +211,7 @@ describe("TerminalHeader chrome (#117)", () => {
     );
     const strip = screen.getByTestId("nav-strip");
     expect(strip.className).toMatch(/max-md:overflow-x-auto/);
+    expect(strip.className).toMatch(/max-md:basis-full/);
   });
 
   it("shows F1–F5 only on CONSOLE surface", () => {
