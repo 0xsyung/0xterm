@@ -11,10 +11,14 @@ export type NewsSourceId =
   | "coindesk"
   | "defiant";
 
+export type NewsCategory = "News" | "Insights" | "Reports";
+
 export type NewsAllowItem = {
   id: NewsSourceId;
   name: string;
   rssUrl: string;
+  /** Editorial taxonomy bucket for NewsReader (#83). */
+  category?: NewsCategory;
 };
 
 /**
@@ -25,24 +29,28 @@ export const NEWS_ALLOWLIST: readonly NewsAllowItem[] = [
   {
     id: "cointelegraph",
     name: "Cointelegraph",
-    rssUrl: "https://cointelegraph.com/rss"
+    rssUrl: "https://cointelegraph.com/rss",
+    category: "News"
   },
   {
     id: "decrypt",
     name: "Decrypt",
-    rssUrl: "https://decrypt.co/feed"
+    rssUrl: "https://decrypt.co/feed",
+    category: "Insights"
   },
   {
     id: "coindesk",
     name: "CoinDesk",
     // Frozen 2026-09-13: HTTP 200 application/xml (no trailing slash needed)
-    rssUrl: "https://www.coindesk.com/arc/outboundfeeds/rss"
+    rssUrl: "https://www.coindesk.com/arc/outboundfeeds/rss",
+    category: "News"
   },
   {
     id: "defiant",
     name: "The Defiant",
     // Frozen 2026-09-13: /feed → 301 → /api/feed (final)
-    rssUrl: "https://thedefiant.io/api/feed"
+    rssUrl: "https://thedefiant.io/api/feed",
+    category: "Reports"
   }
 ] as const;
 
