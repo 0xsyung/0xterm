@@ -1,6 +1,6 @@
 /**
  * @file InvestWorkspace.tsx
- * @description Invest mode action-tile launcher (#80)
+ * @description Invest mode action-tile launcher (#80/#117)
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
@@ -8,10 +8,15 @@
 
 import type { ThemeConfig } from "../types";
 import { WorkspaceTile } from "./WorkspaceTile";
-import type { WorkspaceAction } from "./WorkspaceTile";
+import type { WorkspaceAction, WorkspacePanelId } from "./WorkspaceTile";
 
 const ACTIONS: WorkspaceAction[] = [
-  { cmd: "price", label: "PRICE", hint: "price <tA> [tB] [pool|api]" },
+  {
+    cmd: "price",
+    label: "PRICE",
+    hint: "open price panel",
+    panel: "price"
+  },
   { cmd: "swap", label: "SWAP", hint: "swap <amt> <from> <to>" },
   { cmd: "balance", label: "BALANCE", hint: "balance <token>" },
   { cmd: "portfolio", label: "PORTFOLIO", hint: "all chains + P/L" },
@@ -27,15 +32,23 @@ const ACTIONS: WorkspaceAction[] = [
 
 export function InvestWorkspace({
   theme,
-  onCommand
+  onCommand,
+  onOpenPanel
 }: {
   theme: ThemeConfig;
   onCommand: (cmd: string) => void;
+  onOpenPanel?: (panel: WorkspacePanelId) => void;
 }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {ACTIONS.map((a) => (
-        <WorkspaceTile key={a.cmd} theme={theme} action={a} onCommand={onCommand} />
+        <WorkspaceTile
+          key={a.cmd}
+          theme={theme}
+          action={a}
+          onCommand={onCommand}
+          onOpenPanel={onOpenPanel}
+        />
       ))}
     </div>
   );

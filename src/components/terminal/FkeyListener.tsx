@@ -24,6 +24,8 @@ type Props = {
   onCommand: (cmd: string) => void;
   setPendingConfirm: (c: { onYes: () => void; onNo: () => void } | null) => void;
   onLogText: (text: string, warn?: boolean) => void;
+  /** When false, F-keys are ignored (CONSOLE-only; match header F-row) (#117/#118). */
+  enabled?: boolean;
 };
 
 export default function FkeyListener({
@@ -31,13 +33,15 @@ export default function FkeyListener({
   availableCommands,
   onCommand,
   setPendingConfirm,
-  onLogText
+  onLogText,
+  enabled = true
 }: Props) {
   const bindingsRef = useRef(bindings);
   const commandsRef = useRef(availableCommands);
   const onCommandRef = useRef(onCommand);
   const setPendingConfirmRef = useRef(setPendingConfirm);
   const onLogTextRef = useRef(onLogText);
+  const enabledRef = useRef(enabled);
   useEffect(() => {
     bindingsRef.current = bindings;
   }, [bindings]);
@@ -53,9 +57,13 @@ export default function FkeyListener({
   useEffect(() => {
     onLogTextRef.current = onLogText;
   }, [onLogText]);
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!enabledRef.current) return;
       const isFKey = (e.key as string).match(/^F([1-9]|1[0-2])$/);
       if (!isFKey) return;
       e.preventDefault();

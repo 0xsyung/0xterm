@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * @file workspaces.test.tsx
- * @description Smoke render for the workspace launcher (#80)
+ * @description Smoke render for the workspace launcher (#80/#117)
  * @license Proprietary / All Rights Reserved
  * © 2026 0xTERM. All rights reserved. Unauthorized copying or distribution is strictly prohibited.
  */
@@ -14,11 +14,32 @@ import { WorkspaceTile } from "./WorkspaceTile";
 const theme = THEMES.matrix;
 
 describe("WorkspaceStrip", () => {
-  it("renders invest tiles and fires onCommand on click", () => {
+  it("PRICE opens panel path (not bare onCommand)", () => {
     const onCommand = vi.fn();
-    render(<WorkspaceStrip theme={theme} mode="invest" onCommand={onCommand} />);
+    const onOpenPanel = vi.fn();
+    render(
+      <WorkspaceStrip
+        theme={theme}
+        mode="invest"
+        onCommand={onCommand}
+        onOpenPanel={onOpenPanel}
+      />
+    );
     fireEvent.click(screen.getByRole("button", { name: /PRICE/i }));
-    expect(onCommand).toHaveBeenCalledWith("price");
+    expect(onOpenPanel).toHaveBeenCalledWith("price");
+    expect(onCommand).not.toHaveBeenCalled();
+  });
+
+  it("PRICE hint is panel-oriented, not Usage dump", () => {
+    render(
+      <WorkspaceStrip theme={theme} mode="invest" onCommand={vi.fn()} onOpenPanel={vi.fn()} />
+    );
+    expect(screen.getByRole("button", { name: /PRICE/i }).textContent).toMatch(
+      /open price panel/i
+    );
+    expect(screen.getByRole("button", { name: /PRICE/i }).textContent).not.toMatch(
+      /price <tA>/i
+    );
   });
 
   it("renders forensic tiles with kyt", () => {
@@ -55,5 +76,26 @@ describe("WorkspaceTile", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /SWAP/i }));
     expect(onCommand).toHaveBeenCalledWith("swap 1 ETH USDC");
+  });
+
+  it("panel action calls onOpenPanel instead of onCommand", () => {
+    const onCommand = vi.fn();
+    const onOpenPanel = vi.fn();
+    render(
+      <WorkspaceTile
+        theme={theme}
+        action={{
+          cmd: "price",
+          label: "PRICE",
+          hint: "open price panel",
+          panel: "price"
+        }}
+        onCommand={onCommand}
+        onOpenPanel={onOpenPanel}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /PRICE/i }));
+    expect(onOpenPanel).toHaveBeenCalledWith("price");
+    expect(onCommand).not.toHaveBeenCalled();
   });
 });

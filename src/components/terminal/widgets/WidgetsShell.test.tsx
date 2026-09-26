@@ -168,6 +168,7 @@ describe("bind command wiring (issue #28)", () => {
     );
     expect(shellSrc).toMatch(/bind: \(args\) =>/);
     expect(shellSrc).toContain("<FkeyListener");
+    expect(shellSrc).toContain('enabled={primaryTab === "terminal" && terminalMode === "console"}');
     expect(shellSrc).toContain("bindings={bindings}");
     expect(shellSrc).toContain("footerLabel(bindings, currentThemeKey)");
   });
