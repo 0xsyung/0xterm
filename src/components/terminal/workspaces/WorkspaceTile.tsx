@@ -8,7 +8,7 @@
 
 import type { ThemeConfig } from "../types";
 
-export type WorkspacePanelId = "price";
+export type WorkspacePanelId = "price" | "swap";
 
 export type WorkspaceAction = {
   cmd: string;

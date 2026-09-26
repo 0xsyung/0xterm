@@ -42,6 +42,35 @@ describe("WorkspaceStrip", () => {
     );
   });
 
+
+  it("SWAP opens panel path (not bare onCommand)", () => {
+    const onCommand = vi.fn();
+    const onOpenPanel = vi.fn();
+    render(
+      <WorkspaceStrip
+        theme={theme}
+        mode="invest"
+        onCommand={onCommand}
+        onOpenPanel={onOpenPanel}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /SWAP/i }));
+    expect(onOpenPanel).toHaveBeenCalledWith("swap");
+    expect(onCommand).not.toHaveBeenCalled();
+  });
+
+  it("SWAP hint is panel-oriented, not Usage dump", () => {
+    render(
+      <WorkspaceStrip theme={theme} mode="invest" onCommand={vi.fn()} onOpenPanel={vi.fn()} />
+    );
+    expect(screen.getByRole("button", { name: /SWAP/i }).textContent).toMatch(
+      /open swap panel/i
+    );
+    expect(screen.getByRole("button", { name: /SWAP/i }).textContent).not.toMatch(
+      /swap <amt>/i
+    );
+  });
+
   it("renders forensic tiles with kyt", () => {
     const onCommand = vi.fn();
     render(<WorkspaceStrip theme={theme} mode="forensic" onCommand={onCommand} />);

@@ -17,7 +17,12 @@ const ACTIONS: WorkspaceAction[] = [
     hint: "open price panel",
     panel: "price"
   },
-  { cmd: "swap", label: "SWAP", hint: "swap <amt> <from> <to>" },
+  {
+    cmd: "swap",
+    label: "SWAP",
+    hint: "open swap panel",
+    panel: "swap"
+  },
   { cmd: "balance", label: "BALANCE", hint: "balance <token>" },
   { cmd: "portfolio", label: "PORTFOLIO", hint: "all chains + P/L" },
   { cmd: "snapshot", label: "SNAPSHOT", hint: "record baseline" },
